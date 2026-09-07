@@ -838,7 +838,10 @@ adminRouter.get("/topics", modOrAbove, async (req, res, next) => {
     const size = Math.min(50, Math.max(10, Number(req.query.size ?? 20)));
 
     const where: any = {};
+    const topicIdMatch = q.match(/^(?:#?(\d+)|https?:\/\/[^/]+\/forum\/topic\/(\d+)(?:[/?#].*)?)$/i);
+    const topicId = Number(topicIdMatch?.[1] || topicIdMatch?.[2]);
     if (q) where.OR = [
+      ...(Number.isSafeInteger(topicId) && topicId > 0 ? [{ id: topicId }] : []),
       { title: { contains: q } },
       { content: { contains: q } },
     ];

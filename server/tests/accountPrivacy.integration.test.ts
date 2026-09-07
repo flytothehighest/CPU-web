@@ -53,7 +53,7 @@ test('account privacy lifecycle on isolated PostgreSQL', { skip: process.env.PRI
     await submitProfileReview(owner.id, { bio: 'pending biography' });
     let user = await prisma.user.findUniqueOrThrow({ where: { id: owner.id } });
     assert.equal(user.bio, 'private');
-    assert.equal(user.profileReviewStatus, 'pending');
+    assert.equal(user.profileReviewStatus, 'checking');
     await assert.rejects(decideProfileReview(owner.id, other.id, '{}', true, 'stale'));
     await decideProfileReview(owner.id, other.id, user.pendingProfile!, true, 'checked');
     user = await prisma.user.findUniqueOrThrow({ where: { id: owner.id } });

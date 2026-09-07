@@ -872,9 +872,9 @@ async function prepareImageReviewInput(asset: {
   localPath: string;
   mimeType: string | null;
   attemptCount: number;
-}): Promise<PreparedImageReviewInput> {
+}, markAttempt = true): Promise<PreparedImageReviewInput> {
   const now = new Date();
-  await prisma.forumImageAsset.update({
+  if (markAttempt) await prisma.forumImageAsset.update({
     where: { id: asset.id },
     data: {
       lastAttemptAt: now,
@@ -925,6 +925,15 @@ async function reviewPreparedImage(input: PreparedImageReviewInput) {
   } catch (error: any) {
     await markImageReviewError(input.asset, error);
   }
+}
+
+export async function reviewProfileAvatar(url: string, userId: number) {
+  if (!shouldRunImageReview()) throw new Error("AI 图片审核未开启或服务未配置");
+  const asset = await prisma.forumImageAsset.findFirst({ where: { url, createdById: userId } });
+  if (!asset) throw new Error("待审核头像文件不存在");
+  // 资料快照通过前保持隔离，不能交给论坛图片队列提前公开。
+  const input = await prepareImageReviewInput(asset, false);
+  return requestImageReview({ url, localPath: input.asset.localPath, mimeType: input.mimeType, dataUrl: input.dataUrl });
 }
 
 async function applyImageReviewDecision(assetId: number, decision: ImageReviewDecision) {

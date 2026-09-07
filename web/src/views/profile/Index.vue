@@ -726,7 +726,7 @@ async function saveEdit() {
       college: editForm.college.trim(),
     } as any);
     auth.user = u;
-    ElMessage.success(u.profileReview?.status === "pending" ? "资料已提交，审核通过后公开生效" : "已保存");
+    ElMessage.success(["pending", "checking"].includes(u.profileReview?.status || "") ? "资料已提交 AI 审核，通过后自动公开生效" : "已保存");
     editing.value = false;
   } finally { saving.value = false; }
 }

@@ -1,7 +1,7 @@
 <template>
   <div class="topics-pane">
     <div class="ctrl-bar">
-      <el-input v-model="q" placeholder="搜标题 / 正文" clearable style="width:280px" @keyup.enter="reload">
+      <el-input v-model="q" placeholder="搜 ID / 帖子链接 / 标题 / 正文" clearable style="width:280px" @keyup.enter="reload">
         <template #prefix><el-icon><Search /></el-icon></template>
       </el-input>
       <el-select v-model="boardSlug" clearable placeholder="所有板块" style="width:160px" :disabled="Boolean(boardLoadError)" @change="reload">
