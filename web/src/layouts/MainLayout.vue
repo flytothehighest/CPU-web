@@ -203,17 +203,15 @@
       platform="windows"
     />
 
-    <ComposeActionSheet v-if="useMobileForumLayout && composeMenuOpen" v-model="composeMenuOpen" />
-
     <button
       v-if="showForumPostFab"
       type="button"
       class="forum-post-fab"
-      aria-label="发布内容"
+      aria-label="投稿"
       @click="openForumPost"
     >
       <el-icon><Edit /></el-icon>
-      <span>发布</span>
+      <span>投稿</span>
     </button>
 
     <button
@@ -406,7 +404,6 @@ import { isDesktopNativeApp, isFlutterNativeShell, isLikelyIosDevice, isIosNativ
 const ShijianAssistant = defineAsyncComponent(() => import("@/views/search/Result.vue"));
 const DesktopToolsPanel = defineAsyncComponent(() => import("@/components/common/DesktopToolsPanel.vue"));
 const DownloadSafetyGuideDialog = defineAsyncComponent(() => import("@/components/common/DownloadSafetyGuideDialog.vue"));
-const ComposeActionSheet = defineAsyncComponent(() => import("@/components/forum/ComposeActionSheet.vue"));
 
 const auth = useAuthStore();
 const msg = useMessageStore();
@@ -419,7 +416,6 @@ const logoutPending = ref(false);
 const assistantWidgetOpen = ref(false);
 const toolsWidgetOpen = ref(false);
 const downloadSafetyGuideVisible = ref(false);
-const composeMenuOpen = ref(false);
 const keyboardOpen = ref(false);
 const keyboardGeometryOpen = ref(false);
 const mobileViewportHeight = ref(0);
@@ -494,15 +490,12 @@ const showForumPostFab = computed(() => (
 ));
 
 function openForumPost() {
-  if (!useMobileForumLayout.value) {
-    if (!auth.isLoggedIn) {
-      void router.push({ name: "login", query: { redirect: "/post" } });
-      return;
-    }
-    void router.push({ name: "post" });
+  const target = useMobileForumLayout.value ? "/post?board=general" : "/post";
+  if (!auth.isLoggedIn) {
+    void router.push({ name: "login", query: { redirect: target } });
     return;
   }
-  composeMenuOpen.value = true;
+  void router.push(target);
 }
 
 // 两个面板占同一块位置，只能开一个
@@ -1835,13 +1828,16 @@ function setAppearanceMode(command: string | number | object) {
   }
 
   .forum-post-fab {
+    display: inline-flex;
     right: 14px;
     bottom: calc(var(--layout-mobile-tabbar-reserve) + 12px);
     width: auto;
     height: 52px;
     min-height: 52px;
+    align-items: center;
     justify-content: center;
-    padding: 0 15px;
+    gap: 7px;
+    padding: 0 16px;
   }
 
   .forum-post-fab span { display: inline; }
@@ -1861,12 +1857,12 @@ function setAppearanceMode(command: string | number | object) {
   .forum-post-fab {
     right: 14px;
     bottom: calc(var(--layout-mobile-tabbar-reserve) + 12px);
-    width: 46px;
+    width: auto;
     height: 46px;
     min-height: 46px;
-    padding: 0;
+    padding: 0 14px;
     border: 1px solid color-mix(in srgb, var(--cpu-primary) 24%, var(--cpu-border));
-    border-radius: 15px;
+    border-radius: 23px;
     background: color-mix(in srgb, var(--cpu-card) 94%, transparent);
     color: var(--cpu-primary);
     box-shadow: 0 8px 22px rgba(15, 23, 42, .12);
@@ -1875,7 +1871,7 @@ function setAppearanceMode(command: string | number | object) {
   }
 
   .forum-post-fab .el-icon { font-size: 21px; }
-  .forum-post-fab span { display: none; }
+  .forum-post-fab span { display: inline; font-size: 13px; }
   .forum-post-fab:hover { background: var(--cpu-card); color: var(--cpu-primary-dark); }
 
   .layout-root.keyboard-open .main--bare {
