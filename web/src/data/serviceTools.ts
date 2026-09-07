@@ -24,8 +24,8 @@ export const serviceTools: ServiceTool[] = [
   {
     slug: "feedback",
     name: "需求反馈",
-    summary: "先把校园服务里的工具想法集中收集起来",
-    description: "用于承接后续工具需求、使用建议和问题反馈，之后可以替换为完整的在线问卷能力。",
+    summary: "提交校园服务建议与使用问题",
+    description: "收集校园工具需求、使用建议和问题反馈。",
     icon: "forum",
     status: "ready",
     category: "反馈",
@@ -37,8 +37,8 @@ export const serviceTools: ServiceTool[] = [
   {
     slug: "questionnaire",
     name: "在线问卷",
-    summary: "预留问卷发布、填写与结果统计入口",
-    description: "后续可扩展问卷编辑器、链接分享、匿名填写和数据导出等能力。",
+    summary: "发布和填写问卷，查看结果统计",
+    description: "支持问卷编辑、链接分享、填写和结果导出。",
     icon: "document",
     status: "ready",
     category: "表单",

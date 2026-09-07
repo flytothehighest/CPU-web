@@ -15,7 +15,7 @@
       <div class="panel-head">
         <div>
           <h3>工具列表</h3>
-          <p>常用工具会陆续补齐，也欢迎先把需求告诉我们。</p>
+          <p>选择需要的校园工具，也可以通过需求反馈提出建议。</p>
         </div>
         <div class="panel-actions">
           <el-button v-if="canManageAny" plain type="primary" @click="openManage">

@@ -17,6 +17,9 @@ struct NativeImagePreviewItem: Decodable, Identifiable {
 struct NativeImageGallery: View {
     let items: [NativeImagePreviewItem]
     @State private var selection: Int
+    @State private var saving = false
+    @State private var saveMessage = ""
+    @State private var showSaveMessage = false
     @Environment(\.dismiss) private var dismiss
 
     init(items: [NativeImagePreviewItem], startIndex: Int) {
@@ -61,6 +64,7 @@ struct NativeImageGallery: View {
                             .background(.ultraThinMaterial, in: Circle())
                     }
                     .foregroundStyle(.white)
+                    .disabled(saving)
                 }
                 .padding(.horizontal, 18)
                 .padding(.top, 8)
@@ -79,18 +83,44 @@ struct NativeImageGallery: View {
                 }
             }
         }
+        .alert("保存图片", isPresented: $showSaveMessage) {
+            Button("知道了", role: .cancel) {}
+        } message: {
+            Text(saveMessage)
+        }
     }
 
     private func saveCurrentImage() {
-        guard items.indices.contains(selection), let url = URL(string: items[selection].url) else { return }
-        Task {
+        guard !saving else { return }
+        guard items.indices.contains(selection), let url = URL(string: items[selection].url),
+              url.scheme?.lowercased() == "https" else {
+            saveMessage = "图片地址无效，无法保存。"
+            showSaveMessage = true
+            return
+        }
+        saving = true
+        Task { @MainActor in
             guard let (data, response) = try? await URLSession.shared.data(from: url),
                   let http = response as? HTTPURLResponse,
                   (200..<300).contains(http.statusCode),
                   let image = UIImage(data: data) else {
+                saving = false
+                saveMessage = "图片下载失败，请检查网络后重试。"
+                showSaveMessage = true
                 return
             }
-            ImageStore.saveToPhotos(image: image) { _ in }
+            ImageStore.saveToPhotos(image: image) { result in
+                Task { @MainActor in
+                    saving = false
+                    switch result {
+                    case .success:
+                        saveMessage = "图片已保存到系统相册。"
+                    case .failure:
+                        saveMessage = "保存失败，请检查相册添加权限和可用存储空间后重试。"
+                    }
+                    showSaveMessage = true
+                }
+            }
         }
     }
 }

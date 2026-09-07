@@ -157,6 +157,11 @@ struct WebViewContainer: UIViewRepresentable {
             synchronizeHistoryPositionAndCapture(in: webView)
         }
 
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            mainFrameLoadFailed = true
+            model.showError()
+        }
+
         func webView(
             _ webView: WKWebView,
             didFailProvisionalNavigation navigation: WKNavigation!,
@@ -221,6 +226,14 @@ struct WebViewContainer: UIViewRepresentable {
             decidePolicyFor navigationResponse: WKNavigationResponse,
             decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void
         ) {
+            if navigationResponse.isForMainFrame,
+               let response = navigationResponse.response as? HTTPURLResponse,
+               response.statusCode >= 400 {
+                mainFrameLoadFailed = true
+                model.showError()
+                decisionHandler(.cancel)
+                return
+            }
             let disposition = (navigationResponse.response as? HTTPURLResponse)?
                 .value(forHTTPHeaderField: "Content-Disposition")?
                 .lowercased() ?? ""

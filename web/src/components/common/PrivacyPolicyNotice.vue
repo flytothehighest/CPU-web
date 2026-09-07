@@ -2,6 +2,8 @@
   <p :class="['privacy-policy-notice', `align-${align}`, `tone-${tone}`, { compact }]">
     <span v-if="prefix">{{ prefix }}</span>
     <a href="/privacy.html">《隐私政策》</a>
+    <span>及</span>
+    <a href="/terms.html">《用户协议》</a>
     <span v-if="suffix">{{ suffix }}</span>
   </p>
 </template>

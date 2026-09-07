@@ -5,8 +5,12 @@ enum AppConfiguration {
     static let widgetEndpointKey = "scheduleWidgetEndpoint"
     static let widgetEndpointFileName = "schedule-widget-endpoint.txt"
     static let widgetThemeKey = "scheduleWidgetTheme"
-    static let versionCode = 1
-    static let versionName = "1.0.0"
+    static var versionCode: Int {
+        Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "") ?? 1
+    }
+    static var versionName: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.0"
+    }
 
     static var appURL: URL {
         let configured = Bundle.main.object(forInfoDictionaryKey: "CPUAppURL") as? String

@@ -47,6 +47,7 @@
         <el-button v-if="!user?.studentSso" plain :disabled="savingPw || logoutBusy" @click="passwordDialog = true">修改密码</el-button>
         <el-button type="danger" plain :loading="logoutBusy" :disabled="logoutBusy" @click="onLogout">退出登录</el-button>
       </div>
+      <p><a href="/privacy.html">隐私政策</a> · <a href="/terms.html">用户协议</a></p>
     </div>
 
     <div v-if="user?.vipActive" id="vip-style" class="cpu-card vip-style-card">

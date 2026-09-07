@@ -153,6 +153,7 @@ final class CPUIOSBridge: NSObject, WKScriptMessageHandler {
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard message.name == Self.handlerName,
               message.frameInfo.isMainFrame,
+              message.frameInfo.securityOrigin.protocol == "https",
               message.frameInfo.securityOrigin.host.lowercased() == AppConfiguration.appHost,
               let body = message.body as? [String: Any],
               let action = body["action"] as? String else {
@@ -218,19 +219,23 @@ final class CPUIOSBridge: NSObject, WKScriptMessageHandler {
     }
 
     private func saveRemoteImage(_ value: String?) {
-        guard let value, let url = URL(string: value) else {
+        guard let value, let url = URL(string: value), url.scheme?.lowercased() == "https" else {
             showMessage(title: "保存失败", message: "图片地址无效。")
             return
         }
         Task {
             do {
-                var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
+                let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
+                // Let the cookie store enforce domain, path and Secure scope,
+                // including redirects, instead of forwarding every WebView cookie.
+                let configuration = URLSessionConfiguration.ephemeral
                 if let cookieStore = webView?.configuration.websiteDataStore.httpCookieStore {
                     let cookies = await cookieStore.allCookies()
-                    let fields = HTTPCookie.requestHeaderFields(with: cookies)
-                    fields.forEach { request.setValue($1, forHTTPHeaderField: $0) }
+                    cookies.forEach { configuration.httpCookieStorage?.setCookie($0) }
                 }
-                let (data, response) = try await URLSession.shared.data(for: request)
+                let session = URLSession(configuration: configuration)
+                defer { session.finishTasksAndInvalidate() }
+                let (data, response) = try await session.data(for: request)
                 guard let http = response as? HTTPURLResponse,
                       (200..<300).contains(http.statusCode),
                       let image = UIImage(data: data) else {
