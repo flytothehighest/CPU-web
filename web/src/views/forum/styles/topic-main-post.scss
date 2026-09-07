@@ -475,5 +475,27 @@
     min-width: 0;
     margin-left: 0;
   }
+
+  .post-foot .post-action {
+    height: 44px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 12px;
+    color: var(--cpu-text-secondary);
+    font-weight: 500;
+
+    :deep(.el-icon) { font-size: 18px; }
+    &.is-liked { color: var(--el-color-primary); }
+    &.is-disabled { opacity: 0.45; }
+    &:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
+  }
+
+  .post-action-count {
+    margin-left: 6px;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .post-action-more { margin-left: auto; }
 }
 

@@ -338,13 +338,20 @@
       </div>
 
       <footer class="post-foot">
-        <el-button :type="liked ? 'primary' : 'default'" :icon="Star" :loading="topicActionBusy === 'like'" :disabled="isTopicActionBusy || topic.hidden" @click="onLike">
-          {{ liked ? '已点赞' : '点赞' }} · {{ topic.likeCount }}
+        <el-button text class="post-action" :class="{ 'is-liked': liked }" :aria-pressed="liked" :icon="liked ? StarFilled : Star" :loading="topicActionBusy === 'like'" :disabled="isTopicActionBusy || topic.hidden" @click="onLike">
+          <span>{{ liked ? '已赞' : '点赞' }}</span><span class="post-action-count">{{ topic.likeCount }}</span>
         </el-button>
-        <el-button :icon="ChatLineRound" :disabled="!canReply" @click="openReplyDialog()">回复 · {{ topic.replyCount }}</el-button>
-        <el-button :disabled="topic.hidden" @click="shareDialogOpen = true">分享</el-button>
-        <el-button v-if="canReportPost(topic)" type="danger" plain @click="openReport('topic', topic.id, topic.title)">举报</el-button>
-        <el-button v-if="canReportPost(topic)" plain @click="blockPostAuthor('topic', topic.id)">屏蔽作者</el-button>
+        <el-button text class="post-action" :icon="ChatLineRound" :disabled="!canReply" @click="openReplyDialog()"><span>回复</span><span class="post-action-count">{{ topic.replyCount }}</span></el-button>
+        <el-button text class="post-action" :icon="Share" :disabled="topic.hidden" @click="shareDialogOpen = true">分享</el-button>
+        <el-dropdown v-if="canReportPost(topic)" class="post-action-more" trigger="click" placement="bottom-end">
+          <el-button text class="post-action" :icon="MoreFilled" aria-label="更多帖子操作" />
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item @click="openReport('topic', topic.id, topic.title)">举报帖子</el-dropdown-item>
+              <el-dropdown-item @click="blockPostAuthor('topic', topic.id)">屏蔽作者</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
       </footer>
       </div>
     </article>
@@ -760,7 +767,7 @@
 import { ref, reactive, computed, nextTick, onBeforeUnmount, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { ArrowLeft, ArrowRight, ChatLineRound, Compass, Link, MoreFilled, Picture, Star, VideoCamera } from "@element-plus/icons-vue";
+import { ArrowLeft, ArrowRight, ChatLineRound, Compass, Link, MoreFilled, Picture, Share, Star, StarFilled, VideoCamera } from "@element-plus/icons-vue";
 import UserAvatar from "@/components/common/UserAvatar.vue";
 import UserVerificationBadge from "@/components/common/UserVerificationBadge.vue";
 import UserReputationBadge from "@/components/common/UserReputationBadge.vue";
