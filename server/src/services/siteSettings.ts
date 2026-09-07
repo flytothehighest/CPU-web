@@ -54,9 +54,6 @@ export type LearningAssistantTiersConfig = Record<LearningAssistantTierKey, Lear
 export type LearningPlatformKey = "chaoxing" | "zhihuishu" | "icve" | "zjy" | "icourse" | "yuketang" | "weban";
 export type LearningPlatformAvailability = Record<LearningPlatformKey, boolean>;
 export type AiServiceConfig = {
-  privacyOperator?: string;
-  privacyPolicyUrl?: string;
-  privacyRetention?: string;
   id: string;
   name: string;
   provider: string;
@@ -313,9 +310,6 @@ function normalizeAiServiceEntries(input: unknown): AiServiceConfig[] {
     signatures.add(signature);
     result.push({
       id: normalizeAiServiceId(item.id, index, used),
-      privacyOperator: String(item.privacyOperator || "").trim().slice(0, 160),
-      privacyPolicyUrl: String(item.privacyPolicyUrl || "").trim().slice(0, 500),
-      privacyRetention: String(item.privacyRetention || "").trim().slice(0, 1000),
       name: String(item.name ?? `AI 服务 ${index + 1}`).trim().slice(0, 80) || `AI 服务 ${index + 1}`,
       provider,
       apiUrl,

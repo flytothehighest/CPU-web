@@ -2442,9 +2442,6 @@ const siteConfigPatchSchema = z.object({
   }).optional(),
   learningAssistantAccessMode: z.enum(["guest-unlimited", "account-quota"]).optional(),
   aiServices: z.array(z.object({
-    privacyOperator: z.string().trim().max(160).optional(),
-    privacyPolicyUrl: z.string().trim().max(500).refine((url) => !url || /^https:\/\//.test(url) || url === "/privacy.html", "隐私政策须为 HTTPS 地址").optional(),
-    privacyRetention: z.string().trim().max(1000).optional(),
     id: z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,47}$/i),
     name: z.string().trim().min(1).max(80),
     provider: z.string().trim().min(1).max(40),

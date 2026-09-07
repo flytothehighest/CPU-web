@@ -3,9 +3,6 @@ import type { TopNavigationItem } from "./site";
 import type { ForumAdPlacement } from "./forumAds";
 
 export type AiServiceConfig = {
-  privacyOperator?: string;
-  privacyPolicyUrl?: string;
-  privacyRetention?: string;
   id: string;
   name: string;
   provider: string;

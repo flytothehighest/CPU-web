@@ -1,5 +1,4 @@
 import { prisma } from "../prisma";
-import { ensureUserAiConsent } from "./aiConsent";
 import { invalidateForumCaches } from "./cacheInvalidation";
 import { ensureForumImageAssetsForContent } from "./imageModeration";
 import { ensureForumVideoAssetsForContent } from "./videoModeration";
@@ -76,6 +75,13 @@ export function startForumSubmissionReviewPoller() {
 }
 
 export async function recoverPendingForumSubmissions() {
+  // Only recover the retired consent gate's exact marker; preserve requested human reviews.
+  const consentBlocked = { hidden: true, aiReviewStatus: "manual_requested", aiReviewDetail: "AI consent unavailable; manual review required" };
+  const restartReview = { aiReviewStatus: "checking", aiReviewReason: null, aiReviewDetail: null, aiReviewedAt: null };
+  await Promise.all([
+    prisma.topic.updateMany({ where: consentBlocked, data: restartReview }),
+    prisma.reply.updateMany({ where: consentBlocked, data: restartReview }),
+  ]);
   const now = Date.now();
   const retryBefore = new Date(now - RETRY_DELAYS_MS[0]);
   const automaticManualRetryBefore = new Date(now - AUTO_MANUAL_RETRY_DELAY_MS);
@@ -183,7 +189,6 @@ async function processTopicSubmissionReview(topicId: number) {
   const automaticManualRetry = topic.aiReviewStatus === "manual_requested" && isAutomaticManualReviewRetry(topic.aiReviewDetail);
   if (topic.aiReviewStatus === "manual_requested" && !automaticManualRetry) return;
   try {
-    await ensureUserAiConsent(topic.authorId);
     const metadata = parseJsonObject(topic.metadata);
     const editContext = parseTopicEditReviewContext(topic.aiReviewDetail);
     let result: Awaited<ReturnType<typeof reviewTopicContent>>;
@@ -316,7 +321,6 @@ async function processReplySubmissionReview(replyId: number) {
   if (!reply) return;
   const automaticManualRetry = reply.aiReviewStatus === "manual_requested" && isAutomaticManualReviewRetry(reply.aiReviewDetail);
   if (reply.aiReviewStatus === "manual_requested" && !automaticManualRetry) return;
-  await ensureUserAiConsent(reply.authorId);
   const result = await reviewReplyContent({
     topicTitle: reply.topic.title,
     boardName: reply.topic.board.name,
@@ -427,10 +431,6 @@ async function failTopicSubmissionReview(topicId: number, error: unknown, expect
   const attempt = forumReviewAttempt(current.aiReviewDetail) + 1;
   const snapshotWhere = forumReviewSnapshot(topicId, current.updatedAt, current.aiReviewStatus);
 
-  if (await queueConsentManualReview("topic", snapshotWhere, error, {
-    id: topicId, topicId, userId: current.authorId, preview: current.title, submissionId: current.submissionId,
-  })) return;
-
   if (!automaticManualRetry && attempt < MAX_REVIEW_ATTEMPTS) {
     const updated = await prisma.topic.updateMany({
       where: snapshotWhere,
@@ -497,10 +497,6 @@ async function failReplySubmissionReview(replyId: number, error: unknown) {
   if (current.aiReviewStatus === "manual_requested" && !automaticManualRetry) return;
   const attempt = forumReviewAttempt(current.aiReviewDetail) + 1;
   const snapshotWhere = forumReviewStatusSnapshot(replyId, current.aiReviewStatus);
-
-  if (await queueConsentManualReview("reply", snapshotWhere, error, {
-    id: replyId, topicId: current.topicId, userId: current.authorId, preview: current.content.slice(0, 80), submissionId: current.submissionId,
-  })) return;
 
   if (!automaticManualRetry && attempt < MAX_REVIEW_ATTEMPTS) {
     const updated = await prisma.reply.updateMany({
@@ -631,32 +627,6 @@ async function notifyInitialReviewOutage(input: {
       submissionId: input.submissionId,
     },
   });
-}
-
-export function consentManualReviewReason(error: unknown) {
-  const code = (error as { code?: number } | null)?.code;
-  return code === 4120 || code === 4121
-    ? "内容已保存，正在等待人工审核；本次未向 AI 服务发送内容。"
-    : null;
-}
-
-async function queueConsentManualReview(
-  kind: "topic" | "reply",
-  where: { id: number; hidden: true; aiReviewStatus: string; updatedAt?: Date },
-  error: unknown,
-  input: { id: number; topicId: number; userId: number; preview: string; submissionId?: string | null },
-) {
-  const reason = consentManualReviewReason(error);
-  if (!reason) return false;
-  const data = { aiReviewStatus: "manual_requested", aiReviewReason: reason, aiReviewDetail: "AI consent unavailable; manual review required", aiReviewedAt: new Date() };
-  const updated = kind === "topic"
-    ? await prisma.topic.updateMany({ where, data })
-    : await prisma.reply.updateMany({ where, data });
-  if (updated.count === 1) {
-    await invalidateForumCaches().catch(() => undefined);
-    await notifyAutomaticManualQueue({ ...input, kind, attempt: 0, reason });
-  }
-  return true;
 }
 
 async function notifyAutomaticManualQueue(input: {

@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { ensureContextAiConsent, ensureUserAiConsent } from "./aiConsent";
 import { prisma } from "../prisma";
 import { Errors } from "../utils/response";
 import { finishAiReviewLogError, finishAiReviewLogSuccess, startAiReviewLog } from "./aiReviewLog";
@@ -168,8 +167,6 @@ export async function requestAiJson(
   options?: AiJsonRequestOptions,
 ) {
   const config = getSiteConfig();
-  await ensureContextAiConsent();
-  if (options?.logContext?.createdById) await ensureUserAiConsent(options.logContext.createdById);
   const providerConfigs = options?.providerConfigs?.length
     ? options.providerConfigs
     : options?.providerConfig

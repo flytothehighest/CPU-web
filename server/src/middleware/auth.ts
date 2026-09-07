@@ -3,7 +3,6 @@ import { prisma } from "../prisma";
 import { signToken, verifySessionTokenSignature, verifyToken } from "../utils/jwt";
 import { Errors } from "../utils/response";
 import { isCookieAuthRequest, issueBrowserSession, updateBrowserSession } from "../services/browserSession";
-import { aiActorContext } from "../services/aiConsent";
 
 function requestAuthToken(req: Request) {
   if (req.browserSession?.siteToken) return req.browserSession.siteToken;
@@ -70,7 +69,7 @@ export async function authRequired(req: Request, res: Response, next: NextFuncti
       const session = await issueBrowserSession(res, { siteToken: token, ...(jwxtToken ? { jwxtToken } : {}) });
       req.browserSession = session;
     }
-    aiActorContext.run(req.user.userId, next);
+    next();
   } catch (error: any) {
     if (error?.status && error?.code) {
       next(error);
@@ -91,8 +90,7 @@ export async function authOptional(req: Request, res: Response, next: NextFuncti
   } catch {
     req.user = undefined;
   }
-  if (req.user) aiActorContext.run(req.user.userId, next);
-  else next();
+  next();
 }
 
 export async function authForAccountDeletion(req: Request, _res: Response, next: NextFunction) {

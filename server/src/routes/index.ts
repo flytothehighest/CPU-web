@@ -32,7 +32,6 @@ import { forumReportRouter } from "./forumReport";
 import { accountVerificationRouter } from "./accountVerification";
 import { yaodaFlightRouter } from "./yaodaFlight";
 import { privacyRouter } from "./privacy";
-import { aiConsentGate } from "../middleware/aiConsent";
 import { revokedCredentialGate } from "../middleware/revokedCredential";
 
 export const router = Router();
@@ -42,11 +41,11 @@ router.use("/privacy", privacyRouter);
 router.use("/auth", authRouter);
 router.use("/user-avatars", userAvatarRouter);
 router.use("/boards", authOptional, boardRouter);
-router.use("/topics", authOptional, aiConsentGate, topicRouter);
-router.use("/replies", authOptional, aiConsentGate, replyRouter);
+router.use("/topics", authOptional, topicRouter);
+router.use("/replies", authOptional, replyRouter);
 router.use("/services", servicesRouter);
 router.use("/courses", authOptional, courseRouter);
-router.use("/search", authOptional, aiConsentGate, searchRouter);
+router.use("/search", authOptional, searchRouter);
 router.use("/home", authOptional, homeRouter);
 router.use("/site", siteRouter);
 router.use("/forum-ads", forumAdsRouter);
@@ -69,10 +68,10 @@ router.use("/jwxt", revokedCredentialGate, jwxtRouter);
 router.use("/user", authRequired, userRouter);
 router.use("/likes", authRequired, likeRouter);
 router.use("/messages", authRequired, messageRouter);
-router.use("/direct-messages", authRequired, aiConsentGate, directMessageRouter);
+router.use("/direct-messages", authRequired, directMessageRouter);
 router.use("/forum-reports", authRequired, forumReportRouter);
 router.use("/account-verification", authRequired, accountVerificationRouter);
-router.use("/uploads", authOptional, aiConsentGate, uploadRouter);
+router.use("/uploads", authOptional, uploadRouter);
 
 // 管理后台：需登录 + 内部按 role 分级
 router.use("/admin", authRequired, adminRouter);

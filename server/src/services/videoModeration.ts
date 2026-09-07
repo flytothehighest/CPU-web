@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { ensureUserAiConsent } from "./aiConsent";
 import path from "node:path";
 import { mkdir, readFile, rm, stat } from "node:fs/promises";
 import { execFile as execFileCallback } from "node:child_process";
@@ -609,7 +608,6 @@ async function prepareVideoReviewInput(asset: {
   mimeType: string | null;
   attemptCount: number;
 }): Promise<PreparedVideoReviewInput> {
-  await ensureUserAiConsent((await prisma.forumVideoAsset.findUnique({ where: { id: asset.id }, select: { createdById: true } }))?.createdById);
   const now = new Date();
   await prisma.forumVideoAsset.update({
     where: { id: asset.id },
@@ -700,7 +698,6 @@ async function applyVideoReviewDecision(input: PreparedVideoReviewInput, decisio
 }
 
 async function requestVideoReview(input: PreparedVideoReviewInput): Promise<VideoReviewDecision> {
-  await ensureUserAiConsent((await prisma.forumVideoAsset.findUnique({ where: { id: input.asset.id }, select: { createdById: true } }))?.createdById);
   const config = getSiteConfig();
   const providers = resolveAiServiceCandidatesForScene(config, "video-review");
   const provider = providers[0];

@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { ensureContextAiConsent } from "./aiConsent";
 import { checkAiModelAvailability } from "./aiModelCatalog";
 import { shouldFallbackToNextProvider } from "./modelFallback";
 import {
@@ -274,7 +273,6 @@ export async function sendAiJsonRequestWithProviderFallback(input: {
     ? [...configuredProviders].sort((left, right) => Number(isOllamaEndpoint(left.provider, left.apiUrl)) - Number(isOllamaEndpoint(right.provider, right.apiUrl)))
     : configuredProviders;
   for (let index = 0; index < providers.length; index += 1) {
-    await ensureContextAiConsent();
     const provider = providers[index];
     const model = String(provider.model || input.model || "").trim();
     if (index > 0) {

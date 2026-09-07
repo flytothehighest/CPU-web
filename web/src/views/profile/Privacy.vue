@@ -1,21 +1,8 @@
 <template>
   <main class="privacy-page" v-loading="loading">
     <h2>账号与隐私</h2>
-    <p><a href="/privacy.html">隐私政策</a> · <a href="/community-rules.html">社区治理规则</a> · <a href="/ai-privacy.html">AI 数据共享声明</a></p>
+    <p><a href="/privacy.html">隐私政策</a> · <a href="/community-rules.html">社区治理规则</a></p>
     <template v-if="auth.isLoggedIn">
-      <section class="cpu-card">
-        <h3>AI 数据共享</h3>
-        <p>{{ disclosure?.purposes }}</p><p>{{ disclosure?.data }}</p>
-        <p v-for="recipient in disclosure?.recipients" :key="recipient.host + recipient.name">
-          {{ recipient.operator }}（{{ recipient.name }} · {{ recipient.host }}）<br />{{ recipient.retention }}
-          <a v-if="recipient.policyUrl" :href="recipient.policyUrl" target="_blank" rel="noopener noreferrer">隐私政策</a>
-        </p>
-        <p>{{ disclosure?.choice }}</p>
-        <el-alert v-if="disclosure && !disclosure.ready" title="服务接收方信息尚不完整，暂不发送个人内容给 AI。" type="warning" :closable="false" />
-        <p>当前状态：{{ disclosure?.agreed ? '已同意' : '未同意' }}</p>
-        <el-button v-if="disclosure?.agreed" @click="withdraw">撤回同意</el-button>
-        <el-button v-else :disabled="!disclosure?.ready" @click="agree">阅读并选择是否同意</el-button>
-      </section>
       <section class="cpu-card">
         <h3>已屏蔽用户</h3>
         <p>屏蔽后不显示该账号的帖子和回复，双方无法继续私聊。匿名内容按实际账号生效，不会显示其真实身份。</p>
@@ -50,10 +37,8 @@ import { useAuthStore } from '@/stores/auth';
 import { request } from '@/api/request';
 import { clearCreds } from '@/utils/credCrypto';
 import { clearCommunityViewCaches } from '@/utils/privacyLocalState';
-import { fetchAiDisclosure, ensureAiConsent, setAiConsent, type AiDisclosure } from '@/utils/aiConsent';
 const auth = useAuthStore();
 const loading = ref(false), deleting = ref(false), acknowledged = ref(false), confirmation = ref('');
-const disclosure = ref<AiDisclosure | null>(null);
 const blocks = ref<Array<{ id: string; label: string }>>([]);
 const receipt = ref(''), status = ref<{ message: string } | null>(null);
 try { receipt.value = localStorage.getItem('cpu-account-deletion-receipt') || ''; } catch { /* Storage may be disabled. */ }
@@ -61,13 +46,10 @@ async function refresh() {
   loading.value = true;
   try {
     if (auth.isLoggedIn) {
-      disclosure.value = await fetchAiDisclosure();
       blocks.value = await request.get('/user/blocks');
     }
   } finally { loading.value = false; }
 }
-async function agree() { try { await ensureAiConsent(); await refresh(); } catch (error) { if (error instanceof Error) ElMessage.error(error.message); } }
-async function withdraw() { if (disclosure.value) { await setAiConsent(disclosure.value.version, false); await refresh(); ElMessage.success('已撤回同意'); } }
 async function unblock(id: string) { await request.delete(`/user/blocks/${encodeURIComponent(id)}`); clearCommunityViewCaches(); await refresh(); }
 async function checkStatus() { status.value = await request.post('/privacy/account-deletion/status', { receipt: receipt.value }); }
 async function removeAccount() {

@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { prisma } from '../src/prisma';
 import { requestAccountDeletion, processAccountDeletion, getDeletionReceipt, publicDeletionStatus, managedDeletionPath } from '../src/services/accountDeletion';
-import { currentAiDisclosure, ensureUserAiConsent, describeAiRecipient } from '../src/services/aiConsent';
 import { ensureNoUserBlock } from '../src/services/userBlock';
 import { submitProfileReview, decideProfileReview } from '../src/services/profileReview';
 import { isIosCommerceRequest } from '../src/middleware/iosCommerce';
@@ -19,10 +18,7 @@ test('iOS commerce is identified independently of account; regular web remains a
   assert.equal(isIosCommerceRequest({ headers: { 'x-cpu-client': 'ios' } }), true);
   assert.equal(isIosCommerceRequest({ headers: { 'user-agent': 'Mozilla/5 Safari' } }), false);
 });
-test('unknown AI proxy requires operator, policy and retention; asset paths reject traversal', () => {
-  assert.equal(describeAiRecipient({ name: 'proxy', apiUrl: 'https://proxy.example/v1' }).ready, false);
-  assert.equal(describeAiRecipient({ name: 'local', provider: 'ollama', apiUrl: 'http://127.0.0.1:11434' }).ready, true);
-  assert.equal(describeAiRecipient({ name: 'relay', apiUrl: 'http://127.0.0.1:8080' }).ready, false);
+test('managed asset paths reject traversal', () => {
   assert.equal(managedDeletionPath('/uploads/avatars/2/a.png?v=1', 2), 'avatars/2/a.png');
   assert.equal(managedDeletionPath('/uploads/avatars/3/a.png', 2), null);
   assert.equal(managedDeletionPath('forum/../private'), null);
@@ -46,9 +42,7 @@ test('account privacy lifecycle on isolated PostgreSQL', { skip: process.env.PRI
     const other = await prisma.user.create({ data: { username: `other-${suffix}`, passwordHash: 'test', nickname: 'Other' } });
     const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${signToken({ userId: owner.id, studentId: owner.username, role: 'user', campus: '' })}` };
     assert.equal((await fetch(`${origin}/blocks`)).status, 401);
-    await assert.rejects(ensureUserAiConsent(owner.id));
-    await prisma.user.update({ where: { id: owner.id }, data: { aiConsentVersion: currentAiDisclosure().version, aiConsentAgreedAt: new Date(), avatar: `/uploads/avatars/${owner.id}/owned.png` } });
-    await ensureUserAiConsent(owner.id);
+    await prisma.user.update({ where: { id: owner.id }, data: { avatar: `/uploads/avatars/${owner.id}/owned.png` } });
     const blocked = await fetch(`${origin}/blocks`, { method: 'POST', headers, body: JSON.stringify({ targetType: 'user', targetId: other.id }) });
     assert.equal(blocked.status, 200);
     const blockList = await (await fetch(`${origin}/blocks`, { headers })).json() as any;
@@ -78,7 +72,6 @@ test('account privacy lifecycle on isolated PostgreSQL', { skip: process.env.PRI
     assert.equal(receiptResponse.status, 200);
     assert.equal((await receiptResponse.json() as any).data.username, undefined);
     await assert.rejects(requestAccountDeletion(owner.id));
-    await assert.rejects(ensureUserAiConsent(owner.id));
     assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: owner.id } })).status, 'deleting');
     const media: string[] = [];
     let fail = true;
