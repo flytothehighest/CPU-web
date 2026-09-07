@@ -46,7 +46,7 @@ async function presentReplySubmission(reply: any, requestUser: any, replayed = f
     reason: reply.aiReviewReason,
     replayed,
   });
-  if (submissionResult.status === "pending" || submissionResult.status === "failed") {
+  if (submissionResult.status === "pending" || submissionResult.status === "failed" || submissionResult.status === "manual_review") {
     return {
       ...decodeReplyForViewer(reply, requestUser),
       blocked: false,

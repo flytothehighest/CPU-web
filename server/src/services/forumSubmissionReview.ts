@@ -180,10 +180,10 @@ async function processTopicSubmissionReview(topicId: number) {
     },
   });
   if (!topic) return;
-  await ensureUserAiConsent(topic.authorId);
   const automaticManualRetry = topic.aiReviewStatus === "manual_requested" && isAutomaticManualReviewRetry(topic.aiReviewDetail);
   if (topic.aiReviewStatus === "manual_requested" && !automaticManualRetry) return;
   try {
+    await ensureUserAiConsent(topic.authorId);
     const metadata = parseJsonObject(topic.metadata);
     const editContext = parseTopicEditReviewContext(topic.aiReviewDetail);
     let result: Awaited<ReturnType<typeof reviewTopicContent>>;
@@ -314,9 +314,9 @@ async function processReplySubmissionReview(replyId: number) {
     },
   });
   if (!reply) return;
-  await ensureUserAiConsent(reply.authorId);
   const automaticManualRetry = reply.aiReviewStatus === "manual_requested" && isAutomaticManualReviewRetry(reply.aiReviewDetail);
   if (reply.aiReviewStatus === "manual_requested" && !automaticManualRetry) return;
+  await ensureUserAiConsent(reply.authorId);
   const result = await reviewReplyContent({
     topicTitle: reply.topic.title,
     boardName: reply.topic.board.name,
@@ -427,6 +427,10 @@ async function failTopicSubmissionReview(topicId: number, error: unknown, expect
   const attempt = forumReviewAttempt(current.aiReviewDetail) + 1;
   const snapshotWhere = forumReviewSnapshot(topicId, current.updatedAt, current.aiReviewStatus);
 
+  if (await queueConsentManualReview("topic", snapshotWhere, error, {
+    id: topicId, topicId, userId: current.authorId, preview: current.title, submissionId: current.submissionId,
+  })) return;
+
   if (!automaticManualRetry && attempt < MAX_REVIEW_ATTEMPTS) {
     const updated = await prisma.topic.updateMany({
       where: snapshotWhere,
@@ -493,6 +497,10 @@ async function failReplySubmissionReview(replyId: number, error: unknown) {
   if (current.aiReviewStatus === "manual_requested" && !automaticManualRetry) return;
   const attempt = forumReviewAttempt(current.aiReviewDetail) + 1;
   const snapshotWhere = forumReviewStatusSnapshot(replyId, current.aiReviewStatus);
+
+  if (await queueConsentManualReview("reply", snapshotWhere, error, {
+    id: replyId, topicId: current.topicId, userId: current.authorId, preview: current.content.slice(0, 80), submissionId: current.submissionId,
+  })) return;
 
   if (!automaticManualRetry && attempt < MAX_REVIEW_ATTEMPTS) {
     const updated = await prisma.reply.updateMany({
@@ -625,6 +633,32 @@ async function notifyInitialReviewOutage(input: {
   });
 }
 
+export function consentManualReviewReason(error: unknown) {
+  const code = (error as { code?: number } | null)?.code;
+  return code === 4120 || code === 4121
+    ? "内容已保存，正在等待人工审核；本次未向 AI 服务发送内容。"
+    : null;
+}
+
+async function queueConsentManualReview(
+  kind: "topic" | "reply",
+  where: { id: number; hidden: true; aiReviewStatus: string; updatedAt?: Date },
+  error: unknown,
+  input: { id: number; topicId: number; userId: number; preview: string; submissionId?: string | null },
+) {
+  const reason = consentManualReviewReason(error);
+  if (!reason) return false;
+  const data = { aiReviewStatus: "manual_requested", aiReviewReason: reason, aiReviewDetail: "AI consent unavailable; manual review required", aiReviewedAt: new Date() };
+  const updated = kind === "topic"
+    ? await prisma.topic.updateMany({ where, data })
+    : await prisma.reply.updateMany({ where, data });
+  if (updated.count === 1) {
+    await invalidateForumCaches().catch(() => undefined);
+    await notifyAutomaticManualQueue({ ...input, kind, attempt: 0, reason });
+  }
+  return true;
+}
+
 async function notifyAutomaticManualQueue(input: {
   kind: "topic" | "reply";
   id: number;
@@ -633,12 +667,13 @@ async function notifyAutomaticManualQueue(input: {
   preview: string;
   submissionId?: string | null;
   attempt: number;
+  reason?: string;
 }) {
   const target = input.kind === "topic" ? "帖子" : "回复";
   await notifySubmissionResult({
     userId: input.userId,
-    title: `AI 审核服务持续异常，${target}已自动转入人工审核`,
-    content: `这不是内容违规判定。系统已自动尝试 ${input.attempt} 次，现已加入人工审核队列；在管理员处理前，AI 仍会每 30 分钟继续重试。`,
+    title: input.reason ? `${target}已提交，等待人工审核` : `AI 审核服务持续异常，${target}已自动转入人工审核`,
+    content: input.reason || `这不是内容违规判定。系统已自动尝试 ${input.attempt} 次，现已加入人工审核队列；在管理员处理前，AI 仍会每 30 分钟继续重试。`,
     link: input.kind === "topic" ? `/forum/topic/${input.topicId}` : `/forum/topic/${input.topicId}#reply-${input.id}`,
     level: "warning",
     payload: {
@@ -661,7 +696,7 @@ async function notifyAutomaticManualQueue(input: {
       category: "system",
       level: "warning",
       title: input.kind === "topic" ? "有新的稿件待人工审核" : "有新的回复待人工审核",
-      content: `${input.preview}（AI 服务异常自动转入，后台仍会继续重试）`,
+      content: `${input.preview}（${input.reason || "AI 服务异常自动转入，后台仍会继续重试"}）`,
       source: "AI 审核",
       link: `/forum/topic/${input.topicId}${input.kind === "reply" ? `#reply-${input.id}` : ""}`,
       payload: JSON.stringify({

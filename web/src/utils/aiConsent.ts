@@ -52,6 +52,6 @@ export async function ensureAiConsent() {
 
 export function requiresAiConsentForRequest(method: string, url: string) {
   if (!["post", "patch", "put"].includes(method.toLowerCase())) return false;
-  return /^\/(?:topics(?:\/|$)|replies(?:\/|$)|uploads(?:\/|$)|search\/assistant(?:\/|$)|direct-messages\/.*\/messages(?:\/|$))/.test(url)
+  return /^\/(?:topics\/smart-compose(?:\?|$)|search\/assistant(?:\/|$)|direct-messages\/.*\/messages(?:\/|$))/.test(url)
     && !/\/(?:impressions|manual-review|read|history)(?:\/|$)/.test(url);
 }

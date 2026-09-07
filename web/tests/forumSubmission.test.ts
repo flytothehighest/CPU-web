@@ -16,7 +16,10 @@ test("客户端为帖子和回复生成可复用且互不混淆的提交 ID", ()
 });
 
 test("只有无响应或服务端错误才需要查询发布结果", () => {
-  assert.equal(isAmbiguousForumSubmissionError(new Error("timeout")), true);
+  assert.equal(isAmbiguousForumSubmissionError({ request: {}, message: "timeout" }), true);
+  assert.equal(isAmbiguousForumSubmissionError(new Error("AI 声明未配置")), false);
+  assert.equal(isAmbiguousForumSubmissionError("cancel"), false);
+  assert.equal(isAmbiguousForumSubmissionError({ requestNotSent: true, response: { status: 503 } }), false);
   assert.equal(isAmbiguousForumSubmissionError({ response: { status: 502 } }), true);
   assert.equal(isAmbiguousForumSubmissionError({ response: { status: 400 } }), false);
 });

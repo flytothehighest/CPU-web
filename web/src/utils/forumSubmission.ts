@@ -33,8 +33,10 @@ export function getForumRequestMessage(error: unknown) {
 }
 
 export function isAmbiguousForumSubmissionError(error: unknown) {
+  if (typeof error !== "object" || error === null) return false;
+  if ((error as { requestNotSent?: boolean }).requestNotSent) return false;
   const status = getForumRequestStatus(error);
-  return status === undefined || status >= 500;
+  return status !== undefined ? status >= 500 : Boolean((error as { request?: unknown }).request);
 }
 
 function wait(ms: number) {

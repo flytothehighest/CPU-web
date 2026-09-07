@@ -3,7 +3,7 @@ import { ensureUserAiConsent } from "../services/aiConsent";
 
 export function isAiContentWrite(method: string, path: string) {
   return ["POST", "PATCH", "PUT"].includes(method.toUpperCase())
-    && /^\/api\/(?:topics(?:\/|$)|replies(?:\/|$)|uploads(?:\/|$)|search\/assistant(?:\/|$)|direct-messages\/.*\/messages(?:\/|$))/.test(path)
+    && /^\/api\/(?:topics\/smart-compose$|search\/assistant(?:\/|$)|direct-messages\/.*\/messages(?:\/|$))/.test(path)
     && !/\/(?:impressions|manual-review|read|history)(?:\/|$)/.test(path);
 }
 

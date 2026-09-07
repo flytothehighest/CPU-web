@@ -253,6 +253,20 @@
 .reply-dialog-actions {
   width: 100%;
   margin-top: 0;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.reply-status-text {
+  flex: 1 1 160px;
+  min-width: 0;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.reply-dialog-actions .reply-submit-actions {
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 :deep(.reply-dialog .el-dialog__body) {

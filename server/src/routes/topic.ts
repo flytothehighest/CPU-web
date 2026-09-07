@@ -137,7 +137,7 @@ async function presentTopicSubmission(topic: any, requestUser: any, replayed = f
     reason: topic.aiReviewReason,
     replayed,
   });
-  if (submissionResult.status === "pending" || submissionResult.status === "failed") {
+  if (submissionResult.status === "pending" || submissionResult.status === "failed" || submissionResult.status === "manual_review") {
     return {
       ...decodeTopicForViewer(topic, requestUser),
       submissionResult,

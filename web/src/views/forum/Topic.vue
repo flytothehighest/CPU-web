@@ -503,11 +503,11 @@
       />
       <template #footer>
         <div class="reply-form-actions reply-dialog-actions">
-          <span class="cpu-muted">{{ replying ? replySubmissionProgress : "草稿自动保存" }}</span>
+          <span class="cpu-muted reply-status-text">{{ replying ? replySubmissionProgress : "草稿自动保存" }}</span>
           <div class="reply-submit-actions">
             <el-button v-if="editingReplyId" :disabled="replying" @click="cancelReplyEdit">取消编辑</el-button>
             <el-button type="primary" :loading="replying" :disabled="replying" @click="submitReply">
-              {{ replying ? replySubmissionProgress : (editingReplyId ? "保存修改" : "发布回复") }}
+              {{ replying ? "处理中" : (editingReplyId ? "保存修改" : "发布回复") }}
             </el-button>
           </div>
         </div>
