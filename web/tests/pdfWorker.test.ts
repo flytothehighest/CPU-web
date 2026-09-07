@@ -12,6 +12,16 @@ test("PDF worker uses the page origin when Vite emits a root-relative asset URL"
   );
 });
 
+test("PDF worker keeps the object-storage origin of the deferred service chunk", () => {
+  assert.equal(
+    resolvePdfWorkerUrl(
+      "https://static.cputime.cn/cpu-web-media/web-static/assets/dual-origin-v2/pdf.worker-BgryrOlp.mjs",
+      "https://cputime.cn",
+    ),
+    "https://static.cputime.cn/cpu-web-media/web-static/assets/dual-origin-v2/pdf.worker-BgryrOlp.mjs",
+  );
+});
+
 test("PDF worker keeps its development path while rebasing to the local page", () => {
   assert.equal(
     resolvePdfWorkerUrl(
