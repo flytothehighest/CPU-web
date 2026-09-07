@@ -46,6 +46,13 @@ export function forumInternalTitle(content: unknown, fallback = "新帖子") {
   return excerpt.length >= 2 ? excerpt : fallback;
 }
 
+export function prepareForumTopicTitle(title: unknown, content: unknown, fallback = "新帖子") {
+  const visibleTitle = String(title || "").trim();
+  return visibleTitle
+    ? { title: visibleTitle, postMode: "post" as const }
+    : { title: forumInternalTitle(content, fallback), postMode: "say" as const };
+}
+
 function normalizeForumImageUrl(value: string) {
   const url = value.trim().replace(/&amp;/gi, "&");
   if (!url || !/^(?:https?:\/\/|\/(?!\/))/i.test(url)) return "";

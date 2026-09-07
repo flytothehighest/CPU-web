@@ -56,29 +56,6 @@
           </div>
         </section>
 
-        <div v-if="!activityTheme" class="publish-mode-picker" role="radiogroup" aria-label="发布形式">
-          <button
-            type="button"
-            class="publish-mode-option"
-            :class="{ active: publishMode === 'say' }"
-            role="radio"
-            :aria-checked="publishMode === 'say'"
-            @click="selectPublishMode('say')"
-          >
-            <b>说说</b>
-          </button>
-          <button
-            type="button"
-            class="publish-mode-option"
-            :class="{ active: publishMode === 'post' }"
-            role="radio"
-            :aria-checked="publishMode === 'post'"
-            @click="selectPublishMode('post')"
-          >
-            <b>帖子</b>
-          </button>
-        </div>
-
         <!-- 二手交流板块：保留必要的信息结构，不产生站内交易 -->
         <section v-if="isSecondHandPost" class="second-hand-form" aria-labelledby="second-hand-form-title">
           <div class="second-hand-form-head">
@@ -321,8 +298,8 @@
           </el-form-item>
         </template>
 
-        <el-form-item v-if="publishMode === 'post'" label="标题" required>
-          <el-input v-model="form.title" :placeholder="activityTheme?.titlePlaceholder || '一句话概括主要内容'" maxlength="120" show-word-limit />
+        <el-form-item label="标题（可选）">
+          <el-input v-model="form.title" :placeholder="activityTheme?.titlePlaceholder || '不填写也可以直接发布'" maxlength="120" show-word-limit />
         </el-form-item>
 
         <el-form-item :label="postContentLabel" required>
@@ -539,7 +516,7 @@
 
     <el-dialog
       v-model="previewOpen"
-      :title="editingId ? '确认重新提交审核' : '确认发布帖子'"
+      :title="editingId ? '确认重新提交审核' : '确认发布内容'"
       width="720px"
       class="publish-preview-dialog"
       append-to-body
@@ -561,7 +538,7 @@
             <b>{{ fact.value }}</b>
           </div>
         </div>
-        <h3 v-if="publishMode === 'post'">{{ form.title || "未填写标题" }}</h3>
+        <h3 v-if="form.title.trim()">{{ form.title.trim() }}</h3>
         <MarkdownView :content="form.content" />
       </div>
       <template #footer>
@@ -613,7 +590,7 @@ import { courseApi, type Course } from "@/api/course";
 import { useAuthStore } from "@/stores/auth";
 import { useSmartPostJobStore } from "@/stores/smartPostJob";
 import { fmtDate } from "@/utils/format";
-import { forumInternalTitle } from "@/utils/forumContent";
+import { prepareForumTopicTitle } from "@/utils/forumContent";
 import { CAMPUS_LIFE_ACTIVITY, resolveCampusLifeActivityTheme } from "@/utils/forumActivity";
 import { useMobileLayout } from "@/utils/mobileLayout";
 import {
@@ -652,12 +629,9 @@ const editingId = computed(() => {
 });
 const CONTENT_MAX = 20000;
 type PostEditorMode = "visual" | "markup";
-type PublishMode = "say" | "post";
 const editorRef = ref<InstanceType<typeof RichTextEditor> | null>(null);
 const markupTextareaRef = ref<HTMLTextAreaElement | null>(null);
 const editorMode = ref<PostEditorMode>("visual");
-const publishMode = ref<PublishMode>(route.query.mode === "say" ? "say" : "post");
-const publishModeTouched = ref(false);
 const smartPostOpen = ref(false);
 const smartPostRunning = ref(false);
 const smartPostOperation = ref<SmartPostOperation>("compose");
@@ -673,6 +647,7 @@ let smartPostEstimateTimer = 0;
 let smartPostEstimateSeq = 0;
 const previewOpen = ref(false);
 const pendingMetadata = ref<any>(null);
+const pendingSubmissionTitle = ref("");
 const reviewBlockedOpen = ref(false);
 const requestingManualReview = ref(false);
 const manualReviewConfirmOpen = ref(false);
@@ -799,7 +774,7 @@ const activityTheme = computed(() => {
 });
 const pageTitle = computed(() => {
   if (activityTheme.value) return `发布 · ${activityTheme.value.label}`;
-  if (!isSecondHandPost.value) return editingId.value ? "修改内容" : publishMode.value === "say" ? "发说说" : "发表帖子";
+  if (!isSecondHandPost.value) return editingId.value ? "修改内容" : "发布内容";
   if (editingId.value) return "修改二手信息";
   if (meta.marketKind === "wanted") return "发布求购";
   if (meta.marketKind === "discuss") return "发起二手讨论";
@@ -1000,13 +975,9 @@ watch(anonymousEnabledForForm, (enabled) => {
   if (!enabled && !editingId.value) form.anonymous = false;
 }, { immediate: true });
 
-watch(() => [form.boardSlug, form.title, form.anonymous, publishMode.value, meta.marketKind, meta.category, meta.priceType, meta.price, meta.negotiable, meta.condition, meta.tradeMode, meta.campus, meta.location, meta.courseId, meta.courseTeacherId, meta.teacherName, meta.semester, editorMode.value], () => {
+watch(() => [form.boardSlug, form.title, form.anonymous, meta.marketKind, meta.category, meta.priceType, meta.price, meta.negotiable, meta.condition, meta.tradeMode, meta.campus, meta.location, meta.courseId, meta.courseTeacherId, meta.teacherName, meta.semester, editorMode.value], () => {
   scheduleFormDraftSave();
 }, { deep: true });
-
-watch(() => meta.marketKind, () => {
-  if (boardType.value === "market" && !publishModeTouched.value) publishMode.value = defaultPublishMode();
-});
 
 watch(() => form.content, (value) => {
   if (editorMode.value === "markup") scheduleMarkupDraftSave(value);
@@ -1038,12 +1009,10 @@ async function loadInitial() {
       if (seq !== loadSeq) return;
       form.boardSlug = t.board?.slug ?? "";
       boardPickerExpanded.value = false;
-      form.title = t.title;
+      form.title = t.metadata?._postMode === "say" ? "" : t.title;
       form.content = t.editableContent ?? t.content;
       form.anonymous = Boolean(t.isAnonymous);
       if (t.metadata) Object.assign(meta, t.metadata);
-      publishMode.value = t.metadata?._postMode === "say" ? "say" : "post";
-      publishModeTouched.value = true;
       if (t.board?.type === "market") normalizeExistingMarketMeta(t.metadata || {});
       editorMode.value = resolveInitialEditorMode(form.content, t.metadata);
       if (editorMode.value === "markup") mobileAdvancedToolsOpen.value = true;
@@ -1054,7 +1023,6 @@ async function loadInitial() {
       restoreContentDraft();
       if (typeof route.query.kind === "string") meta.marketKind = routeMarketKind();
       if (boardType.value === "market") normalizeExistingMarketMeta(meta);
-      if (!publishModeTouched.value) publishMode.value = defaultPublishMode();
       restorePendingTopicSubmission();
       if (pendingSubmissionAttempt.value) void monitorPendingTopicSubmission(pendingSubmissionAttempt.value.submissionId);
     }
@@ -1072,6 +1040,7 @@ function resetEditorStateForLoad() {
   flushPostDraftSaves();
   previewOpen.value = false;
   pendingMetadata.value = null;
+  pendingSubmissionTitle.value = "";
   reviewBlockedOpen.value = false;
   manualReviewConfirmOpen.value = false;
   requestingManualReview.value = false;
@@ -1082,8 +1051,6 @@ function resetEditorStateForLoad() {
   activityAvailable.value = false;
   boardPickerExpanded.value = !(typeof route.query.board === "string" && route.query.board);
   mobileAdvancedToolsOpen.value = false;
-  publishMode.value = route.query.mode === "say" ? "say" : "post";
-  publishModeTouched.value = typeof route.query.mode === "string";
   form.boardSlug = typeof route.query.board === "string" && !editingId.value ? route.query.board : "";
   form.title = "";
   form.content = "";
@@ -1109,20 +1076,7 @@ async function loadCoursesForReview(force = false) {
 
 function onBoardChange() {
   boardPickerExpanded.value = false;
-  publishModeTouched.value = false;
-  publishMode.value = defaultPublishMode();
   if (boardType.value === "coursereview") void loadCoursesForReview();
-}
-
-function defaultPublishMode(): PublishMode {
-  if (form.boardSlug === "general") return "say";
-  if (boardType.value === "market" && meta.marketKind === "discuss") return "say";
-  return "post";
-}
-
-function selectPublishMode(mode: PublishMode) {
-  publishMode.value = mode;
-  publishModeTouched.value = true;
 }
 
 function getRequestStatus(error: unknown) {
@@ -1242,13 +1196,9 @@ function restoreFormDraft() {
     const raw = localStorage.getItem(formDraftKey.value);
     if (!raw) return;
     const draft = JSON.parse(raw);
-    if (typeof draft.title === "string" && !form.title) form.title = draft.title;
+    if (typeof draft.title === "string" && !form.title && draft.publishMode !== "say") form.title = draft.title;
     if (typeof draft.boardSlug === "string" && !form.boardSlug) form.boardSlug = draft.boardSlug;
     if (typeof draft.anonymous === "boolean") form.anonymous = draft.anonymous;
-    if (draft.publishMode === "say" || draft.publishMode === "post") {
-      publishMode.value = draft.publishMode;
-      publishModeTouched.value = true;
-    }
     if (draft.meta && typeof draft.meta === "object") Object.assign(meta, draft.meta);
     const savedMode = normalizeEditorMode(draft.editorMode ?? draft.meta?._editorMode);
     if (savedMode) editorMode.value = savedMode;
@@ -1289,7 +1239,6 @@ function scheduleFormDraftSave() {
     boardSlug: form.boardSlug,
     title: form.title,
     anonymous: form.anonymous,
-    publishMode: publishMode.value,
     editorMode: editorMode.value,
     meta,
     savedAt: Date.now(),
@@ -1534,23 +1483,30 @@ async function submit() {
   if (auth.user?.topicSubmissionLocked) { ElMessage.warning("你有内容正在人工复核，暂时不能继续提交新内容"); return; }
   if (!form.boardSlug) { ElMessage.warning("请选择板块"); return; }
   if (form.anonymous && !anonymousEnabledForForm.value) { ElMessage.warning(anonymousHint.value); return; }
-  if (publishMode.value === "post" && form.title.trim().length < 2) { ElMessage.warning("标题至少 2 字"); return; }
+  if (form.title.trim() && form.title.trim().length < 2) { ElMessage.warning("标题至少 2 字，也可以留空"); return; }
   if (isEditorContentEmpty()) { ElMessage.warning("请填写正文"); return; }
   if (form.content.length > CONTENT_MAX) { ElMessage.warning("正文内容过长，请精简后再发布"); return; }
-  if (publishMode.value === "say") {
-    form.title = forumInternalTitle(form.content, currentBoard.value?.name ? `${currentBoard.value.name}动态` : "新动态");
-  }
-  const metadata = buildMetadata();
+  const prepared = currentPreparedTopic();
+  const metadata = buildMetadata(prepared.postMode);
   if (!metadata) return;
+  pendingSubmissionTitle.value = prepared.title;
   pendingMetadata.value = metadata;
   previewOpen.value = true;
 }
 
-function buildMetadata() {
+function currentPreparedTopic() {
+  return prepareForumTopicTitle(
+    form.title,
+    form.content,
+    currentBoard.value?.name ? `${currentBoard.value.name}动态` : "新动态",
+  );
+}
+
+function buildMetadata(postMode: "say" | "post") {
   // 组织 metadata
   const metadata: any = {
     _editorMode: editorMode.value,
-    _postMode: publishMode.value,
+    _postMode: postMode,
   };
   if (activityTheme.value) {
     metadata.campaignId = CAMPUS_LIFE_ACTIVITY.id;
@@ -1611,10 +1567,10 @@ function buildMetadata() {
   return metadata;
 }
 
-function topicSubmissionFingerprint(metadata: unknown) {
+function topicSubmissionFingerprint(title: string, metadata: unknown) {
   return JSON.stringify({
     boardSlug: form.boardSlug,
-    title: form.title,
+    title,
     content: form.content,
     metadata,
     anonymous: form.anonymous,
@@ -1665,7 +1621,7 @@ function pendingTopicStillMatchesCurrentDraft() {
     return Boolean(
       parsed
       && parsed.boardSlug === form.boardSlug
-      && parsed.title === form.title
+      && parsed.title === currentPreparedTopic().title
       && parsed.content === form.content
       && Boolean(parsed.anonymous) === Boolean(form.anonymous)
     );
@@ -1739,14 +1695,15 @@ async function handleTopicSubmissionResult(r: TopicSubmissionResponse, editing =
 async function confirmSubmit() {
   if (submitting.value) return;
   const metadata = pendingMetadata.value;
-  if (!metadata) return;
+  const title = pendingSubmissionTitle.value;
+  if (!metadata || !title) return;
   submitting.value = true;
   submissionProgress.value = "正在提交审核…";
   try {
     if (editingId.value) {
       try {
         const r = await topicApi.update(editingId.value, {
-          title: form.title,
+          title,
           content: form.content,
           metadata,
         });
@@ -1759,7 +1716,7 @@ async function confirmSubmit() {
         submissionProgress.value = "连接中断，正在确认审核状态…";
         const current = await topicApi.detail(editingId.value, { cacheTtlMs: 0, suppressErrorMessage: true }).catch(() => null);
         const saved = current
-          && current.title === form.title
+          && current.title === title
           && current.content === form.content
           && (
             current.board?.type === "question"
@@ -1784,13 +1741,13 @@ async function confirmSubmit() {
       return;
     }
 
-    const fingerprint = topicSubmissionFingerprint(metadata);
+    const fingerprint = topicSubmissionFingerprint(title, metadata);
     const submissionId = getTopicSubmissionId(fingerprint);
     let result: TopicSubmissionResponse | null = null;
     try {
       result = await topicApi.create({
         boardSlug: form.boardSlug,
-        title: form.title,
+        title,
         content: form.content,
         metadata,
         anonymous: form.anonymous,
@@ -2199,17 +2156,6 @@ function notifyVideoReviewState(summary?: {
 }
 
 .board-hint { font-size: 12px; color: var(--cpu-text-secondary); margin-top: 6px; }
-.publish-mode-picker {
-  display: inline-grid;
-  grid-template-columns: repeat(2, minmax(72px, 1fr));
-  gap: 3px;
-  margin: 0 0 16px;
-  padding: 3px;
-  border: 1px solid var(--cpu-border-soft);
-  border-radius: 999px;
-  background: var(--cpu-surface-subtle);
-}
-
 .creator-tools-toggle {
   display: inline-flex;
   width: fit-content;
@@ -2221,21 +2167,6 @@ function notifyVideoReviewState(summary?: {
   background: transparent;
   font-size: 11px;
   cursor: pointer;
-}
-.publish-mode-option {
-  min-width: 0;
-  padding: 6px 14px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--cpu-text-secondary);
-  text-align: center;
-  cursor: pointer;
-}
-.publish-mode-option.active {
-  color: var(--cpu-text);
-  background: var(--cpu-card);
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
 }
 .field-error {
   display: flex;
@@ -2755,8 +2686,6 @@ function notifyVideoReviewState(summary?: {
   .second-hand-form-head {
     padding: 16px 14px 11px;
   }
-
-  .publish-mode-picker { display: grid; margin-bottom: 14px; }
 
   .second-hand-kind-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
