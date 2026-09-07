@@ -5,6 +5,7 @@ import {
   compareAndExpireRedisKey,
   countRedisKeysByPrefix,
   deleteRedisKeys,
+  deleteRedisSubjectCacheEntries,
   expireRedisKey,
   incrementRedisKey,
   readRedisString,
@@ -359,6 +360,13 @@ export async function setEphemeralValue(key: string, value: string, ttlMs: numbe
     ? await writeDurableEphemeralValue(key, value, ttlMs)
     : false;
   if (!stored && !durableStored) writeLocalValue(key, value, ttlMs);
+}
+
+export async function deleteSubjectCacheEntries(subjectHash: string) {
+  await deleteRedisSubjectCacheEntries(subjectHash);
+  for (const key of localCacheValues.keys()) {
+    if (key.startsWith(buildRedisKey("cache-value")) && key.split(":").includes(subjectHash)) localCacheValues.delete(key);
+  }
 }
 
 export async function getEphemeralValue(key: string) {

@@ -38,6 +38,7 @@ export async function ensureUserCanSpeak(userId: number) {
   });
   if (!user) throw Errors.notFound("用户不存在");
   if (user.status === "banned") throw Errors.forbidden("账号已被封禁");
+  if (["deleting", "deleted"].includes(user.status)) throw Errors.unauthorized("账号已删除或正在删除");
   if (user.status === "muted") throw Errors.forbidden(buildMutedMessage(user.mutedUntil));
   return user;
 }

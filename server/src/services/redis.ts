@@ -221,6 +221,22 @@ export async function countRedisKeysByPrefix(prefix: string) {
   }
 }
 
+export async function deleteRedisSubjectCacheEntries(subjectHash: string) {
+  if (!/^[a-f0-9]{24}$/.test(subjectHash)) throw new Error("Invalid subject cache hash");
+  const client = await getCommandClient();
+  if (!client) {
+    if (isRedisConfigured()) throw new Error("Redis unavailable during account deletion");
+    return;
+  }
+  let cursor = "0";
+  do {
+    const [next, keys] = await client.scan(cursor, "MATCH", `${buildRedisKey("cache-value")}*${subjectHash}*`, "COUNT", 200);
+    cursor = next;
+    const owned = keys.filter((key: string) => key.split(":").includes(subjectHash));
+    if (owned.length) await client.del(...owned);
+  } while (cursor !== "0");
+}
+
 export async function compareAndDeleteRedisKey(key: string, token: string) {
   const client = await getCommandClient();
   if (!client) return false;

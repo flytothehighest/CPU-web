@@ -55,7 +55,7 @@ const open = computed({
   set: (value: boolean) => emit("update:modelValue", value),
 });
 const targetTypeLabel = computed(() => (
-  props.targetType === "topic" ? "帖子" : props.targetType === "reply" ? "评论" : "私聊消息"
+  props.targetType === "user" ? "用户资料" : props.targetType === "topic" ? "帖子" : props.targetType === "reply" ? "评论" : "私聊消息"
 ));
 
 watch(() => props.modelValue, (value) => {

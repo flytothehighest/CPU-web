@@ -5,6 +5,7 @@ import {
   isDirectMessageReviewUnavailable,
 } from "./directMessageModeration";
 import { reviewDirectMessageContent } from "./topicAiReview";
+import { hasUserBlock, lockUserPair } from "./userBlock";
 
 const POLL_INTERVAL_MS = 5_000;
 const POLL_BATCH_SIZE = 20;
@@ -91,6 +92,11 @@ async function processDirectMessageSubmissionReview(messageId: number) {
   const blocked = result.status === "blocked_ai";
   const recipientId = directCounterpartId(message.conversation, message.senderId);
   const finalized = await prisma.$transaction(async (tx) => {
+    await lockUserPair(tx, message.senderId, recipientId);
+    if (await hasUserBlock(message.senderId, recipientId, tx)) {
+      await tx.directMessage.updateMany({ where: { id: message.id, aiReviewStatus: "checking" }, data: { hidden: true, aiReviewStatus: "blocked_user", aiReviewReason: "用户屏蔽关系已生效，消息未送达", aiReviewedAt: new Date() } });
+      return false;
+    }
     const updated = await tx.directMessage.updateMany({
       where: { id: message.id, aiReviewStatus: "checking", hidden: true },
       data: {

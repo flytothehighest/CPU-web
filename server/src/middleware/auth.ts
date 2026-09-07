@@ -3,6 +3,7 @@ import { prisma } from "../prisma";
 import { signToken, verifySessionTokenSignature, verifyToken } from "../utils/jwt";
 import { Errors } from "../utils/response";
 import { isCookieAuthRequest, issueBrowserSession, updateBrowserSession } from "../services/browserSession";
+import { aiActorContext } from "../services/aiConsent";
 
 function requestAuthToken(req: Request) {
   if (req.browserSession?.siteToken) return req.browserSession.siteToken;
@@ -11,7 +12,7 @@ function requestAuthToken(req: Request) {
   return "";
 }
 
-async function hydrateUserFromToken(token: string, allowExpiredSessionToken = false) {
+async function hydrateUserFromToken(token: string, allowExpiredSessionToken = false, allowBanned = false) {
   const payload = allowExpiredSessionToken ? verifySessionTokenSignature(token) : verifyToken(token);
   const user = await prisma.user.findUnique({
     where: { id: payload.userId },
@@ -22,16 +23,19 @@ async function hydrateUserFromToken(token: string, allowExpiredSessionToken = fa
       voiceHubRole: true,
       lostFoundRole: true,
       status: true,
+      blocksOwned: { select: { targetId: true } },
     },
   });
   if (!user) throw Errors.unauthorized("账号不存在或已失效，请重新登录");
-  if (user.status === "banned") throw Errors.forbidden("账号已被封禁");
+  if (["deleting", "deleted"].includes(user.status)) throw Errors.unauthorized("账户已申请删除，原有登录凭据已失效");
+  if (user.status === "banned" && !allowBanned) throw Errors.forbidden("账号已被封禁");
   return {
     ...payload,
     studentId: user.username,
     role: user.role,
     voiceHubRole: user.voiceHubRole,
     lostFoundRole: user.lostFoundRole,
+    blockedUserIds: user.blocksOwned?.map((block) => block.targetId) || [],
   };
 }
 
@@ -66,7 +70,7 @@ export async function authRequired(req: Request, res: Response, next: NextFuncti
       const session = await issueBrowserSession(res, { siteToken: token, ...(jwxtToken ? { jwxtToken } : {}) });
       req.browserSession = session;
     }
-    next();
+    aiActorContext.run(req.user.userId, next);
   } catch (error: any) {
     if (error?.status && error?.code) {
       next(error);
@@ -87,5 +91,15 @@ export async function authOptional(req: Request, res: Response, next: NextFuncti
   } catch {
     req.user = undefined;
   }
-  next();
+  if (req.user) aiActorContext.run(req.user.userId, next);
+  else next();
+}
+
+export async function authForAccountDeletion(req: Request, _res: Response, next: NextFunction) {
+  try {
+    const token = requestAuthToken(req);
+    if (!token) throw Errors.unauthorized();
+    req.user = await hydrateUserFromToken(token, Boolean(req.browserSession), true);
+    next();
+  } catch (error) { next(error); }
 }

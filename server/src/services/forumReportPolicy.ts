@@ -1,4 +1,4 @@
-export const FORUM_REPORT_TARGET_TYPES = ["topic", "reply", "direct_message"] as const;
+export const FORUM_REPORT_TARGET_TYPES = ["topic", "reply", "direct_message", "user"] as const;
 export type ForumReportTargetType = typeof FORUM_REPORT_TARGET_TYPES[number];
 export const FORUM_REPORT_AUTO_HIDE_THRESHOLD = 3;
 
@@ -39,15 +39,16 @@ export function forumReportEligibility(input: {
 }
 
 export function forumReportTargetUrl(targetType: ForumReportTargetType, targetId: number, topicId?: number | null) {
+  if (targetType === "user") return `/u/${targetId}`;
   if (targetType === "topic") return `/forum/topic/${targetId}`;
   if (targetType === "reply" && topicId) return `/forum/topic/${topicId}#reply-${targetId}`;
   return null;
 }
 
 export function shouldAutoHideReportedContent(targetType: ForumReportTargetType, activeReportCount: number) {
-  return targetType !== "direct_message" && activeReportCount >= FORUM_REPORT_AUTO_HIDE_THRESHOLD;
+  return (targetType === "topic" || targetType === "reply") && activeReportCount >= FORUM_REPORT_AUTO_HIDE_THRESHOLD;
 }
 
 export function shouldRestoreAutoHiddenContent(targetType: ForumReportTargetType, activeReportCount: number) {
-  return targetType !== "direct_message" && activeReportCount < FORUM_REPORT_AUTO_HIDE_THRESHOLD;
+  return (targetType === "topic" || targetType === "reply") && activeReportCount < FORUM_REPORT_AUTO_HIDE_THRESHOLD;
 }

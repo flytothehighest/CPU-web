@@ -2,6 +2,7 @@ import axios, { AxiosError, type AxiosInstance, type AxiosRequestConfig } from "
 import { ElMessage } from "element-plus";
 import { reactive } from "vue";
 import { detectClientPlatform } from "@/utils/clientInfo";
+import { ensureAiConsent, requiresAiConsentForRequest } from "@/utils/aiConsent";
 
 export interface ApiResponse<T> {
   code: number;
@@ -52,7 +53,7 @@ const getRequestsInFlight = new Map<string, Promise<unknown>>();
 let responseCacheGeneration = 0;
 let responseCacheMutationVersion = 0;
 
-function invalidateResponseCache() {
+export function invalidateResponseCache() {
   responseCacheGeneration += 1;
   responseCacheMutationVersion += 1;
   getResponseCache.clear();
@@ -342,7 +343,8 @@ const instance: AxiosInstance = axios.create({
   withCredentials: true,
 });
 
-instance.interceptors.request.use((config) => {
+instance.interceptors.request.use(async (config) => {
+  if (requiresAiConsentForRequest(config.method || "get", config.url || "")) await ensureAiConsent();
   const token = getToken();
   if (token && token !== COOKIE_SESSION_MARKER) {
     config.headers.Authorization = `Bearer ${token}`;

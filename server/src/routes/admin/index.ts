@@ -133,6 +133,7 @@ import { forumAdsAdminRouter } from "./forumAds";
 import { vipGiftCodesAdminRouter } from "./vipGiftCodes";
 import { wechatAdminRouter } from "./wechat";
 import { forumReportAdminRouter } from "../forumReport";
+import { profileReviewAdminRouter } from "../profileReview";
 import { accountVerificationAdminRouter } from "../accountVerification";
 import {
   DeploymentAlreadyRunningError,
@@ -145,6 +146,7 @@ export const adminRouter = Router();
 adminRouter.use("/forum-ads", forumAdsAdminRouter);
 adminRouter.use("/vip-gift-codes", vipGiftCodesAdminRouter);
 adminRouter.use("/forum-reports", modOrAbove, forumReportAdminRouter);
+adminRouter.use("/profile-reviews", modOrAbove, profileReviewAdminRouter);
 adminRouter.use("/account-verifications", modOrAbove, accountVerificationAdminRouter);
 const deploymentUpdateSchema = z.object({
   confirmation: z.literal("UPDATE_AND_DEPLOY"),
@@ -510,6 +512,7 @@ adminRouter.patch("/users/:id", modOrAbove, validate(userPatchSchema), async (re
       },
     });
     if (!current) throw Errors.notFound("用户不存在");
+    if (["deleting", "deleted"].includes(current.status)) throw Errors.conflict("删除中的账户及已删除账户不可恢复或修改");
 
     const data: any = {};
     if (req.body.role === "voicehub_admin") {
@@ -2439,6 +2442,9 @@ const siteConfigPatchSchema = z.object({
   }).optional(),
   learningAssistantAccessMode: z.enum(["guest-unlimited", "account-quota"]).optional(),
   aiServices: z.array(z.object({
+    privacyOperator: z.string().trim().max(160).optional(),
+    privacyPolicyUrl: z.string().trim().max(500).refine((url) => !url || /^https:\/\//.test(url) || url === "/privacy.html", "隐私政策须为 HTTPS 地址").optional(),
+    privacyRetention: z.string().trim().max(1000).optional(),
     id: z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,47}$/i),
     name: z.string().trim().min(1).max(80),
     provider: z.string().trim().min(1).max(40),

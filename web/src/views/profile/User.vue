@@ -40,13 +40,15 @@
           <span>发帖 {{ user.postCount }}</span>
           <span>回复 {{ user.replyCount }}</span>
           <span>声望 {{ user.reputation }}</span>
-          <span v-if="user.sponsorAmount > 0" class="sponsor-badge">已赞助 ¥{{ formatMoney(user.sponsorAmount) }}</span>
+          <span v-if="!isIosNativeApp() && user.sponsorAmount > 0" class="sponsor-badge">已赞助 ¥{{ formatMoney(user.sponsorAmount) }}</span>
         </div>
         <div v-if="user.id !== auth.user?.id && user.role !== 'bot'" class="profile-actions">
           <el-button type="primary" plain @click="startDirectMessage">
             <el-icon><Message /></el-icon>
             站内私聊
           </el-button>
+          <el-button v-if="auth.isLoggedIn" plain @click="reportOpen = true">举报用户</el-button>
+          <el-button v-if="auth.isLoggedIn" type="danger" plain @click="blockProfile">屏蔽用户</el-button>
           <el-button plain @click="editUserRemark">{{ userRemark ? "修改备注" : "添加备注" }}</el-button>
         </div>
         <div v-if="auth.isMod" class="staff-panel">
@@ -78,6 +80,7 @@
       </div>
     </div>
   </div>
+  <ContentReportDialog v-if="user" v-model="reportOpen" target-type="user" :target-id="user.id" :target-label="user.nickname" />
 </template>
 
 <script setup lang="ts">
@@ -92,8 +95,13 @@ import { request } from "@/api/request";
 import { directMessageApi, type DirectMessageRemarks } from "@/api/directMessage";
 import { useAuthStore } from "@/stores/auth";
 import { fmtDate, fmtRelative } from "@/utils/format";
+import ContentReportDialog from "@/components/forum/ContentReportDialog.vue";
+import { blockUser } from "@/utils/userBlock";
+import { isIosNativeApp } from "@/utils/clientInfo";
 import { promptDirectMessageRemark } from "@/utils/directMessageRemark";
 
+const reportOpen = ref(false);
+async function blockProfile() { if (await blockUser("user", user.value.id)) { topics.value = []; await router.replace("/profile/privacy"); } }
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();

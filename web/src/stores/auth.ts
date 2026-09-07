@@ -106,7 +106,7 @@ export const useAuthStore = defineStore("auth", {
     canAccessForum: (state) => !useSiteStore().features.forumLoginRequired || !!state.user,
     needSetupNickname: (s) => !!s.user
       && (!s.user.nickname || s.user.nickname.trim() === "")
-      && !(s.user.nicknameReview?.status === "checking" && s.user.nicknameReview.pendingNickname?.trim()),
+      && !(["checking", "manual_pending"].includes(s.user.nicknameReview?.status || "") && s.user.nicknameReview?.pendingNickname?.trim()),
     needDataAuthAgreement: (s) => !!s.user?.studentSso && !s.dataAuthAgreed,
     isGraduateIdentity: (s) => s.academicIdentity === "graduate",
     academicIdentityLabel: (s) => academicIdentityLabel(s.academicIdentity),

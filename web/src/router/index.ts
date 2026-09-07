@@ -7,7 +7,7 @@ import { useSiteStore } from "@/stores/site";
 import type { FeatureKey } from "@/api/site";
 import { boardApi } from "@/api/board";
 import { topicApi } from "@/api/topic";
-import { isLikelyIosDevice } from "@/utils/clientInfo";
+import { isLikelyIosDevice, isIosNativeApp } from "@/utils/clientInfo";
 import { preloadScheduleBackgroundAsset } from "@/utils/scheduleBackgroundStorage";
 
 const MainLayout = () => import("@/layouts/MainLayout.vue");
@@ -182,6 +182,7 @@ export const router = createRouter({
         { path: "messages", name: "messages", component: () => import("@/views/messages/Index.vue"), meta: { title: "消息中心" } },
         { path: "messages/qqbot-reminders", name: "message-qqbot-reminders", component: () => import("@/views/services/QqBotReminders.vue"), meta: { title: "小工具提醒规则" } },
         { path: "profile", name: "profile", component: loadProfileView, meta: { title: "我的" } },
+        { path: "profile/privacy", name: "privacy", component: () => import("@/views/profile/Privacy.vue"), meta: { title: "账号与隐私", public: true } },
         { path: "profile/verification", name: "profile-verification", component: () => import("@/views/profile/Verification.vue"), meta: { title: "拾间认证" } },
         { path: "vip", name: "vip", component: () => import("@/views/profile/Vip.vue"), meta: { title: "VIP 中心" } },
         { path: "sponsor", name: "sponsor", component: () => import("@/views/profile/SponsorWall.vue"), meta: { title: "支持药大拾间", public: true } },
@@ -195,6 +196,9 @@ export const router = createRouter({
 });
 
 router.beforeEach(async (to) => {
+  if (isIosNativeApp() && /^\/(vip|sponsor|sponsor-wall)(\/|$)/.test(to.path)) {
+    return { path: "/profile", replace: true };
+  }
   if (usesImmediateIosScroll()) {
     iosRouteTransitionEnabled.value = !iosHistoryTraversalPending;
     iosHistoryTraversalPending = false;

@@ -8,6 +8,7 @@ export interface JwtPayload {
   campus: string;
   voiceHubRole?: string | null;
   lostFoundRole?: string | null;
+  blockedUserIds?: number[];
 }
 
 export function signToken(payload: JwtPayload): string {

@@ -9,6 +9,7 @@ import { attachJwxtAgentGateway } from "./services/jwxtAgentGateway";
 import { loadJwxtAgentRuntimeConfig } from "./services/jwxtAgentConfig";
 import { attachVoiceHubGateway, voiceHubProxyConfig } from "./services/voiceHubProxy";
 import { attachQqBotWebSocketGateway } from "./services/qqbot/connection";
+import { startAccountDeletionWorker } from "./services/accountDeletion";
 
 async function start() {
   await loadJwxtAgentRuntimeConfig().catch((error) => {
@@ -61,6 +62,7 @@ async function start() {
     console.log(`   药苑之声:           http://localhost:${config.port}${voiceHubProxyConfig.path}`);
     console.log("   宿舍电费查询:       远程校园 Agent");
     startScheduler();
+    startAccountDeletionWorker();
   });
 }
 

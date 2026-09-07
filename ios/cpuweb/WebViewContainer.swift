@@ -81,7 +81,6 @@ struct WebViewContainer: UIViewRepresentable {
     @MainActor
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, UIGestureRecognizerDelegate,
         NativePresentationProviding, NativeWebHistoryObserving {
-        private static let inAppPaymentHosts: Set<String> = ["pay.kaipay.cn"]
         private let model: WebViewModel
         private var mainFrameLoadFailed = false
         private weak var hostView: WebViewHostView?
@@ -192,6 +191,10 @@ struct WebViewContainer: UIViewRepresentable {
                 return
             }
 
+            if AppConfiguration.isCommerceURL(url) {
+                decisionHandler(.cancel)
+                return
+            }
             if navigationAction.targetFrame == nil {
                 openExternal(url)
                 decisionHandler(.cancel)
@@ -201,7 +204,7 @@ struct WebViewContainer: UIViewRepresentable {
             let scheme = url.scheme?.lowercased() ?? ""
             if scheme == "http" || scheme == "https" {
                 let host = url.host?.lowercased() ?? ""
-                if host == AppConfiguration.appHost || Self.inAppPaymentHosts.contains(host) {
+                if host == AppConfiguration.appHost {
                     decisionHandler(.allow)
                 } else {
                     openExternal(url)
@@ -485,7 +488,7 @@ struct WebViewContainer: UIViewRepresentable {
         }
 
         private func openExternal(_ url: URL) {
-            guard UIApplication.shared.canOpenURL(url) else { return }
+            guard !AppConfiguration.isCommerceURL(url), UIApplication.shared.canOpenURL(url) else { return }
             UIApplication.shared.open(url)
         }
 

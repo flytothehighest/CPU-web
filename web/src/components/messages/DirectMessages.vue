@@ -86,6 +86,7 @@
             <span>{{ activeChatSubtitle }}</span>
           </div>
           <div class="chat-actions">
+            <el-button text type="danger" @click="blockCounterpart">屏蔽</el-button>
             <el-button v-if="!activeCounterpart.anonymous && activeCounterpart.id > 0" class="remark-link" text type="primary" @click="editCounterpartRemark">
               {{ activeRemark ? "改备注" : "备注" }}
             </el-button>
@@ -176,6 +177,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { ElMessage } from "element-plus";
 import { ArrowLeft } from "@element-plus/icons-vue";
 import { useRoute, useRouter } from "vue-router";
+import { blockUser } from "@/utils/userBlock";
 import UserAvatar from "@/components/common/UserAvatar.vue";
 import DisplayNickname from "@/components/common/DisplayNickname.vue";
 import ContentReportDialog from "@/components/forum/ContentReportDialog.vue";
@@ -221,6 +223,17 @@ let routeSeq = 0;
 let messageSeq = 0;
 
 const activeCounterpart = computed(() => activeConversation.value?.counterpart || pendingTarget.value);
+async function blockCounterpart() {
+  const conversationId = activeConversation.value?.id;
+  const targetId = conversationId || activeCounterpart.value?.id;
+  if (!targetId) return;
+  if (await blockUser(conversationId ? "conversation" : "user", targetId)) {
+    activeConversation.value = null;
+    pendingTarget.value = null;
+    messages.value = [];
+    await router.replace("/profile/privacy");
+  }
+}
 const activeRemark = computed(() => activeConversation.value?.counterpartRemark || pendingTargetRemark.value || null);
 const activeDisplayName = computed(() => activeRemark.value || activeCounterpart.value?.nickname || "对方");
 const activeChatSubtitle = computed(() => {

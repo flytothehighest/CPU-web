@@ -56,6 +56,7 @@ export default defineEventHandler(async (event) => {
   const routePath = stripBaseFromPath(getRequestURL(event).pathname, baseURL)
   if (!routePath.startsWith('/api/')) return
   const method = getMethod(event).toUpperCase()
+  if (method === 'POST' && routePath === '/api/internal/account-deletion') return
   const isPublic = isPublicApiRoute(routePath, method)
 
   // VoiceHub 原账号、密码、OAuth 与注册入口全部停用，唯一身份源为 CPU-web 会话。

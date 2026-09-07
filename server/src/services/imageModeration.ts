@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { ensureUserAiConsent } from "./aiConsent";
 import path from "node:path";
 import { readFile, rm } from "node:fs/promises";
 import { prisma } from "../prisma";
@@ -154,7 +155,6 @@ export async function registerForumImageAsset(input: {
         localPath,
         mimeType: input.mimeType ?? undefined,
         fileSize: input.fileSize ?? undefined,
-        createdById: input.createdById ?? undefined,
         ...(shouldRequeue
           ? {
               status: "pending",
@@ -987,6 +987,7 @@ async function requestImageReview(input: {
   mimeType: string;
   dataUrl: string;
 }): Promise<ImageReviewDecision> {
+  await ensureUserAiConsent((await prisma.forumImageAsset.findUnique({ where: { url: input.url }, select: { createdById: true } }))?.createdById);
   const config = getSiteConfig();
   const providers = resolveAiServiceCandidatesForScene(config, "image-review");
   const provider = providers[0];
@@ -1087,6 +1088,7 @@ async function requestImageReview(input: {
 }
 
 async function requestImageReviewBatch(inputs: PreparedImageReviewInput[]): Promise<ImageReviewDecision[]> {
+  for (const input of inputs) await ensureUserAiConsent((await prisma.forumImageAsset.findUnique({ where: { id: input.asset.id }, select: { createdById: true } }))?.createdById);
   const config = getSiteConfig();
   const providers = resolveAiServiceCandidatesForScene(config, "image-review");
   const provider = providers[0];

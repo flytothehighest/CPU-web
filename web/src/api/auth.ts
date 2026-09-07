@@ -5,6 +5,7 @@ import type { AccountVerification } from "@/api/accountVerification";
 export interface LoginPayload { username: string; password: string }
 export interface RegisterPayload { username: string; password: string; nickname: string; college?: string; enrollYear?: number }
 export interface UserInfo {
+  profileReview?: { status: string; reason: string | null; pending: Record<string, unknown> | null };
   id: number;
   username: string;
   nickname: string;

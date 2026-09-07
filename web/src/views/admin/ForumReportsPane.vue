@@ -1,5 +1,6 @@
 <template>
   <div class="reports-pane">
+    <ProfileReviewsPane />
     <div class="reports-head">
       <div>
         <div class="reports-title">内容举报</div>
@@ -19,7 +20,7 @@
         <el-option label="全部类型" value="all" />
         <el-option label="帖子" value="topic" />
         <el-option label="评论" value="reply" />
-        <el-option label="私聊" value="direct_message" />
+        <el-option label="私聊" value="direct_message" /><el-option label="用户资料" value="user" />
       </el-select>
     </div>
 
@@ -46,7 +47,7 @@
           <span>该举报人历史提交 {{ row.reporterReportCount }} 次 · 未采纳 {{ row.reporterRejectedCount }} 次</span>
         </div>
         <el-alert
-          v-if="row.activeTargetReportCount >= 3 && row.targetType !== 'direct_message'"
+          v-if="row.activeTargetReportCount >= 3 && (row.targetType === 'topic' || row.targetType === 'reply')"
           class="threshold-alert"
           type="warning"
           :closable="false"
@@ -60,6 +61,7 @@
           <template v-if="row.handledNote">：{{ row.handledNote }}</template>
         </div>
         <div class="card-actions">
+          <el-button v-if="row.targetType === 'user' && row.targetAuthor" size="small" type="danger" plain @click="clearProfile(row)">清除违规资料</el-button>
           <el-button v-if="row.targetUrl" size="small" plain @click="openTarget(row)">查看原内容</el-button>
           <template v-if="row.status === 'pending'">
             <el-button size="small" type="success" plain :loading="busyId === row.id" :disabled="busyId !== null" @click="handle(row, 'resolved')">处理完成</el-button>
@@ -86,9 +88,18 @@ import { onMounted, ref } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { adminApi, type ForumReportAdminRow } from "@/api/admin";
 import { fmtDate } from "@/utils/format";
+import ProfileReviewsPane from "./ProfileReviewsPane.vue";
+import { request } from "@/api/request";
+
+async function clearProfile(row: ForumReportAdminRow) {
+  let reason = "";
+  try { ({ value: reason } = await ElMessageBox.prompt("填写违规原因；将清除当前昵称、头像、简介和院系，并通知用户。", "清除违规资料", { inputValidator: (value: string) => Boolean(value?.trim().length >= 2) || "请填写具体原因" })); } catch { return; }
+  await request.post(`/admin/profile-reviews/${row.targetId}/clear`, { reason });
+  ElMessage.success("违规资料已清除，可继续完成举报处理");
+}
 
 type ReportStatus = "pending" | "resolved" | "rejected" | "all";
-type ReportTargetType = "topic" | "reply" | "direct_message" | "all";
+type ReportTargetType = "topic" | "reply" | "direct_message" | "user" | "all";
 
 const rows = ref<ForumReportAdminRow[]>([]);
 const counts = ref<Record<string, number>>({});
@@ -162,7 +173,7 @@ function displayUser(user?: { nickname?: string; username?: string } | null) {
 }
 
 function targetTypeLabel(value: ForumReportAdminRow["targetType"]) {
-  return value === "topic" ? "帖子" : value === "reply" ? "评论" : "私聊";
+  return value === "user" ? "用户资料" : value === "topic" ? "帖子" : value === "reply" ? "评论" : "私聊";
 }
 
 function targetTagType(value: ForumReportAdminRow["targetType"]) {

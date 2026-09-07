@@ -31,6 +31,7 @@ export function buildSelfUser(u: any) {
     id: u.id,
     username: u.username,
     nickname: u.nickname,
+    profileReview: { status: u.profileReviewStatus || "none", reason: u.profileReviewReason || null, pending: u.pendingProfile ? JSON.parse(u.pendingProfile) : null },
     nicknameReview: {
       status: u.nicknameReviewStatus ?? "none",
       pendingNickname: u.pendingNickname ?? null,

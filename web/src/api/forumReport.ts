@@ -1,6 +1,6 @@
 import { request, type RequestOptions } from "./request";
 
-export type ForumReportTargetType = "topic" | "reply" | "direct_message";
+export type ForumReportTargetType = "topic" | "reply" | "direct_message" | "user";
 export type ForumReportReason =
   | "spam_or_fraud"
   | "harassment"

@@ -1,4 +1,5 @@
 import { prisma } from "../prisma";
+import { ensureUserAiConsent } from "./aiConsent";
 import { invalidateForumCaches } from "./cacheInvalidation";
 import { ensureForumImageAssetsForContent } from "./imageModeration";
 import { ensureForumVideoAssetsForContent } from "./videoModeration";
@@ -179,6 +180,7 @@ async function processTopicSubmissionReview(topicId: number) {
     },
   });
   if (!topic) return;
+  await ensureUserAiConsent(topic.authorId);
   const automaticManualRetry = topic.aiReviewStatus === "manual_requested" && isAutomaticManualReviewRetry(topic.aiReviewDetail);
   if (topic.aiReviewStatus === "manual_requested" && !automaticManualRetry) return;
   try {
@@ -312,6 +314,7 @@ async function processReplySubmissionReview(replyId: number) {
     },
   });
   if (!reply) return;
+  await ensureUserAiConsent(reply.authorId);
   const automaticManualRetry = reply.aiReviewStatus === "manual_requested" && isAutomaticManualReviewRetry(reply.aiReviewDetail);
   if (reply.aiReviewStatus === "manual_requested" && !automaticManualRetry) return;
   const result = await reviewReplyContent({

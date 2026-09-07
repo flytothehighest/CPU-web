@@ -31,18 +31,22 @@ import { directMessageRouter } from "./directMessage";
 import { forumReportRouter } from "./forumReport";
 import { accountVerificationRouter } from "./accountVerification";
 import { yaodaFlightRouter } from "./yaodaFlight";
+import { privacyRouter } from "./privacy";
+import { aiConsentGate } from "../middleware/aiConsent";
+import { revokedCredentialGate } from "../middleware/revokedCredential";
 
 export const router = Router();
+router.use("/privacy", privacyRouter);
 
 // 公开路径
 router.use("/auth", authRouter);
 router.use("/user-avatars", userAvatarRouter);
 router.use("/boards", authOptional, boardRouter);
-router.use("/topics", authOptional, topicRouter);
-router.use("/replies", authOptional, replyRouter);
+router.use("/topics", authOptional, aiConsentGate, topicRouter);
+router.use("/replies", authOptional, aiConsentGate, replyRouter);
 router.use("/services", servicesRouter);
 router.use("/courses", authOptional, courseRouter);
-router.use("/search", authOptional, searchRouter);
+router.use("/search", authOptional, aiConsentGate, searchRouter);
 router.use("/home", authOptional, homeRouter);
 router.use("/site", siteRouter);
 router.use("/forum-ads", forumAdsRouter);
@@ -59,16 +63,16 @@ router.use("/integrations", integrationsRouter);
 router.use("/oauth", oauthRouter);
 
 // 教务代登录：begin-login / login 公开，其余 handler 内部验 token
-router.use("/jwxt", jwxtRouter);
+router.use("/jwxt", revokedCredentialGate, jwxtRouter);
 
 // 站内登录后
 router.use("/user", authRequired, userRouter);
 router.use("/likes", authRequired, likeRouter);
 router.use("/messages", authRequired, messageRouter);
-router.use("/direct-messages", authRequired, directMessageRouter);
+router.use("/direct-messages", authRequired, aiConsentGate, directMessageRouter);
 router.use("/forum-reports", authRequired, forumReportRouter);
 router.use("/account-verification", authRequired, accountVerificationRouter);
-router.use("/uploads", uploadRouter);
+router.use("/uploads", authOptional, aiConsentGate, uploadRouter);
 
 // 管理后台：需登录 + 内部按 role 分级
 router.use("/admin", authRequired, adminRouter);

@@ -6,8 +6,10 @@ import { validate } from "../middleware/validate";
 import { Errors, ok } from "../utils/response";
 import { isVipActive } from "../services/vip";
 import { redeemVipGiftCode } from "../services/vipGiftCodes";
+import { iosCommerceUnavailable } from "../middleware/iosCommerce";
 
 export const vipRouter = Router();
+vipRouter.use(iosCommerceUnavailable);
 
 const VIP_BENEFITS = [
   { key: "forum-ad-free", title: "论坛免广告", description: "VIP 用户可隐藏标记为 VIP 免广告的推广内容。" },

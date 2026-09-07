@@ -8,6 +8,7 @@ const LOCK_NAMESPACES: Record<ForumReportTargetType, number> = {
   topic: 73101,
   reply: 73102,
   direct_message: 73103,
+  user: 73104,
 };
 
 export async function acquireForumReportTargetLock(

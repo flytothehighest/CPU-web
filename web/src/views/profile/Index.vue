@@ -30,6 +30,7 @@
       </h3>
       <p class="account-note">{{ user?.studentSso ? "学号仅用于登录和身份校验，不会公开展示" : "登录账号仅自己可见，不会公开展示" }}</p>
       <p v-if="nicknameReviewText" class="nickname-review-note" :class="`is-${user?.nicknameReview?.status}`">{{ nicknameReviewText }}</p>
+      <el-alert v-if="user?.profileReview?.reason" :title="user.profileReview.reason" :type="user.profileReview.status === 'rejected' ? 'warning' : 'info'" :closable="false" />
       <p v-if="user?.verification" class="verification-copy">拾间认证：{{ user.verification.label }}</p>
       <p class="bio">{{ user?.bio || "这个人很懒，什么都没写" }}</p>
       <ul class="kv">
@@ -38,12 +39,13 @@
         <li><span>发帖</span><span>{{ user?.postCount }}</span></li>
         <li><span>回复</span><span>{{ user?.replyCount }}</span></li>
         <li><span>声望</span><span>{{ user?.reputation }}</span></li>
-        <li v-if="(user?.sponsorAmount ?? 0) > 0"><span>赞助</span><span class="sponsor-total">¥{{ formatMoney(user?.sponsorAmount) }}</span></li>
+        <li v-if="!iosCommerceHidden && (user?.sponsorAmount ?? 0) > 0"><span>赞助</span><span class="sponsor-total">¥{{ formatMoney(user?.sponsorAmount) }}</span></li>
       </ul>
       <div class="profile-actions">
         <el-button type="primary" plain :disabled="saving || logoutBusy" @click="editing = true">编辑资料</el-button>
+        <el-button plain @click="router.push('/profile/privacy')">账号与隐私</el-button>
         <el-button plain :disabled="saving || logoutBusy" @click="router.push('/profile/verification')">拾间认证</el-button>
-        <el-button type="warning" plain :disabled="saving || logoutBusy" @click="router.push('/vip')">VIP 中心</el-button>
+        <el-button v-if="!iosCommerceHidden" type="warning" plain :disabled="saving || logoutBusy" @click="router.push('/vip')">VIP 中心</el-button>
         <el-button v-if="!user?.studentSso" plain :disabled="savingPw || logoutBusy" @click="passwordDialog = true">修改密码</el-button>
         <el-button type="danger" plain :loading="logoutBusy" :disabled="logoutBusy" @click="onLogout">退出登录</el-button>
       </div>
@@ -154,7 +156,7 @@
       </el-button>
     </div>
 
-    <div id="sponsor" v-if="site.features.sponsor || (user?.sponsorAmount ?? 0) > 0" class="cpu-card sponsor-card">
+    <div id="sponsor" v-if="!iosCommerceHidden && (site.features.sponsor || (user?.sponsorAmount ?? 0) > 0)" class="cpu-card sponsor-card">
       <div class="sponsor-main">
         <div class="sponsor-copy">
           <h3 class="cpu-section-title">{{ sponsorOptions.title || "赞助本站" }}</h3>
@@ -491,6 +493,9 @@ import { compressImageFile, normalizeImageUploadError } from "@/utils/imageUploa
 import { preloadAvatar } from "@/utils/avatarPreview";
 import { withMediaRevision } from "@/utils/cdnMedia";
 import { readViewCache, writeViewCache } from "@/utils/viewCache";
+import { isIosNativeApp } from "@/utils/clientInfo";
+
+const iosCommerceHidden = isIosNativeApp();
 
 interface ProfileViewCache {
   topics: any[];
@@ -609,7 +614,7 @@ const profileFrameClass = computed(() => user.value?.profileFrame ? `profile-fra
 const nicknameReviewText = computed(() => {
   const review = user.value?.nicknameReview;
   if (!review || review.status === "none") return "";
-  if (review.status === "checking") return `昵称“${review.pendingNickname || ""}”正在后台审核，当前昵称暂不改变。`;
+  if (["checking", "manual_pending"].includes(review.status)) return `昵称“${review.pendingNickname || ""}”正在后台审核，当前昵称暂不改变。`;
   if (review.status === "rejected") return `昵称“${review.pendingNickname || ""}”未通过审核：${review.reason || "请换一个昵称后重试"}`;
   if (review.status === "review_failed") return review.reason || "昵称审核暂未完成，请重新提交。";
   return "";
@@ -721,7 +726,7 @@ async function saveEdit() {
       college: editForm.college.trim(),
     } as any);
     auth.user = u;
-    ElMessage.success(u.nicknameReview?.status === "checking" ? "资料已保存，昵称审核通过后生效" : "已保存");
+    ElMessage.success(u.profileReview?.status === "pending" ? "资料已提交，审核通过后公开生效" : "已保存");
     editing.value = false;
   } finally { saving.value = false; }
 }
@@ -738,6 +743,7 @@ async function saveVipDecoration(field: "profileTheme" | "profileFrame", value: 
 }
 
 async function loadSponsorOptions() {
+  if (iosCommerceHidden) return;
   try {
     Object.assign(sponsorOptions, await paymentsApi.sponsorOptions({ suppressErrorMessage: true }));
     sponsorOptionsCached.value = true;
@@ -750,6 +756,7 @@ async function loadSponsorOptions() {
 }
 
 async function loadSponsorOrders() {
+  if (iosCommerceHidden) return;
   try {
     sponsorOrders.value = (await paymentsApi.sponsorOrders({ page: 1, size: 10, status: "paid" }, { suppressErrorMessage: true })).list;
   } catch {
@@ -807,6 +814,7 @@ function writeProfileCache() {
 }
 
 async function handleSponsorReturnFromQuery() {
+  if (iosCommerceHidden) return;
   const sponsorQuery = String(route.query.sponsor ?? "");
   if (sponsorQuery !== "success") return;
   const key = String(route.query.outTradeNo ?? "__no_trade_no");
@@ -852,6 +860,7 @@ function openSponsorConfirm() {
 }
 
 async function submitSponsor() {
+  if (iosCommerceHidden) return;
   if (sponsorSubmitting.value) return;
   if (!validateSponsorAmount()) return;
   if (!enabledPayTypes.value.length) {
@@ -970,11 +979,8 @@ async function onAvatarChange(event: Event) {
       mimeType: "image/jpeg",
       maxBytes: 140 * 1024,
     });
-    const saved = await auth.updateProfile({ avatar });
-    avatarPreviewRevision.value = Date.now();
-    avatarPreviewFailed.value = !(await preloadAvatar(avatarDisplayUrl.value || saved.avatar));
-    if (avatarPreviewFailed.value) ElMessage.warning("头像已保存，预览暂时加载失败，可点击重新加载");
-    else ElMessage.success("头像已更新");
+    await auth.updateProfile({ avatar });
+    ElMessage.success("头像已提交审核，通过后公开显示");
   } catch (error) {
     ElMessage.error(normalizeImageUploadError(error, "头像上传失败，请稍后重试"));
   } finally {
@@ -990,7 +996,7 @@ async function removeAvatar() {
     await auth.updateProfile({ avatar: null });
     avatarPreviewFailed.value = false;
     avatarPreviewRevision.value = 0;
-    ElMessage.success("头像已移除");
+    ElMessage.success("头像移除申请已提交审核");
   } finally {
     avatarSaving.value = false;
   }

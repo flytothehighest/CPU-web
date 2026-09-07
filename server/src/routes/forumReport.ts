@@ -159,6 +159,12 @@ async function resolveReportTarget(
   reporterId: number,
   reporterRole: string,
 ) {
+  if (targetType === "user") {
+    const user = await prisma.user.findUnique({ where: { id: targetId }, select: { id: true, nickname: true, avatar: true, bio: true, college: true, status: true } });
+    if (!user || ["deleting", "deleted"].includes(user.status)) throw Errors.notFound("用户不存在");
+    if (user.id === reporterId) throw Errors.badRequest("不能举报自己");
+    return { targetAuthorId: user.id, targetLabel: `用户资料：${user.nickname}`, contentSnapshot: JSON.stringify({ nickname: user.nickname, avatar: user.avatar, bio: user.bio, college: user.college }) };
+  }
   if (targetType === "topic") return resolveTopicReportTarget(reporterId, reporterRole, targetId);
   if (targetType === "reply") return resolveReplyReportTarget(reporterId, reporterRole, targetId);
   return resolveDirectMessageReportTarget(reporterId, targetId);
@@ -302,6 +308,7 @@ async function topicIdsForReplyReports(reports: Array<{ targetType: string; targ
 }
 
 async function reporterTargetUrl(targetType: ForumReportTargetType, targetId: number) {
+  if (targetType === "user") return forumReportTargetUrl(targetType, targetId);
   if (targetType === "topic") return forumReportTargetUrl(targetType, targetId);
   if (targetType === "reply") {
     const reply = await prisma.reply.findUnique({ where: { id: targetId }, select: { topicId: true } });

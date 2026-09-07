@@ -1,3 +1,4 @@
+import { isAuthorBlocked } from "../services/userBlock";
 import { Router } from "express";
 import { prisma } from "../prisma";
 import { ok } from "../utils/response";
@@ -114,14 +115,14 @@ homeRouter.get("/summary", async (req, res, next) => {
         forumEnabled: forumAccessEnabled,
         unreadCount,
       } : null,
-      pinnedTopics: forumAccessEnabled ? publicSummary.pinnedTopics.map((item: any) => decodeTopicForViewer(item, req.user)) : [],
-      hotTopics: forumAccessEnabled ? publicSummary.hotTopics.map((item: any, index: number) => ({
+      pinnedTopics: forumAccessEnabled ? publicSummary.pinnedTopics.filter((item: any) => !isAuthorBlocked(item.authorId, req.user)).map((item: any) => decodeTopicForViewer(item, req.user)) : [],
+      hotTopics: forumAccessEnabled ? publicSummary.hotTopics.filter((item: any) => !isAuthorBlocked(item.authorId, req.user)).map((item: any, index: number) => ({
         rank: index + 1,
         hotScore: computeHotScore(item),
         ...decodeTopicForViewer(item, req.user),
       })) : [],
       latestTopics: forumAccessEnabled ? await decodeTopicsForViewerForList(latestTopics, req.user) : [],
-      announce: publicSummary.announce.map((item: any) => decodeTopicForViewer(item, req.user)),
+      announce: publicSummary.announce.filter((item: any) => !isAuthorBlocked(item.authorId, req.user)).map((item: any) => decodeTopicForViewer(item, req.user)),
       services: publicSummary.services
         .filter((s) => !HOME_HIDDEN_SERVICE_CODES.includes(s.code))
         .map(normalizeServiceCard),
@@ -182,7 +183,7 @@ homeRouter.get("/latest-feed", async (req, res, next) => {
       return { pins, list, total };
     });
     const [pins, list] = await Promise.all([
-      Promise.resolve(cached.pins.map((item: any) => decodeTopicForViewer(item, req.user))),
+      Promise.resolve(cached.pins.filter((item: any) => !isAuthorBlocked(item.authorId, req.user)).map((item: any) => decodeTopicForViewer(item, req.user))),
       decodeTopicsForViewerForList(cached.list, req.user),
     ]);
     ok(res, {

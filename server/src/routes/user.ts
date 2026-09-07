@@ -13,11 +13,12 @@ import { decodeTopicForViewer } from "../services/forumPresentation";
 import { visibleBoardSlugFilter } from "../services/retiredBoards";
 import { forumContentVisibilityWhere } from "../services/forumSubmission";
 import { isVipActive, VIP_PROFILE_FRAMES, VIP_PROFILE_THEMES } from "../services/vip";
-import { deleteManagedUserAvatar, storeUserAvatarDataUrl } from "../services/userAvatarStorage";
-import { invalidateForumCaches } from "../services/cacheInvalidation";
-import { normalizeNicknameSubmission, scheduleNicknameReview } from "../services/nicknameReview";
+import { submitProfileReview } from "../services/profileReview";
+import { isAuthorBlocked } from "../services/userBlock";
+import { userBlockRouter } from "./userBlock";
 
 export const userRouter = Router();
+userRouter.use("/blocks", userBlockRouter);
 
 userRouter.get("/me", authRequired, async (req, res, next) => {
   try {
@@ -31,90 +32,26 @@ userRouter.get("/me", authRequired, async (req, res, next) => {
 userRouter.patch("/me", authRequired, async (req, res, next) => {
   try {
     const body = req.body as Record<string, unknown>;
+    await submitProfileReview(req.user!.userId, body);
     const allowed: Record<string, unknown> = {};
-    for (const k of ["bio", "college", "enrollYear"]) {
-      if (body[k] !== undefined) allowed[k] = body[k];
-    }
-    const previous = body.avatar !== undefined || body.nickname !== undefined
-      ? await prisma.user.findUnique({
-          where: { id: req.user!.userId },
-          select: { avatar: true, nickname: true, pendingNickname: true, nicknameReviewStatus: true },
-        })
-      : null;
-    if ((body.avatar !== undefined || body.nickname !== undefined) && !previous) throw Errors.notFound("用户不存在");
-    let nicknameQueued = false;
-    if (body.nickname !== undefined) {
-      const nickname = normalizeNicknameSubmission(body.nickname);
-      if (nickname === previous!.nickname.trim()) {
-        if (previous!.pendingNickname) {
-          Object.assign(allowed, {
-            pendingNickname: null,
-            nicknameReviewStatus: "none",
-            nicknameReviewReason: null,
-            nicknameReviewDetail: null,
-            nicknameReviewModel: null,
-            nicknameReviewRequestedAt: null,
-            nicknameReviewedAt: null,
-          });
-        }
-      } else if (!(previous!.nicknameReviewStatus === "checking" && previous!.pendingNickname === nickname)) {
-        Object.assign(allowed, {
-          pendingNickname: nickname,
-          nicknameReviewStatus: "checking",
-          nicknameReviewReason: "昵称已提交，正在后台审核",
-          nicknameReviewDetail: "",
-          nicknameReviewModel: null,
-          nicknameReviewRequestedAt: new Date(),
-          nicknameReviewedAt: null,
-        });
-        nicknameQueued = true;
-      }
-    }
-    if (body.avatar !== undefined) {
-      if (body.avatar === null || body.avatar === "") {
-        allowed.avatar = null;
-      } else if (typeof body.avatar === "string" && body.avatar.trim().startsWith("data:image/")) {
-        try {
-          allowed.avatar = await storeUserAvatarDataUrl(req.user!.userId, body.avatar);
-        } catch (error: any) {
-          throw Errors.badRequest(String(error?.message || "头像保存失败"));
-        }
-      } else if (typeof body.avatar === "string") {
-        allowed.avatar = body.avatar.trim();
-      } else {
-        throw Errors.badRequest("头像数据格式不正确");
-      }
-    }
     if (body.profileTheme !== undefined || body.profileFrame !== undefined) {
-      const current = await prisma.user.findUnique({
-        where: { id: req.user!.userId },
-        select: { isVip: true },
-      });
+      const current = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { isVip: true } });
       if (!isVipActive(current)) throw Errors.forbidden("VIP 用户才能使用个性化资料装扮");
       if (body.profileTheme !== undefined) {
-        if (typeof body.profileTheme !== "string" || !VIP_PROFILE_THEMES.includes(body.profileTheme as any)) {
-          throw Errors.badRequest("不支持的资料主题");
-        }
+        if (typeof body.profileTheme !== "string" || !VIP_PROFILE_THEMES.includes(body.profileTheme as any)) throw Errors.badRequest("不支持的资料主题");
         allowed.profileTheme = body.profileTheme;
       }
       if (body.profileFrame !== undefined) {
-        if (typeof body.profileFrame !== "string" || !VIP_PROFILE_FRAMES.includes(body.profileFrame as any)) {
-          throw Errors.badRequest("不支持的头像框");
-        }
+        if (typeof body.profileFrame !== "string" || !VIP_PROFILE_FRAMES.includes(body.profileFrame as any)) throw Errors.badRequest("不支持的头像框");
         allowed.profileFrame = body.profileFrame;
       }
     }
-    if (body.dataAuthAgreed === true) {
-      allowed.dataAuthAgreedAt = new Date();
-    }
-    const u = await prisma.user.update({ where: { id: req.user!.userId }, data: allowed });
-    if (nicknameQueued) scheduleNicknameReview(u.id);
-    if (body.avatar !== undefined && previous?.avatar !== u.avatar) {
-      if (previous?.avatar) await deleteManagedUserAvatar(previous.avatar).catch(() => false);
-      await invalidateForumCaches();
-    }
-    ok(res, buildSelfUser(u));
-  } catch (e) { next(e); }
+    if (body.dataAuthAgreed === true) allowed.dataAuthAgreedAt = new Date();
+    await prisma.user.updateMany({ where: { id: req.user!.userId, status: { notIn: ["deleting", "deleted"] } }, data: allowed });
+    const user = await prisma.user.findUnique({ where: { id: req.user!.userId } });
+    if (!user || ["deleting", "deleted"].includes(user.status)) throw Errors.unauthorized();
+    ok(res, buildSelfUser(user));
+  } catch (error) { next(error); }
 });
 
 // 修改自己的密码 —— SSO 账号无站内密码，拒绝
@@ -163,7 +100,7 @@ userRouter.get("/:id", async (req, res, next) => {
     const id = Number(req.params.id);
     await releaseExpiredMutes();
     const user = await prisma.user.findUnique({ where: { id } });
-    if (!user) throw Errors.notFound();
+    if (!user || ["deleting", "deleted"].includes(user.status)) throw Errors.notFound();
     ok(res, buildPublicUser(user, req.user));
   } catch (e) { next(e); }
 });
@@ -172,7 +109,7 @@ userRouter.get("/:id/topics", async (req, res, next) => {
   try {
     const id = Number(req.params.id);
     const forumAccessEnabled = await resolveForumAccess(req.user?.userId, req.user?.role);
-    if (!forumAccessEnabled) return ok(res, []);
+    if (!forumAccessEnabled || isAuthorBlocked(id, req.user)) return ok(res, []);
     const canSeeAnonymous = req.user?.userId === id || req.user?.role === "admin" || req.user?.role === "mod";
     const list = await prisma.topic.findMany({
       where: {

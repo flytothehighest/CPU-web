@@ -6,11 +6,13 @@ import { isGlobalPinnedTopic } from "./siteSettings";
 import { renderModeratedVideoContent, summarizeForumVideoModerationForContent } from "./videoModeration";
 import { presentAnonymousAlias } from "./userTrust";
 import { presentQuestionMetadata } from "./questionBounty";
+import { isAuthorBlocked } from "./userBlock";
 
 type Viewer = {
   userId?: number | null;
   role?: string | null;
   lostFoundRole?: string | null;
+  blockedUserIds?: number[];
 } | null | undefined;
 
 export const forumAuthorReputationSelect = {
@@ -87,7 +89,7 @@ export function decodeTopicForViewer(topic: any, viewer?: Viewer) {
     author: anonymous ? buildAnonymousAuthor(privacySafeTopic.anonymousAlias) : buildUserPreview(privacySafeTopic.author, viewer),
     realAuthor: anonymous && reveal ? buildUserPreview(privacySafeTopic.author, viewer) : undefined,
     ...(Array.isArray(rawPreviewReplies)
-      ? { previewReplies: rawPreviewReplies.map((reply) => decodeReplyForViewer(reply, viewer)) }
+      ? { previewReplies: rawPreviewReplies.filter((reply) => !isAuthorBlocked(reply.authorId, viewer)).map((reply) => decodeReplyForViewer(reply, viewer)) }
       : {}),
   };
 }
@@ -126,7 +128,7 @@ export async function decodeTopicForViewerWithImages(topic: any, viewer?: Viewer
 }
 
 export async function decodeTopicsForViewerForList(topics: any[], viewer?: Viewer) {
-  const decoded = topics.map((topic) => decodeTopicForViewer(topic, viewer));
+  const decoded = topics.filter((topic) => !isAuthorBlocked(topic.authorId, viewer)).map((topic) => decodeTopicForViewer(topic, viewer));
   const videoRendered = await Promise.all(decoded.map((topic) => renderModeratedVideoContent(String(topic.content || ""), viewer)));
   const rendered = await renderModeratedContents(videoRendered, viewer);
   return decoded.map((topic, index) => ({ ...topic, content: rendered[index] }));

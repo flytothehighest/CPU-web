@@ -90,6 +90,9 @@
                 :placeholder="service.provider.toLowerCase() === 'ollama' ? 'Ollama 可留空' : 'sk-...'"
               />
             </label>
+            <label class="ai-row ai-row--stretch"><span class="ai-label">数据接收方</span><el-input v-model="service.privacyOperator" maxlength="160" placeholder="实际运营方名称；自定义中转服务须同时说明上游接收方" /></label>
+            <label class="ai-row ai-row--stretch"><span class="ai-label">接收方隐私政策</span><el-input v-model="service.privacyPolicyUrl" maxlength="500" placeholder="HTTPS 隐私政策地址" /></label>
+            <label class="ai-row ai-row--stretch"><span class="ai-label">数据处理与保留</span><el-input v-model="service.privacyRetention" type="textarea" maxlength="1000" placeholder="据实际服务条款填写用途、处理地区、保留期限及删除方式；信息不全时暂停用户数据发送" /></label>
             <label class="ai-row">
               <span class="ai-label">拾间AI历史消息数</span>
               <el-input-number

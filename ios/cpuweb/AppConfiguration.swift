@@ -24,6 +24,18 @@ enum AppConfiguration {
         appURL.host?.lowercased() ?? "cputime.cn"
     }
 
+    static func isCommerceURL(_ url: URL) -> Bool {
+        let scheme = url.scheme?.lowercased() ?? ""
+        if ["alipay", "alipays", "weixin", "wxpay"].contains(scheme) { return true }
+        let host = url.host?.lowercased() ?? ""
+        if host == "pay.kaipay.cn" { return true }
+        guard [appHost, "cputime.cn", "cpu.lizmt.cn"].contains(host) else { return false }
+        let path = url.path.lowercased()
+        return ["/vip", "/sponsor", "/sponsor-wall", "/api/payments", "/api/vip"].contains {
+            path == $0 || path.hasPrefix($0 + "/")
+        }
+    }
+
     static func destinationURL(for deepLink: URL) -> URL? {
         guard deepLink.scheme?.lowercased() == "cpuweb" else { return nil }
 

@@ -26,7 +26,7 @@ interface CpuWebEnvelope<T> {
   message?: string
 }
 
-function cpuWebOrigin() {
+export function cpuWebOrigin() {
   const raw = String(process.env.CPU_WEB_ORIGIN || DEFAULT_CPU_WEB_ORIGIN).trim()
   let parsed: URL
   try {
@@ -129,6 +129,9 @@ async function syncShadowUser(cpuUser: CpuWebUser) {
     let shadow = await findShadowUser(cpuUser, tx)
     if (!shadow) {
       throw createError({ statusCode: 500, message: '无法建立药苑之声用户映射' })
+    }
+    if (shadow.status === 'withdrawn' && shadow.password.startsWith('$deleted:')) {
+      throw createError({ statusCode: 401, message: '该账户已删除' })
     }
 
     await tx

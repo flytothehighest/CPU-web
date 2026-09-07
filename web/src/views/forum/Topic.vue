@@ -344,6 +344,7 @@
         <el-button :icon="ChatLineRound" :disabled="!canReply" @click="openReplyDialog()">回复 · {{ topic.replyCount }}</el-button>
         <el-button :disabled="topic.hidden" @click="shareDialogOpen = true">分享</el-button>
         <el-button v-if="canReportPost(topic)" type="danger" plain @click="openReport('topic', topic.id, topic.title)">举报</el-button>
+        <el-button v-if="canReportPost(topic)" plain @click="blockPostAuthor('topic', topic.id)">屏蔽作者</el-button>
       </footer>
       </div>
     </article>
@@ -447,6 +448,7 @@
               </el-button>
               <el-button v-if="!entry.item.hidden" text size="small" @click="replyTo(entry.item)">回复</el-button>
               <el-button v-if="canReportPost(entry.item)" text size="small" type="danger" @click="openReport('reply', entry.item.id, `#${entry.item.floor} 评论`)">举报</el-button>
+              <el-button v-if="canReportPost(entry.item)" text size="small" @click="blockPostAuthor('reply', entry.item.id)">屏蔽作者</el-button>
               <el-button v-if="canEditReply(entry.item)" text size="small" @click="editReply(entry.item)">编辑</el-button>
               <el-button v-if="canEditReply(entry.item)" text size="small" type="danger" :loading="replyActionBusyId === entry.item.id" :disabled="replyActionBusyId !== null" @click="removeReply(entry.item)">删除</el-button>
               <el-button v-if="!entry.item.hidden" text size="small" :loading="replyLikeBusyId === entry.item.id" :disabled="replyLikeBusyId !== null" @click="onLikeReply(entry.item)"><AppIcon name="like" /> {{ entry.item.likeCount }}</el-button>
@@ -777,6 +779,7 @@ import { forumCacheScope, readForumTopic, writeForumTopic } from "@/utils/forumC
 import { rememberTopicViewCount } from "@/utils/topicImpressions";
 import { copyText } from "@/utils/userGroup";
 import ContentReportDialog from "@/components/forum/ContentReportDialog.vue";
+import { blockUser } from "@/utils/userBlock";
 import type { ForumReportTargetType } from "@/api/forumReport";
 import { isAndroidNativeApp, isHarmonyNativeApp } from "@/utils/clientInfo";
 import { getNativeBridge, hasNativeImageSaveBridge } from "@/utils/nativeBridge";
@@ -1482,6 +1485,10 @@ function canReportPost(post: Topic | Reply) {
 function openReport(type: "topic" | "reply", id: number, label: string) {
   reportTarget.value = { type, id, label };
   reportDialogOpen.value = true;
+}
+
+async function blockPostAuthor(type: "topic" | "reply", id: number) {
+  if (await blockUser(type, id)) await router.replace('/profile/privacy');
 }
 
 function openPrivateChat(kind: "topic" | "reply", postId: number) {

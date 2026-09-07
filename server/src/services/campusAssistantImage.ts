@@ -4,6 +4,7 @@ import { normalizeAiImageDataUrl, AI_IMAGE_MAX_SOURCE_BYTES } from "./aiImageVal
 import { finishAiReviewLogError, finishAiReviewLogSuccess, startAiReviewLog } from "./aiReviewLog";
 import { saveMediaAsset } from "./mediaStorage";
 import { isLocalOrPrivateHost } from "../utils/officePreview";
+import { ensureUserAiConsent } from "./aiConsent";
 
 // The product-facing feature is called image2, while the upstream catalog
 // exposes its actual OpenAI-compatible model id as gpt-image-2.
@@ -155,6 +156,7 @@ export async function generateCampusAssistantImage(input: {
 
   const providerErrors: string[] = [];
   for (const provider of providers) {
+    await ensureUserAiConsent(input.createdById);
     const endpoint = normalizeCampusAssistantImageEndpoint(provider.apiUrl);
     const started = await startAiReviewLog({
       kind: "campus-assistant",

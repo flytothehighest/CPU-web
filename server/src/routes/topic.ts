@@ -1,3 +1,4 @@
+import { isAuthorBlocked, blockedAuthorWhere } from "../services/userBlock";
 import { Router, type NextFunction, type Request, type Response } from "express";
 import multer from "multer";
 import { z } from "zod";
@@ -462,7 +463,7 @@ topicRouter.get("/:id", async (req, res, next) => {
         lostFoundItem: { select: { id: true, kind: true, status: true } },
       },
     });
-    if (!topic) throw Errors.notFound();
+    if (!topic || isAuthorBlocked(topic.authorId, req.user)) throw Errors.notFound();
     if (isRetiredBoardSlug(topic.board?.slug)) throw Errors.notFound();
     const canSeeHidden = Boolean(requesterId && (requesterId === topic.authorId || requesterRole === "admin" || requesterRole === "mod"));
     if (topic.hidden && !canSeeHidden) throw Errors.notFound();
@@ -966,7 +967,7 @@ topicRouter.get("/:id/replies", async (req, res, next) => {
     if (!isBoardTypeEnabled(topic.board?.type)) throw Errors.forbidden(featureClosedMessage(topic.board?.type));
     await ensureCanReadBoardType(topic.board?.type, req.user?.userId ?? null, req.user?.role ?? null);
     const list = await prisma.reply.findMany({
-      where: { topicId: id, ...forumContentVisibilityWhere(requesterId) },
+      where: { topicId: id, ...forumContentVisibilityWhere(requesterId), ...blockedAuthorWhere(req.user) },
       orderBy: { floor: "asc" },
       include: {
         author: { select: { id: true, username: true, nickname: true, avatar: true, role: true, status: true, mutedUntil: true, isVip: true, profileTheme: true, profileFrame: true, verificationType: true, verificationLabel: true, verificationVerifiedAt: true, verificationExpiresAt: true, ...forumAuthorReputationSelect } },

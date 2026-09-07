@@ -130,6 +130,8 @@ async function streamAssistant(
   const csrf = getCsrfToken();
   if (csrf) headers["X-CSRF-Token"] = csrf;
 
+  const { ensureAiConsent } = await import("@/utils/aiConsent");
+  await ensureAiConsent();
   const response = await fetch("/api/search/assistant/stream", {
     method: "POST",
     credentials: "include",

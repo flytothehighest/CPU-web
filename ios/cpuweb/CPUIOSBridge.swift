@@ -75,6 +75,7 @@ final class CPUIOSBridge: NSObject, WKScriptMessageHandler {
               url: String(url ?? ''), fileName: String(fileName ?? 'image.png')
             }),
             installScheduleWidget: (payload) => { send('installScheduleWidget', { payload: String(payload ?? '') }); },
+            clearScheduleWidget: () => { send('clearScheduleWidget', {}); },
             setScheduleWidgetTheme: (theme) => { send('setScheduleWidgetTheme', { theme: String(theme ?? '') }); }
           };
           Object.defineProperty(window, 'CPUIOS', { value: bridge, configurable: true });
@@ -173,6 +174,14 @@ final class CPUIOSBridge: NSObject, WKScriptMessageHandler {
             saveRemoteImage(body["url"] as? String)
         case "installScheduleWidget":
             installScheduleWidget(payload: body["payload"] as? String)
+        case "clearScheduleWidget":
+            UserDefaults(suiteName: AppConfiguration.appGroup)?.removeObject(forKey: AppConfiguration.widgetEndpointKey)
+            if let directory = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: AppConfiguration.appGroup) {
+                for name in [AppConfiguration.widgetEndpointFileName, "schedule-widget-payload.json"] {
+                    try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
+                }
+            }
+            WidgetCenter.shared.reloadAllTimelines()
         case "setScheduleWidgetTheme":
             setScheduleWidgetTheme(body["theme"] as? String)
         case "webHistory":
@@ -190,6 +199,7 @@ final class CPUIOSBridge: NSObject, WKScriptMessageHandler {
     private func openExternal(_ rawValue: String?) {
         guard let rawValue,
               let url = URL(string: rawValue.trimmingCharacters(in: .whitespacesAndNewlines)),
+              !AppConfiguration.isCommerceURL(url),
               UIApplication.shared.canOpenURL(url) else {
             showMessage(title: "无法打开", message: "这个链接暂时无法交给系统处理。")
             return

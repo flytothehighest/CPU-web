@@ -14,6 +14,7 @@ import {
   directMessageVisibilityWhere,
 } from "../services/directMessageModeration";
 import { scheduleDirectMessageSubmissionReview } from "../services/directMessageSubmissionReview";
+import { ensureNoUserBlock, lockUserPair } from "../services/userBlock";
 import { shouldBypassAiReviewForUser, shouldRunAiReview } from "../services/topicAiReview";
 import {
   anonymousForumDirectScope,
@@ -153,13 +154,14 @@ async function loadDirectMessageRemarks(ownerId: number, targetUserIds: number[]
 
 async function requireDirectMessageTarget(senderId: number, recipientId: number) {
   if (senderId === recipientId) throw Errors.badRequest("不能与自己私聊");
+  await ensureNoUserBlock(senderId, recipientId);
   const [sender, recipient] = await Promise.all([
     prisma.user.findUnique({ where: { id: senderId }, select: { id: true, nickname: true, role: true, status: true, mutedUntil: true } }),
     prisma.user.findUnique({ where: { id: recipientId }, select: directUserSelect }),
   ]);
   if (!sender) throw Errors.unauthorized();
   await ensureUserCanSpeak(senderId);
-  if (!recipient || recipient.status === "banned") throw Errors.notFound("用户不存在或暂时无法接收私聊");
+  if (!recipient || ["banned", "deleting", "deleted"].includes(recipient.status)) throw Errors.notFound("用户不存在或暂时无法接收私聊");
   if (recipient.role === "bot") throw Errors.badRequest("不能向系统账号发起私聊");
   return { sender, recipient };
 }
@@ -171,6 +173,7 @@ async function findConversationForUsers(
   viewerId = firstUserId,
 ) {
   const pair = canonicalDirectParticipants(firstUserId, secondUserId);
+  await ensureNoUserBlock(firstUserId, secondUserId);
   return prisma.directConversation.findFirst({
     where: {
       ...pair,
@@ -239,7 +242,8 @@ async function resolveForumDirectTarget(
   await ensureCanReadBoardType(topic.board?.type, viewerId, viewerRole);
 
   if (post.authorId === viewerId) throw Errors.badRequest("不能与自己私聊");
-  if (!post.author || post.author.status === "banned") throw Errors.notFound("用户不存在或暂时无法接收私聊");
+  await ensureNoUserBlock(viewerId, post.authorId);
+  if (!post.author || ["banned", "deleting", "deleted"].includes(post.author.status)) throw Errors.notFound("用户不存在或暂时无法接收私聊");
   if (post.author.role === "bot") throw Errors.badRequest("不能向系统账号发起私聊");
 
   const alias = post.isAnonymous ? presentAnonymousAlias(post.anonymousAlias) : null;
@@ -271,7 +275,11 @@ async function sendDirectMessage(
   const participantLowAlias = pair.participantLowId === recipientId ? recipientAlias : null;
   const participantHighAlias = pair.participantHighId === recipientId ? recipientAlias : null;
 
-  const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
+      await lockUserPair(tx, senderId, recipientId);
+      await ensureNoUserBlock(senderId, recipientId, tx);
+      const participants = await tx.$queryRaw<Array<{ id: number; status: string }>>`SELECT "id", "status" FROM "User" WHERE "id" IN (${senderId}, ${recipientId}) ORDER BY "id" FOR SHARE`;
+      if (participants.length !== 2 || participants.some((user) => ["deleting", "deleted", "banned"].includes(user.status))) throw Errors.forbidden("账户当前无法接收私聊");
     // INSERT ... ON CONFLICT 会锁住这一对用户在当前身份作用域里的唯一会话行；后续计数和写入在同一事务内，
     // 即使用户并发点击发送，也不能越过“回复前两条”的服务端限制。
     const rows = await tx.$queryRaw<DirectConversationRow[]>`
@@ -414,6 +422,8 @@ directMessageRouter.get("/conversations", async (req, res, next) => {
         AND: [
           { OR: [{ participantLowId: userId }, { participantHighId: userId }] },
           { messages: { some: directMessageVisibilityWhere(userId) } },
+          { participantLowId: { notIn: req.user!.blockedUserIds || [] } },
+          { participantHighId: { notIn: req.user!.blockedUserIds || [] } },
         ],
       },
       include: {
@@ -471,8 +481,9 @@ directMessageRouter.get("/with/:userId", async (req, res, next) => {
     const userId = req.user!.userId;
     const counterpartId = parsePositiveId(req.params.userId, "用户");
     if (counterpartId === userId) throw Errors.badRequest("不能与自己私聊");
+    await ensureNoUserBlock(userId, counterpartId);
     const counterpart = await prisma.user.findUnique({ where: { id: counterpartId }, select: directUserSelect });
-    if (!counterpart || counterpart.status === "banned") throw Errors.notFound("用户不存在或暂时无法接收私聊");
+      if (!counterpart || ["banned", "deleting", "deleted"].includes(counterpart.status)) throw Errors.notFound("用户不存在或暂时无法接收私聊");
     if (counterpart.role === "bot") throw Errors.badRequest("不能向系统账号发起私聊");
     const remarkByUserId = await loadDirectMessageRemarks(userId, [counterpartId]);
     const counterpartRemark = remarkByUserId.get(counterpartId) || null;
@@ -553,6 +564,7 @@ directMessageRouter.get("/conversations/:id/messages", validate(pageQuerySchema,
       throw Errors.notFound("会话不存在");
     }
     const limit = req.query.limit as unknown as number;
+    await ensureNoUserBlock(userId, directCounterpartId(conversation, userId));
     const before = req.query.before as unknown as number | undefined;
     const rows = await prisma.directMessage.findMany({
       where: {

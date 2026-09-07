@@ -28,7 +28,7 @@ export function nicknameSetupRequired(input: {
   nicknameReviewStatus?: string | null;
 }) {
   if (String(input.nickname || "").trim()) return false;
-  return !(input.nicknameReviewStatus === "checking" && String(input.pendingNickname || "").trim());
+  return !(["checking", "manual_pending"].includes(input.nicknameReviewStatus || "") && String(input.pendingNickname || "").trim());
 }
 
 export function nicknameReviewAttempt(detail: string | null | undefined) {

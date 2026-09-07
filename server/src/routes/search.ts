@@ -1,3 +1,4 @@
+import { isAuthorBlocked } from "../services/userBlock";
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../prisma";
@@ -148,7 +149,7 @@ searchRouter.get("/", async (req, res, next) => {
     });
 
     ok(res, {
-      topics: topics.map((topic: any) => {
+      topics: topics.filter((topic: any) => !isAuthorBlocked(topic.authorId, req.user)).map((topic: any) => {
         const presented = sanitizeLostFoundTopicFields(topic, req.user);
         return {
           ...presented,

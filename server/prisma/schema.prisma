@@ -50,6 +50,11 @@ model User {
   topicSubmissionLocked  Boolean   @default(false)
   aiReviewWhitelisted    Boolean   @default(false)
   dataAuthAgreedAt       DateTime?
+  aiConsentVersion       String?
+  aiConsentAgreedAt      DateTime?
+  pendingProfile        String?
+  profileReviewStatus   String    @default("none")
+  profileReviewReason   String?
   forumEnabled           Boolean   @default(false)
   forumEnabledAt         DateTime?
   anonymousCredits       Int       @default(0)
@@ -144,8 +149,43 @@ model User {
   reviewedVerifications        UserVerificationApplication[] @relation("VerificationReviewer")
   yaodaFlightAttempts          YaodaFlightAttempt[]
   yaodaFlightAchievements      YaodaFlightAchievement[]
+  blocksOwned                 UserBlock[] @relation("BlockOwner")
+  blocksReceived              UserBlock[] @relation("BlockTarget")
 
   @@index([nicknameReviewStatus, nicknameReviewedAt])
+}
+
+model UserBlock {
+  id        String   @id @default(cuid())
+  ownerId   Int
+  targetId  Int
+  label     String
+  createdAt DateTime @default(now())
+  owner     User @relation("BlockOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  target    User @relation("BlockTarget", fields: [targetId], references: [id], onDelete: Cascade)
+  @@unique([ownerId, targetId])
+  @@index([targetId])
+}
+
+model AccountDeletionJob {
+  id               String   @id @default(cuid())
+  userId           Int      @unique
+  receiptHash      String   @unique
+  status           String   @default("pending")
+  phase            String   @default("data")
+  encryptedPayload String?
+  attempts         Int      @default(0)
+  nextAttemptAt    DateTime @default(now())
+  lastError        String?
+  completedAt      DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  @@index([status, nextAttemptAt])
+}
+
+model AccountRevokedCredential {
+  tokenHash String @id
+  revokedAt DateTime @default(now())
 }
 
 // ============ 拾间认证 ============

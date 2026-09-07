@@ -3,6 +3,9 @@ import type { TopNavigationItem } from "./site";
 import type { ForumAdPlacement } from "./forumAds";
 
 export type AiServiceConfig = {
+  privacyOperator?: string;
+  privacyPolicyUrl?: string;
+  privacyRetention?: string;
   id: string;
   name: string;
   provider: string;
@@ -857,7 +860,7 @@ export type ForumReportAdminRow = {
   id: number;
   reporterId: number;
   targetAuthorId?: number | null;
-  targetType: "topic" | "reply" | "direct_message";
+  targetType: "topic" | "reply" | "direct_message" | "user";
   targetId: number;
   targetLabel: string;
   targetUrl?: string | null;
@@ -1362,7 +1365,7 @@ export const adminApi = {
   manualReviews: (options?: RequestOptions) =>
     request.get<{ total: number; topicCount: number; replyCount: number; topics: any[]; replies: any[] }>("/admin/manual-reviews", undefined, options),
   forumReports: (
-    params: { status?: "pending" | "resolved" | "rejected" | "all"; targetType?: "topic" | "reply" | "direct_message" | "all"; page?: number; size?: number },
+    params: { status?: "pending" | "resolved" | "rejected" | "all"; targetType?: "topic" | "reply" | "direct_message" | "user" | "all"; page?: number; size?: number },
     options?: RequestOptions,
   ) => request.get<ForumReportAdminPage>("/admin/forum-reports", params, options),
   handleForumReport: (id: number, payload: { status: "resolved" | "rejected"; note?: string }) =>

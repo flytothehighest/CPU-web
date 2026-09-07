@@ -5,7 +5,7 @@ import { buildUploadUrl, deleteMediaAsset, saveMediaAsset } from "./mediaStorage
 
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 
-export async function storeUserAvatarDataUrl(userId: number, avatar: string) {
+export async function storeUserAvatarDataUrl(userId: number, avatar: string, awaitingProfileReview = false) {
   const decoded = decodeDataAvatar(avatar);
   if (!decoded?.data.length) throw new Error("头像数据格式不正确");
   if (decoded.data.length > MAX_AVATAR_BYTES) throw new Error("头像不能超过 5MB");
@@ -15,6 +15,11 @@ export async function storeUserAvatarDataUrl(userId: number, avatar: string) {
     buffer: decoded.data,
     contentType: decoded.contentType,
     mediaKind: "image",
+  });
+  await prisma.forumImageAsset.upsert({
+    where: { url: saved.url },
+    create: { url: saved.url, localPath: saved.localPath, mimeType: decoded.contentType, fileSize: decoded.data.length, createdById: userId, status: awaitingProfileReview ? "manual_profile_pending" : "approved" },
+    update: {},
   });
   return saved.url;
 }
