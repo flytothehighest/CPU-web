@@ -41,11 +41,11 @@ userBlockRouter.post("/", validate(schema), async (req, res, next) => {
     if (resolvedId === ownerId) throw Errors.badRequest("不能屏蔽自己");
     const target = await prisma.user.findUnique({ where: { id: resolvedId }, select: { nickname: true, status: true } });
     if (!target || ["deleting", "deleted"].includes(target.status)) throw Errors.notFound("用户不存在");
-    const result = await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx) => {
       await lockUserPair(tx, ownerId, resolvedId);
       const block = await tx.userBlock.upsert({
         where: { ownerId_targetId: { ownerId, targetId: resolvedId } },
-        create: { ownerId, targetId: resolvedId, label: anonymous ? "已屏蔽的匿名用户" : target.nickname || "用户" }, update: {},
+        create: { ownerId, targetId: resolvedId, label: anonymous ? "已屏蔽的匿名用户" : target.nickname || "用户" }, update: anonymous ? { label: "已屏蔽的匿名用户" } : {},
         select: { id: true, label: true, createdAt: true },
       });
       const conversations = await tx.directConversation.findMany({ where: { participantLowId: Math.min(ownerId, resolvedId), participantHighId: Math.max(ownerId, resolvedId) }, select: { id: true } });
@@ -53,7 +53,7 @@ userBlockRouter.post("/", validate(schema), async (req, res, next) => {
       await tx.notification.deleteMany({ where: { userId: ownerId, category: "direct-message", link: { in: conversations.map((row) => `/messages?tab=private&conversation=${row.id}`) } } });
       return block;
     });
-    ok(res, result);
+    ok(res, { blocked: true });
   } catch (error) { next(error); }
 });
 

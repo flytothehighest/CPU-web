@@ -26,8 +26,9 @@ enum AppConfiguration {
 
     static func isCommerceURL(_ url: URL) -> Bool {
         let scheme = url.scheme?.lowercased() ?? ""
-        if ["alipay", "alipays", "weixin", "wxpay"].contains(scheme) { return true }
+        if ["alipay", "alipays", "wxpay"].contains(scheme) { return true }
         let host = url.host?.lowercased() ?? ""
+        if scheme == "weixin" && (host == "pay" || url.path.lowercased().hasPrefix("/pay")) { return true }
         if host == "pay.kaipay.cn" { return true }
         guard [appHost, "cputime.cn", "cpu.lizmt.cn"].contains(host) else { return false }
         let path = url.path.lowercased()
