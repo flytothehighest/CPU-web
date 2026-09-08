@@ -7,12 +7,13 @@ import {
   QQBOT_INBOUND_WS_PATH,
 } from "../src/services/qqbot/connection";
 
-test("QQBot blocks private and temporary-session messages at the transport boundary", () => {
+test("QQBot blocks unsolicited private notifications but allows user-requested replies", () => {
   assert.throws(
     () => assertQqBotMessageActionAllowed("send_private_msg"),
-    /QQBot 私聊及群临时消息已停用/,
+    /QQBot 主动私聊及群临时通知已停用/,
   );
   assert.doesNotThrow(() => assertQqBotMessageActionAllowed("send_group_msg"));
+  assert.doesNotThrow(() => assertQqBotMessageActionAllowed("send_private_msg", true));
 });
 
 test("QQBot connection mode defaults to the compatible outbound direction", () => {

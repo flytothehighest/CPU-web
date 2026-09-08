@@ -895,7 +895,7 @@ export async function handleQqBotWebhook(event: OneBotEvent, secret?: string | n
       await replyToEvent(context, "已收到登录信息，正在登录并检查课程状态，请稍候…");
       try {
         const progress = async (message: string) => {
-          await sendQqMessage({ qqId, tempGroupId: context.groupId }, message).catch(() => undefined);
+          await sendQqMessage({ qqId, tempGroupId: context.groupId }, message, true).catch(() => undefined);
         };
         const result = await runSafetyPlatform(credentials, progress);
         const lines = [
@@ -2492,13 +2492,13 @@ async function createTopicFromQq(input: {
   return { ...topic, board };
 }
 
-export async function sendQqMessage(target: QqMessageTarget, message: string) {
+export async function sendQqMessage(target: QqMessageTarget, message: string, userInitiated = false) {
   const chunks = splitQqMessageForSend(message);
   let messageId: string | undefined;
   for (let index = 0; index < chunks.length; index += 1) {
     const chunk = chunks[index];
     const decorated = chunks.length > 1 ? `（${index + 1}/${chunks.length}）\n${chunk}` : chunk;
-    messageId = (await sendSingleQqMessage(target, decorated)) || messageId;
+    messageId = (await sendSingleQqMessage(target, decorated, userInitiated)) || messageId;
   }
   return messageId;
 }
@@ -2535,9 +2535,9 @@ function isSingleQqImageMessage(value: string) {
   return /^(?:\[CQ:reply,[^\]]+\])?\[CQ:image,[^\]]+\]$/i.test(String(value || "").trim());
 }
 
-async function sendSingleQqMessage(target: QqMessageTarget, message: string) {
+async function sendSingleQqMessage(target: QqMessageTarget, message: string, userInitiated: boolean) {
   const endpoint = target.groupId ? "send_group_msg" : "send_private_msg";
-  assertQqBotMessageActionAllowed(endpoint);
+  assertQqBotMessageActionAllowed(endpoint, userInitiated);
   const config = await getQqBotConfigRaw();
   const connectionMode = normalizeQqBotConnectionMode(config.connectionMode);
   if (!config.enabled || (connectionMode === "outbound" && !config.napcatBaseUrl)) {
@@ -2552,7 +2552,7 @@ async function sendSingleQqMessage(target: QqMessageTarget, message: string) {
     };
   if (connectionMode === "inbound" || isWebSocketUrl(config.napcatBaseUrl)) {
     try {
-      const result = await sendQqMessageByWebSocket(endpoint, body, target, message);
+      const result = await sendQqMessageByWebSocket(endpoint, body, target, message, userInitiated);
       return extractNapCatMessageId(result);
     } catch (error: any) {
       await logQqBotMessage({
@@ -2904,7 +2904,7 @@ async function replyToEvent(
   if (context.event.message_type === "group" && context.groupId) {
     await sendQqMessage({ groupId: context.groupId }, outboundMessage);
   } else {
-    await sendQqMessage({ qqId: context.qqId, tempGroupId: context.groupId }, outboundMessage);
+    await sendQqMessage({ qqId: context.qqId, tempGroupId: context.groupId }, outboundMessage, true);
   }
 }
 
@@ -2914,7 +2914,7 @@ async function replyToPrivateForPosting(
   groupHint = "已收到，请查看私信完成投稿。",
 ) {
   try {
-    await sendQqMessage({ qqId: context.qqId, tempGroupId: context.groupId }, message);
+    await sendQqMessage({ qqId: context.qqId, tempGroupId: context.groupId }, message, true);
   } catch {
     if (context.event.message_type === "group" && context.groupId) {
       await sendQqMessage(
