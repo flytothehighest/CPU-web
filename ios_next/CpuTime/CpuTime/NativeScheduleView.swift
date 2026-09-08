@@ -1,0 +1,1023 @@
+import SwiftUI
+
+/// The native timetable surface. Data loading and authentication stay in
+/// NativeScheduleStore so the SwiftUI surface can also be embedded beside the
+/// existing web routes.
+struct NativeScheduleView: View {
+    @ObservedObject private var store: NativeScheduleStore
+    private let onWidgets: () -> Void
+    private let onLogin: () -> Void
+
+    @State private var selectedDay = 1
+    @State private var didInitializeDay = false
+    @State private var viewMode: ScheduleViewMode = .week
+    @State private var selectedCourse: SelectedCourse?
+    @State private var weekPickerPresented = false
+
+    init(store: NativeScheduleStore, onLogin: @escaping () -> Void = {}, onWidgets: @escaping () -> Void = {}) {
+        _store = ObservedObject(wrappedValue: store)
+        self.onWidgets = onWidgets
+        self.onLogin = onLogin
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 16) {
+                    if isUnauthorized {
+                        authorizationState
+                    } else if let result = store.result {
+                        scheduleHeader(result)
+                        Button(action: onWidgets) { Label("小组件", systemImage: "square.grid.2x2") }
+
+                        if isStale {
+                            cacheBanner
+                        }
+
+                        if isLoading {
+                            loadingBanner
+                        } else if let message = errorMessage {
+                            errorBanner(message)
+                        }
+
+                        if viewMode == .day {
+                            dayPicker(result)
+                        }
+
+                        if hasCourses(in: result) {
+                            if viewMode == .week {
+                                weekGrid(result)
+                            } else {
+                                dayGrid(result)
+                            }
+                        } else {
+                            emptySchedule
+                        }
+                    } else if isLoading {
+                        loadingState
+                    } else if let message = errorMessage {
+                        errorState(message)
+                    } else {
+                        initialState
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, geometry.safeAreaInsets.top + 8)
+                .padding(.bottom, 28)
+            }
+            .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
+            .ignoresSafeArea(.container, edges: [.top, .bottom])
+        }
+        .task {
+            adoptSelectionIfNeeded()
+
+        }
+        .refreshable {
+            await store.refresh()
+        }
+        .onChange(of: store.result?.currentSemester) { _, _ in
+            adoptSelectionIfNeeded()
+        }
+        .onChange(of: store.result?.currentWeek) { _, _ in
+            adoptSelectionIfNeeded()
+        }
+        .sheet(item: $selectedCourse) { selection in
+            CourseDetailSheet(
+                course: selection.course,
+                day: selection.day,
+                startSlot: selection.startSlot,
+                endSlot: selection.endSlot
+            )
+                .presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: $weekPickerPresented) {
+            weekPicker
+                .presentationDetents([.medium, .large])
+        }
+    }
+
+    private var isLoading: Bool {
+        store.state == .loading
+    }
+
+    private var isUnauthorized: Bool {
+        store.state == .unauthorized
+    }
+
+    private var isStale: Bool {
+        store.state == .stale
+    }
+
+    private var errorMessage: String? {
+        let value = store.errorMessage?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return value.isEmpty ? nil : value
+    }
+
+    private func scheduleHeader(_ result: NativeScheduleResult) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 10) {
+                semesterMenu(result)
+
+                Spacer(minLength: 8)
+
+                Button {
+                    jumpToCurrentWeek(result)
+                } label: {
+                    Image(systemName: isViewingCurrentWeek(result) ? "scope" : "location.north.line")
+                        .font(.system(size: 16, weight: .semibold))
+                        .frame(width: 34, height: 34)
+                        .background(Color(uiColor: .secondarySystemGroupedBackground))
+                        .clipShape(Circle())
+                }
+                .foregroundStyle(isViewingCurrentWeek(result) ? Color.accentColor : .primary)
+                .accessibilityLabel("回到本周")
+                .disabled(isLoading || isViewingCurrentWeek(result))
+            }
+
+            HStack(spacing: 8) {
+                weekStepButton(
+                    systemName: "chevron.left",
+                    label: "上一周",
+                    enabled: canMoveWeek(-1, result: result)
+                ) {
+                    moveWeek(-1, result: result)
+                }
+
+                Button {
+                    weekPickerPresented = true
+                } label: {
+                    VStack(spacing: 2) {
+                        Text(weekTitle(result))
+                            .font(.headline)
+                            .lineLimit(1)
+                        if let range = weekRange(result), !range.isEmpty {
+                            Text(range)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 42)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("选择周次")
+
+                weekStepButton(
+                    systemName: "chevron.right",
+                    label: "下一周",
+                    enabled: canMoveWeek(1, result: result)
+                ) {
+                    moveWeek(1, result: result)
+                }
+            }
+
+            Picker("课表视图", selection: $viewMode) {
+                Text("周视图").tag(ScheduleViewMode.week)
+                Text("日视图").tag(ScheduleViewMode.day)
+            }
+            .pickerStyle(.segmented)
+            .accessibilityLabel("切换课表视图")
+        }
+    }
+
+    private func semesterMenu(_ result: NativeScheduleResult) -> some View {
+        Menu {
+            ForEach(result.semesters, id: \.value) { semester in
+                Button {
+                    Task { await store.selectSemester(semester.value) }
+                } label: {
+                    if semester.value == store.selectedSemester {
+                        Label(semester.label, systemImage: "checkmark")
+                    } else {
+                        Text(semester.label)
+                    }
+                }
+            }
+        } label: {
+            Label(semesterTitle(result), systemImage: "graduationcap")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+                .padding(.horizontal, 12)
+                .frame(minHeight: 34)
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .clipShape(Capsule())
+        }
+        .accessibilityLabel("选择学期")
+        .disabled(isLoading || result.semesters.isEmpty)
+    }
+
+    private func weekStepButton(
+        systemName: String,
+        label: String,
+        enabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 15, weight: .bold))
+                .frame(width: 44, height: 42)
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+        .foregroundStyle(enabled ? .primary : .tertiary)
+        .disabled(!enabled || isLoading)
+        .accessibilityLabel(label)
+    }
+
+    private func dayPicker(_ result: NativeScheduleResult) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(1...7, id: \.self) { day in
+                    Button {
+                        selectedDay = day
+                    } label: {
+                        VStack(spacing: 4) {
+                            Text(dayLabel(day))
+                                .font(.caption.weight(.semibold))
+                            Text(dayDate(day, result: result) ?? "--")
+                                .font(.caption2)
+                                .foregroundStyle(selectedDay == day ? .white.opacity(0.82) : .secondary)
+                        }
+                        .frame(width: 58, height: 48)
+                        .background(selectedDay == day ? Color.accentColor : Color(uiColor: .secondarySystemGroupedBackground))
+                        .foregroundStyle(selectedDay == day ? .white : .primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(dayLabel(day)) \(dayDate(day, result: result) ?? "")")
+                }
+            }
+        }
+    }
+
+    private func weekGrid(_ result: NativeScheduleResult) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            scheduleSummary(result)
+
+            GeometryReader { proxy in
+                let columnWidth = max(24, (proxy.size.width - 46) / 7)
+                scheduleRows(result: result, days: Array(1...7), columnWidth: columnWidth)
+                    .frame(minWidth: proxy.size.width, alignment: .leading)
+            }
+            .frame(minHeight: 610)
+        }
+    }
+
+    private func dayGrid(_ result: NativeScheduleResult) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            scheduleSummary(result)
+
+            GeometryReader { proxy in
+                let columnWidth = max(220, proxy.size.width - 46)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    scheduleRows(result: result, days: [selectedDay], columnWidth: columnWidth)
+                }
+            }
+            .frame(minHeight: 618)
+        }
+    }
+
+    private func scheduleRows(result: NativeScheduleResult, days: [Int], columnWidth: CGFloat) -> some View {
+        HStack(alignment: .top, spacing: 0) {
+            slotAxis
+
+            ForEach(days, id: \.self) { day in
+                NativeScheduleDayColumn(
+                    day: day,
+                    dateText: dayDate(day, result: result),
+                    isToday: dayIsToday(day, result: result),
+                    columnWidth: columnWidth,
+                    blocks: blocks(for: day, result: result),
+                    onCourseSelected: { block in
+                        selectedCourse = SelectedCourse(
+                            course: block.course,
+                            day: day,
+                            startSlot: block.startSlot,
+                            endSlot: block.endSlot
+                        )
+                    }
+                )
+            }
+        }
+        .padding(.bottom, 4)
+    }
+
+    private var slotAxis: some View {
+        VStack(spacing: 0) {
+            Text("节次")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 46, height: 52)
+
+            VStack(spacing: 0) {
+                ForEach(ScheduleSlot.all, id: \.number) { slot in
+                    VStack(spacing: 2) {
+                        Text("\(slot.number)")
+                            .font(.caption.weight(.bold).monospacedDigit())
+                        Text(slot.start)
+                            .font(.system(size: 9).monospacedDigit())
+                            .foregroundStyle(.secondary)
+                        Text(slot.end)
+                            .font(.system(size: 9).monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(width: 46, height: NativeScheduleDayColumn.slotHeight)
+                    .overlay(alignment: .trailing) {
+                        Rectangle()
+                            .fill(Color(uiColor: .separator).opacity(0.5))
+                            .frame(width: 0.5)
+                    }
+                }
+            }
+            .background(Color(uiColor: .secondarySystemGroupedBackground).opacity(0.72))
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func scheduleSummary(_ result: NativeScheduleResult) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(weekTitle(result))
+                    .font(.subheadline.weight(.semibold))
+                Text(viewMode == .week ? "整周安排" : "\(dayLabel(selectedDay))的课程")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Text("\(courseCount(result)) 节课")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var cacheBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "clock.arrow.circlepath")
+            Text("显示的是最近一次缓存，正在等待最新课表")
+                .font(.caption)
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private var loadingBanner: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .controlSize(.small)
+            Text("正在更新课表")
+                .font(.caption)
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func errorBanner(_ message: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(Color.orange.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private var loadingState: some View {
+        StateCard(
+            systemImage: "calendar",
+            title: "正在加载课表",
+            message: "正在从教务服务读取最新安排",
+            actionTitle: nil,
+            action: nil,
+            showsProgress: true
+        )
+    }
+
+    private var initialState: some View {
+        StateCard(
+            systemImage: "calendar",
+            title: "准备加载课表",
+            message: "课表会显示在这里",
+            actionTitle: "加载课表",
+            action: { requestLoad() },
+            showsProgress: false
+        )
+    }
+
+    private var authorizationState: some View {
+        StateCard(
+            systemImage: "lock",
+            title: "需要教务授权",
+            message: "登录教务后，原生课表才能读取课程安排",
+            actionTitle: "去登录",
+            action: onLogin,
+            showsProgress: false
+        )
+    }
+
+    private func errorState(_ message: String) -> some View {
+        StateCard(
+            systemImage: "exclamationmark.triangle",
+            title: "课表读取失败",
+            message: message,
+            actionTitle: "重试",
+            action: refresh,
+            showsProgress: false
+        )
+    }
+
+    private var emptySchedule: some View {
+        StateCard(
+            systemImage: "calendar.badge.checkmark",
+            title: viewMode == .day ? "这一天没有课程" : "本周没有课程",
+            message: "可以切换其他周次查看安排",
+            actionTitle: nil,
+            action: nil,
+            showsProgress: false
+        )
+    }
+
+    private var weekPicker: some View {
+        NavigationStack {
+            List {
+                if let result = store.result, !result.weeks.isEmpty {
+                    ForEach(result.weeks, id: \.value) { week in
+                        Button {
+                            weekPickerPresented = false
+                            Task { await store.selectWeek(week.value) }
+                        } label: {
+                            HStack {
+                                Text(week.label.isEmpty ? "第 \(week.value) 周" : week.label)
+                                Spacer()
+                                if week.value == store.selectedWeek {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(Color.accentColor)
+                                }
+                            }
+                        }
+                        .foregroundStyle(.primary)
+                    }
+                } else {
+                    Text("暂无可选周次")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("选择周次")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("完成") {
+                        weekPickerPresented = false
+                    }
+                }
+            }
+        }
+    }
+
+    private func adoptSelectionIfNeeded() {
+        guard let result = store.result else { return }
+        if store.selectedSemester.isEmpty {
+            store.selectedSemester = store.calendar?.currentSemester.nilIfEmpty ?? result.currentSemester
+        }
+        if store.selectedWeek.isEmpty {
+            let currentWeek = store.calendar.map { $0.currentWeek }.flatMap { $0 > 0 ? String($0) : nil }
+            store.selectedWeek = currentWeek ?? result.currentWeek
+        }
+        if !didInitializeDay {
+            selectedDay = (1...7).first(where: { dayIsToday($0, result: result) }) ?? 1
+            didInitializeDay = true
+        }
+    }
+
+    private func requestLoad(force: Bool = false) {
+        let semester = store.selectedSemester.isEmpty ? nil : store.selectedSemester
+        let week = store.selectedWeek.isEmpty ? nil : store.selectedWeek
+        Task { @MainActor in
+            await store.load(semester: semester, week: week, force: force)
+        }
+    }
+
+    private func loadAsync(force: Bool = false) async {
+        let semester = store.selectedSemester.isEmpty ? nil : store.selectedSemester
+        let week = store.selectedWeek.isEmpty ? nil : store.selectedWeek
+        await store.load(semester: semester, week: week, force: force)
+    }
+
+    private func refresh() {
+        requestLoad(force: true)
+    }
+
+    private func moveWeek(_ offset: Int, result: NativeScheduleResult) {
+        guard let currentIndex = result.weeks.firstIndex(where: { $0.value == store.selectedWeek }) else {
+            return
+        }
+        let targetIndex = currentIndex + offset
+        guard result.weeks.indices.contains(targetIndex) else { return }
+        Task { await store.selectWeek(result.weeks[targetIndex].value) }
+    }
+
+    private func jumpToCurrentWeek(_ result: NativeScheduleResult) {
+        guard !isViewingCurrentWeek(result) else { return }
+        guard let calendar = store.calendar,
+              calendar.currentWeek > 0,
+              let semester = calendar.currentSemester.nilIfEmpty,
+              let week = calendar.weeks.first(where: { $0.week == calendar.currentWeek }),
+              let today = Self.todayDate,
+              week.days.contains(today) else {
+            store.selectedSemester = ""
+            store.selectedWeek = ""
+            selectedDay = Self.chinaWeekday
+            didInitializeDay = true
+            Task {
+                await store.load(semester: nil, week: nil, force: true)
+            }
+            return
+        }
+        Task {
+            await store.load(semester: semester, week: String(calendar.currentWeek), force: false)
+        }
+    }
+
+    private func canMoveWeek(_ offset: Int, result: NativeScheduleResult) -> Bool {
+        guard let currentIndex = result.weeks.firstIndex(where: { $0.value == store.selectedWeek }) else {
+            return false
+        }
+        return result.weeks.indices.contains(currentIndex + offset)
+    }
+
+    private func isViewingCurrentWeek(_ result: NativeScheduleResult) -> Bool {
+        guard let calendar = store.calendar,
+              calendar.currentWeek > 0,
+              let currentSemester = calendar.currentSemester.nilIfEmpty,
+              let week = calendar.weeks.first(where: { $0.week == calendar.currentWeek }),
+              let today = Self.todayDate,
+              week.days.contains(today) else {
+            return false
+        }
+        return store.selectedSemester == currentSemester && store.selectedWeek == String(calendar.currentWeek)
+    }
+
+    private func semesterTitle(_ result: NativeScheduleResult) -> String {
+        result.semesters.first(where: { $0.value == store.selectedSemester })?.label
+            ?? store.selectedSemester
+            .nilIfEmpty
+            ?? "选择学期"
+    }
+
+    private func weekTitle(_ result: NativeScheduleResult) -> String {
+        if let label = result.weeks.first(where: { $0.value == store.selectedWeek })?.label, !label.isEmpty {
+            return label
+        }
+        return store.selectedWeek.isEmpty ? "选择周次" : "第 \(store.selectedWeek) 周"
+    }
+
+    private func weekRange(_ result: NativeScheduleResult) -> String? {
+        guard let weekNumber = Int(store.selectedWeek), let calendar = store.calendar,
+              let item = calendar.weeks.first(where: { $0.week == weekNumber }) else {
+            return nil
+        }
+        if !item.monday.isEmpty && !item.sunday.isEmpty {
+            return "\(shortDate(item.monday)) - \(shortDate(item.sunday))"
+        }
+        return nil
+    }
+
+    private func dayDate(_ day: Int, result: NativeScheduleResult) -> String? {
+        guard let weekNumber = Int(store.selectedWeek), let calendar = store.calendar,
+              let item = calendar.weeks.first(where: { $0.week == weekNumber }),
+              item.days.indices.contains(day - 1) else {
+            return nil
+        }
+        return shortDate(item.days[day - 1])
+    }
+
+    private func dayIsToday(_ day: Int, result: NativeScheduleResult) -> Bool {
+        guard let value = rawDayDate(day, result: result), let today = Self.todayDate else {
+            return false
+        }
+        return value == today
+    }
+
+    private func rawDayDate(_ day: Int, result: NativeScheduleResult) -> String? {
+        guard let weekNumber = Int(store.selectedWeek), let calendar = store.calendar,
+              let item = calendar.weeks.first(where: { $0.week == weekNumber }),
+              item.days.indices.contains(day - 1) else {
+            return nil
+        }
+        return item.days[day - 1]
+    }
+
+    private func shortDate(_ value: String) -> String {
+        let pieces = value.split(separator: "-")
+        guard pieces.count >= 3 else { return value }
+        return "\(pieces[pieces.count - 2]).\(pieces[pieces.count - 1])"
+    }
+
+    private func dayLabel(_ day: Int) -> String {
+        ["周一", "周二", "周三", "周四", "周五", "周六", "周日"].indices.contains(day - 1)
+            ? ["周一", "周二", "周三", "周四", "周五", "周六", "周日"][day - 1]
+            : "周\(day)"
+    }
+
+    private func courseCount(_ result: NativeScheduleResult) -> Int {
+        if viewMode == .day {
+            return blocks(for: selectedDay, result: result).count
+        }
+        return (1...7).reduce(0) { total, day in total + blocks(for: day, result: result).count }
+    }
+
+    private func hasCourses(in result: NativeScheduleResult) -> Bool {
+        courseCount(result) > 0
+    }
+
+    private func blocks(for day: Int, result: NativeScheduleResult) -> [NativeScheduleCourseBlock] {
+        let rawBlocks = result.cells
+            .filter { $0.day == day }
+            .flatMap { cell in
+                cell.courses.enumerated().compactMap { index, course -> NativeScheduleCourseBlock? in
+                    if let week = Int(store.selectedWeek), !course.weekList.isEmpty, !course.weekList.contains(week) {
+                        return nil
+                    }
+                    let fallbackStart = cell.bigSlot * 2 - 1
+                    let fallbackEnd = cell.bigSlot * 2
+                    var start = min(max(course.startSlot ?? fallbackStart, 1), ScheduleSlot.all.count)
+                    var end = min(max(course.endSlot ?? fallbackEnd, start), ScheduleSlot.all.count)
+                    // Match the Web timetable's handling of a course repeated
+                    // in several large-period cells by the school parser.
+                    if end < fallbackStart || start > fallbackEnd {
+                        start = min(max(fallbackStart, 1), ScheduleSlot.all.count)
+                        end = min(max(fallbackEnd, start), ScheduleSlot.all.count)
+                    }
+                    return NativeScheduleCourseBlock(
+                        id: "\(day)-\(cell.bigSlot)-\(index)-\(course.name)",
+                        course: course,
+                        startSlot: start,
+                        endSlot: end
+                    )
+                }
+            }
+            .sorted { lhs, rhs in
+                if lhs.startSlot != rhs.startSlot { return lhs.startSlot < rhs.startSlot }
+                return lhs.endSlot < rhs.endSlot
+            }
+
+        let families = Dictionary(grouping: rawBlocks) { block in
+            [block.course.customId ?? "", block.course.name, block.course.teacher ?? "",
+             block.course.location ?? "", block.course.weeks].joined(separator: "\u{1F}")
+        }
+        var merged: [NativeScheduleCourseBlock] = []
+        for family in families.values {
+            var current: NativeScheduleCourseBlock?
+            for block in family.sorted(by: { $0.startSlot < $1.startSlot }) {
+                if let previous = current, block.startSlot <= previous.endSlot + 1 {
+                    current = NativeScheduleCourseBlock(id: previous.id, course: previous.course,
+                        startSlot: previous.startSlot, endSlot: max(previous.endSlot, block.endSlot))
+                } else {
+                    if let current { merged.append(current) }
+                    current = block
+                }
+            }
+            if let current { merged.append(current) }
+        }
+        var laneEnds: [Int] = []
+        return merged.sorted(by: { ($0.startSlot, $0.endSlot, $0.id) < ($1.startSlot, $1.endSlot, $1.id) }).map { block in
+            let lane = laneEnds.firstIndex(where: { $0 < block.startSlot }) ?? laneEnds.count
+            if lane == laneEnds.count {
+                laneEnds.append(block.endSlot)
+            } else {
+                laneEnds[lane] = block.endSlot
+            }
+            return block.withLane(lane)
+        }
+    }
+
+    private static var todayDate: String? {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: .now)
+    }
+
+    private static var chinaWeekday: Int {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
+        let weekday = calendar.component(.weekday, from: .now)
+        return weekday == 1 ? 7 : weekday - 1
+    }
+}
+
+private enum ScheduleViewMode: String, Hashable {
+    case week
+    case day
+}
+
+private struct NativeScheduleCourseBlock: Identifiable {
+    let id: String
+    let course: NativeScheduleCourse
+    let startSlot: Int
+    let endSlot: Int
+    let lane: Int
+
+    init(id: String, course: NativeScheduleCourse, startSlot: Int, endSlot: Int, lane: Int = 0) {
+        self.id = id
+        self.course = course
+        self.startSlot = startSlot
+        self.endSlot = endSlot
+        self.lane = lane
+    }
+
+    func withLane(_ lane: Int) -> NativeScheduleCourseBlock {
+        NativeScheduleCourseBlock(id: id, course: course, startSlot: startSlot, endSlot: endSlot, lane: lane)
+    }
+}
+
+private struct SelectedCourse: Identifiable {
+    let id = UUID()
+    let course: NativeScheduleCourse
+    let day: Int
+    let startSlot: Int
+    let endSlot: Int
+}
+
+private struct ScheduleSlot {
+    let number: Int
+    let start: String
+    let end: String
+
+    static let all: [ScheduleSlot] = [
+        ScheduleSlot(number: 1, start: "08:00", end: "08:45"),
+        ScheduleSlot(number: 2, start: "08:55", end: "09:40"),
+        ScheduleSlot(number: 3, start: "09:55", end: "10:40"),
+        ScheduleSlot(number: 4, start: "10:50", end: "11:35"),
+        ScheduleSlot(number: 5, start: "13:30", end: "14:15"),
+        ScheduleSlot(number: 6, start: "14:25", end: "15:10"),
+        ScheduleSlot(number: 7, start: "15:25", end: "16:10"),
+        ScheduleSlot(number: 8, start: "16:20", end: "17:05"),
+        ScheduleSlot(number: 9, start: "18:30", end: "19:15"),
+        ScheduleSlot(number: 10, start: "19:25", end: "20:10"),
+        ScheduleSlot(number: 11, start: "20:20", end: "21:05")
+    ]
+}
+
+private struct NativeScheduleDayColumn: View {
+    static let slotHeight: CGFloat = 50
+
+    let day: Int
+    let dateText: String?
+    let isToday: Bool
+    let columnWidth: CGFloat
+    let blocks: [NativeScheduleCourseBlock]
+    let onCourseSelected: (NativeScheduleCourseBlock) -> Void
+
+    private var laneCount: Int {
+        max(1, (blocks.map(\.lane).max() ?? 0) + 1)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            VStack(spacing: 2) {
+                HStack(spacing: 4) {
+                    Text(dayLabel)
+                        .font(.caption.weight(.semibold))
+                    if isToday {
+                        Circle()
+                            .fill(Color.accentColor)
+                            .frame(width: 5, height: 5)
+                    }
+                }
+                Text(dateText ?? "--")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(width: columnWidth, height: 52)
+            .background(isToday ? Color.accentColor.opacity(0.12) : Color.clear)
+
+            ZStack(alignment: .topLeading) {
+                VStack(spacing: 0) {
+                    ForEach(ScheduleSlot.all, id: \.number) { _ in
+                        Rectangle()
+                            .fill(Color(uiColor: .tertiarySystemGroupedBackground))
+                            .frame(width: columnWidth, height: Self.slotHeight)
+                            .overlay {
+                                Rectangle()
+                                    .stroke(Color(uiColor: .separator).opacity(0.22), lineWidth: 0.5)
+                            }
+                    }
+                }
+
+                ForEach(blocks) { block in
+                    Button {
+                        onCourseSelected(block)
+                    } label: {
+                        NativeScheduleCourseCard(course: block.course, compact: columnWidth < 70)
+                            .frame(width: max(12, columnWidth / CGFloat(laneCount) - 4), height: max(42, CGFloat(block.endSlot - block.startSlot + 1) * Self.slotHeight - 6))
+                            .clipped()
+                    }
+                    .buttonStyle(.plain)
+                    .offset(x: 2 + CGFloat(block.lane) * (columnWidth / CGFloat(laneCount)), y: CGFloat(block.startSlot - 1) * Self.slotHeight + 3)
+                }
+            }
+            .frame(width: columnWidth, height: CGFloat(ScheduleSlot.all.count) * Self.slotHeight)
+        }
+        .frame(width: columnWidth)
+    }
+
+    private var dayLabel: String {
+        ["周一", "周二", "周三", "周四", "周五", "周六", "周日"].indices.contains(day - 1)
+            ? ["周一", "周二", "周三", "周四", "周五", "周六", "周日"][day - 1]
+            : "周\(day)"
+    }
+}
+
+private struct NativeScheduleCourseCard: View {
+    let course: NativeScheduleCourse
+    var compact = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 5) {
+            if !compact {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(accent)
+                    .frame(width: 3)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(course.name)
+                    .font(.system(size: compact ? 10 : 12, weight: .semibold))
+                    .lineLimit(compact ? 6 : 2)
+                    .multilineTextAlignment(.leading)
+
+                if !compact, let location = clean(course.location) {
+                    Label(location, systemImage: "mappin.and.ellipse")
+                        .font(.system(size: 9))
+                        .lineLimit(1)
+                }
+
+                if !compact, let teacher = clean(course.teacher) {
+                    Text(teacher)
+                        .font(.system(size: 9))
+                        .lineLimit(1)
+                }
+
+                if !compact, let note = clean(course.slotNote) ?? clean(course.weeks) {
+                    Text(note)
+                        .font(.system(size: 9))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .foregroundStyle(.primary)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, compact ? 2 : 6)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(accent.opacity(0.14))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(accent.opacity(0.35), lineWidth: 0.8)
+        }
+    }
+
+    private var accent: Color {
+        let palette: [Color] = [
+            .blue, .teal, .indigo, .orange, .pink, .green, .purple, .mint
+        ]
+        let hash = course.name.unicodeScalars.reduce(UInt64(0)) { ($0 &* 31) &+ UInt64($1.value) }
+        return palette[Int(hash % UInt64(palette.count))]
+    }
+
+    private func clean(_ value: String?) -> String? {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+            return nil
+        }
+        return value
+    }
+}
+
+private struct CourseDetailSheet: View {
+    let course: NativeScheduleCourse
+    let day: Int
+    let startSlot: Int
+    let endSlot: Int
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Text(course.name)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.primary)
+                }
+
+                Section("课程信息") {
+                    detailRow("老师", course.teacher)
+                    detailRow("地点", course.location)
+                    detailRow("星期", dayLabel)
+                    detailRow("周次", course.weeks)
+                    detailRow("节次", course.slotNote ?? slotRange)
+                    detailRow("时间", timeRange)
+                }
+            }
+            .navigationTitle("课程详情")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("完成") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func detailRow(_ label: String, _ value: String?) -> some View {
+        if let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty {
+            LabeledContent(label, value: value)
+        }
+    }
+
+    private var slotRange: String? {
+        startSlot == endSlot ? "第 \(startSlot) 节" : "第 \(startSlot)-\(endSlot) 节"
+    }
+
+    private var dayLabel: String {
+        ["周一", "周二", "周三", "周四", "周五", "周六", "周日"].indices.contains(day - 1)
+            ? ["周一", "周二", "周三", "周四", "周五", "周六", "周日"][day - 1]
+            : "周\(day)"
+    }
+
+    private var timeRange: String? {
+        let slots = ScheduleSlot.all
+        guard slots.indices.contains(startSlot - 1), slots.indices.contains(endSlot - 1) else { return nil }
+        return "\(slots[startSlot - 1].start) - \(slots[endSlot - 1].end)"
+    }
+}
+
+private struct StateCard: View {
+    let systemImage: String
+    let title: String
+    let message: String
+    let actionTitle: String?
+    let action: (() -> Void)?
+    let showsProgress: Bool
+
+    var body: some View {
+        VStack(spacing: 12) {
+            if showsProgress {
+                ProgressView()
+                    .controlSize(.large)
+            } else {
+                Image(systemName: systemImage)
+                    .font(.system(size: 28, weight: .medium))
+                    .foregroundStyle(Color.accentColor)
+            }
+
+            Text(title)
+                .font(.headline)
+
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            if let actionTitle, let action {
+                Button(actionTitle, action: action)
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.regular)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 250)
+        .padding(24)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
+}
+
+#Preview {
+    Text("NativeScheduleView requires a NativeScheduleStore")
+}

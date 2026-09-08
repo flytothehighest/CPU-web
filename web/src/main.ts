@@ -7,6 +7,7 @@ import { useJwxtStore } from "./stores/jwxt";
 import { useSiteStore } from "./stores/site";
 import { applyInitialAppearance, useAppearanceStore } from "./stores/appearance";
 import { installIosNativeImageBridge } from "./utils/nativeBridge";
+import { installIosNextScheduleBridge } from "./utils/iosNextScheduleBridge";
 import {
   isAndroidNativeApp,
   isDesktopNativeApp,
@@ -430,6 +431,7 @@ const app = createApp(App);
 app.use(createPinia());
 useAppearanceStore().hydrate();
 useAuthStore().hydrate();
+installIosNextScheduleBridge(router);
 installJwxtDataPrewarmTriggers();
 // 站点功能开关：尽早拉一次，不阻塞挂载（导航默认乐观显示，拿到结果后自动收敛）
 useSiteStore().fetch();

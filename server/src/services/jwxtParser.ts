@@ -58,6 +58,8 @@ export interface ScheduleResult {
   title: string;
   /** 响应中存在真实课表结构；即使新生暂时没有课程，这个值仍为 true。 */
   pageRecognized?: boolean;
+  /** Verified from the actual upstream week selector, never from the requested URL. */
+  scope?: "semester" | "week" | "unknown";
   semesters: SemesterOption[];
   /** 当前选中的学期 */
   currentSemester: string;
@@ -80,6 +82,12 @@ export function parseSchedule(html: string): ScheduleResult {
   const weeks = parseSelectOptions($, "zc");
   const currentSemester = semesters.find((s) => s.current)?.value ?? "";
   const currentWeek = weeks.find((s) => s.current)?.value ?? "";
+  const options = $("#zc option");
+  const selected = options.filter("[selected]");
+  const effective = selected.length ? selected.first() : options.first();
+  const isAllWeeks = effective.length > 0 && (effective.attr("value") ?? "") === ""
+    && /全部|所有|整学期/.test(effective.text());
+  const scope = isAllWeeks ? "semester" : effective.length && /^\d+$/.test(effective.attr("value") ?? "") ? "week" : "unknown";
   const cells = hasLegacyScheduleTable
     ? parseLegacyScheduleCells($)
     : parseModernScheduleCells($);
@@ -87,6 +95,7 @@ export function parseSchedule(html: string): ScheduleResult {
   return {
     title,
     pageRecognized: hasLegacyScheduleTable || hasModernScheduleTable,
+    scope,
     semesters,
     currentSemester,
     weeks,

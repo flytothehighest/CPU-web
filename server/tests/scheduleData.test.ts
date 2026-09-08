@@ -27,7 +27,8 @@ async function fixture() {
       if (failWeek && (query.week === failWeek || failWeek === "*")) throw new Error("教务暂时不可用");
       return {
         title: "课表", source: "modern" as const, pageRecognized: true,
-        currentSemester: semester, currentWeek: query.week || "1", semesters: [], weeks: [],
+        currentSemester: semester, currentWeek: query.week === "all" ? "" : query.week || "1",
+        scope: query.week === "all" ? "semester" as const : "week" as const, semesters: [], weeks: [],
         cells: [{ day: 1, bigSlot: 1, courses: [{ name, weeks: "1-20周", weekList: [], startSlot: 1, endSlot: 2 }] }],
       };
     },
@@ -129,4 +130,17 @@ test("an upstream response for a different week is rejected before it enters sha
   const sample = await f.service.readSchedule(f.token, { semester, week: "1" });
   const service = createScheduleDataService({ getSchedule: async () => sample.parsed, getCalendar: async () => sample.calendar! });
   await assert.rejects(service.readSchedule(randomUUID(), { semester, week: "2" }), /周次与请求不一致/);
+});
+
+test("all-week rule snapshots keep their scope and do not replace weekly widget caches", async () => {
+  const f = await fixture();
+  const rules = await f.service.readSchedule(f.token, { semester, week: "all" });
+  assert.equal(rules.parsed.scope, "semester");
+  assert.equal(rules.parsed.currentWeek, "");
+  await f.service.readSchedule(f.token, { semester, week: "all" });
+  assert.equal(f.calls.length, 1);
+  const weekly = await f.service.readSchedule(f.token, { semester, week: "2" });
+  assert.equal(weekly.parsed.scope, "week");
+  assert.equal(weekly.parsed.currentWeek, "2");
+  assert.equal(f.calls.length, 2);
 });

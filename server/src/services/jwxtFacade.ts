@@ -226,12 +226,18 @@ export function parseRecognizedSchedule(html: string) {
   return parsed;
 }
 
-export async function getSchedule(token: string, args: { semester?: string; week?: string } = {}) {
-  const semester = args.semester ?? "";
-  const week = args.week ?? "";
+/** An explicit empty zc selects the upstream "全部" option. Omitting zc can
+ * preserve/default to a weekly selection and is not proof of a semester view. */
+export function scheduleQuery(args: { semester?: string; week?: string } = {}) {
   const qs = new URLSearchParams({ viweType: "0" });
-  if (semester) qs.set("xnxq01id", semester);
-  if (week) qs.set("zc", week);
+  if (args.semester) qs.set("xnxq01id", args.semester);
+  if (args.week === "all") qs.set("zc", "");
+  else if (args.week) qs.set("zc", args.week);
+  return qs;
+}
+
+export async function getSchedule(token: string, args: { semester?: string; week?: string } = {}) {
+  const qs = scheduleQuery(args);
   const path = `/jsxsd/xskb/xskb_list.do?${qs.toString()}`;
   return modernFirst(
     async () => parseRecognizedSchedule(await jwxtFetchModernHtml(token, path)),
