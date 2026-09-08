@@ -260,18 +260,13 @@
       </a>
     </footer>
 
-    <nav v-if="!useNativeShell && !mobileTopicChrome" class="mobile-tabbar" :class="{ 'is-hidden': keyboardOpen }" aria-label="移动端主导航" :style="{ gridTemplateColumns: `repeat(${mobileNavItems.length}, 1fr)` }">
-      <router-link
-        v-for="item in mobileNavItems"
-        :key="item.to"
-        :to="resolveMobileTo(item)"
-        class="mobile-tab"
-        :class="{ active: isMobileRouteActive(item) }"
-      >
-        <el-icon><component :is="item.icon" /></el-icon>
-        <span>{{ item.label }}</span>
-      </router-link>
-    </nav>
+    <LiquidGlassTabbar
+      v-if="!useNativeShell && !mobileTopicChrome"
+      class="mobile-tabbar"
+      :hidden="keyboardOpen"
+      :items="mobileNavItems.map(item => ({ ...item, to: resolveMobileTo(item) }))"
+      :active-index="mobileNavItems.findIndex(isMobileRouteActive)"
+    />
 
     <el-drawer
       v-model="mobileMenuOpen"
@@ -364,6 +359,7 @@
 <script setup lang="ts">
 import { ref, computed, defineAsyncComponent, onBeforeUnmount, onMounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import LiquidGlassTabbar from "../components/common/LiquidGlassTabbar.vue";
 import { ElMessage } from "element-plus";
 import {
   Search,
@@ -1155,10 +1151,18 @@ function setAppearanceMode(command: string | number | object) {
   gap: 2px;
   margin-left: auto;
   padding: 2px;
-  border: 1px solid var(--cpu-border-soft);
+  border: 1px solid color-mix(in srgb, var(--cpu-border-soft) 50%, transparent);
   border-radius: 999px;
-  background: var(--cpu-surface-subtle);
+  background: color-mix(in srgb, var(--cpu-surface, #fff) 48%, transparent);
+  -webkit-backdrop-filter: blur(8px) saturate(1.65);
+  backdrop-filter: blur(8px) saturate(1.65);
+  box-shadow: 0 3px 12px #0000000a, inset 0 1px 1px #ffffffa6, inset 0 -1px 1px #ffffff40;
   flex-wrap: nowrap;
+}
+
+:global(html[data-theme="dark"]) .mobile-actions {
+  background: #20292580;
+  box-shadow: 0 3px 12px #0000001f, inset 0 1px 1px #ffffff59, inset 0 -1px 1px #ffffff1f;
 }
 
 .touch-icon-btn {
@@ -1609,42 +1613,6 @@ function setAppearanceMode(command: string | number | object) {
   transform: translateY(calc(100% + env(safe-area-inset-bottom)));
 }
 
-.layout-root--tabbar-fallback .mobile-tab {
-  min-width: 0;
-  height: 52px;
-  border-radius: 12px;
-  color: var(--cpu-text-secondary);
-  text-decoration: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  font-size: 11px;
-  font-weight: 500;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: rgba(22, 135, 118, 0.18);
-  cursor: pointer;
-  transition: transform 0.2s ease, background 0.2s ease;
-}
-
-.layout-root--tabbar-fallback .mobile-tab.active {
-  color: var(--cpu-primary);
-  background: rgba(20, 143, 123, 0.1);
-  transform: scale(1.04);
-}
-
-.layout-root--tabbar-fallback .mobile-tab .el-icon {
-  font-size: 21px;
-}
-
-.layout-root--tabbar-fallback .mobile-tab span {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .drawer-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1999,12 +1967,6 @@ function setAppearanceMode(command: string | number | object) {
     transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.16s ease, visibility 0.2s linear;
   }
 
-  .mobile-tab.active {
-    color: var(--cpu-primary);
-    background: rgba(20, 143, 123, 0.1);
-    transform: scale(1.05);
-  }
-
   :deep(.mobile-drawer) {
     border-radius: 18px 18px 0 0;
     height: auto !important;
@@ -2017,36 +1979,6 @@ function setAppearanceMode(command: string | number | object) {
     visibility: hidden;
     pointer-events: none;
     transform: translateY(calc(100% + env(safe-area-inset-bottom)));
-  }
-
-  .mobile-tab {
-    min-width: 0;
-    height: 50px;
-    border-radius: 12px;
-    color: var(--cpu-text-secondary);
-    text-decoration: none;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 3px;
-    font-size: 11px;
-    font-weight: 500;
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: rgba(22, 135, 118, 0.18);
-    cursor: pointer;
-    transition: transform 0.2s ease, background 0.2s ease;
-  }
-
-  .mobile-tab .el-icon {
-    font-size: 20px;
-  }
-
-  .mobile-tab span {
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   :deep(.mobile-drawer .el-drawer__header) {
@@ -2120,41 +2052,6 @@ function setAppearanceMode(command: string | number | object) {
     transform: translateY(calc(100% + env(safe-area-inset-bottom)));
   }
 
-  .mobile-tab {
-    min-width: 0;
-    height: 52px;
-    border-radius: 12px;
-    color: var(--cpu-text-secondary);
-    text-decoration: none;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 3px;
-    font-size: 11px;
-    font-weight: 500;
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: rgba(22, 135, 118, 0.18);
-    cursor: pointer;
-    transition: transform 0.2s ease, background 0.2s ease;
-  }
-
-  .mobile-tab.active {
-    color: var(--cpu-primary);
-    background: rgba(20, 143, 123, 0.1);
-    transform: scale(1.04);
-  }
-
-  .mobile-tab .el-icon {
-    font-size: 21px;
-  }
-
-  .mobile-tab span {
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
 }
 
 @media (max-width: 420px) {
@@ -2203,5 +2100,22 @@ function setAppearanceMode(command: string | number | object) {
     height: 21px;
     flex-basis: 21px;
   }
+}
+.mobile-tabbar.mobile-tabbar {
+  left: max(12px, env(safe-area-inset-left));
+  right: max(12px, env(safe-area-inset-right));
+  bottom: calc(6px + env(safe-area-inset-bottom));
+  width: auto;
+  max-width: 520px;
+  margin-inline: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mobile-tabbar.mobile-tabbar { transition: none; }
 }
 </style>
