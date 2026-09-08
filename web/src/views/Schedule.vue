@@ -26,7 +26,7 @@
       </el-select>
       <div class="top-actions">
         <AcademicDataSourceBadge v-if="scheduleSource === 'jwxt'" :source="parsed?.source" />
-        <button data-cpu-button="icon"
+        <button
           v-if="showScheduleExitButton"
           type="button"
           class="icon-btn schedule-exit-btn"
@@ -38,10 +38,10 @@
           <span>退出</span>
         </button>
         <div v-if="parsed" class="view-switch" aria-label="切换课表视图">
-          <button data-cpu-button="option" type="button" :class="{ active: viewMode === 'day' }" :disabled="loading" @click="setViewMode('day')">日</button>
-          <button data-cpu-button="option" type="button" :class="{ active: viewMode === 'week' }" :disabled="loading" @click="setViewMode('week')">周</button>
+          <button type="button" :class="{ active: viewMode === 'day' }" :disabled="loading" @click="setViewMode('day')">日</button>
+          <button type="button" :class="{ active: viewMode === 'week' }" :disabled="loading" @click="setViewMode('week')">周</button>
         </div>
-        <button data-cpu-button="option"
+        <button
           v-if="parsed"
           type="button"
           class="icon-btn"
@@ -53,7 +53,7 @@
         >
           <el-icon><Aim /></el-icon>
         </button>
-        <button data-cpu-button="icon"
+        <button
           v-if="installPromptRef && (installPromptRef as any).canShow"
           type="button"
           class="icon-btn install-btn"
@@ -63,7 +63,7 @@
         >
           <el-icon><Download /></el-icon>
         </button>
-        <button data-cpu-button="icon"
+        <button
           v-if="isDev"
           type="button"
           class="icon-btn"
@@ -86,7 +86,7 @@
           @hide="moreMenuView = 'menu'"
         >
           <template #reference>
-            <button data-cpu-button="icon"
+            <button
               type="button"
               class="icon-btn"
               aria-label="更多"
@@ -98,17 +98,17 @@
           </template>
           <div class="more-panel" :style="pageStyle">
             <template v-if="moreMenuView === 'menu'">
-              <button data-cpu-button="action" type="button" class="more-action" @click="moreMenuView = 'theme'">
+              <button type="button" class="more-action" @click="moreMenuView = 'theme'">
                 <span class="more-theme-swatch current" :style="{ background: currentThemePreview }" />
                 <span>主题选择</span>
                 <el-icon class="more-chevron"><ArrowRight /></el-icon>
               </button>
-              <button data-cpu-button="action" type="button" class="more-action" @click="moreMenuView = 'background'">
+              <button type="button" class="more-action" @click="moreMenuView = 'background'">
                 <el-icon><Picture /></el-icon>
                 <span>{{ hasScheduleBackground ? "背景自定义（已启用）" : "背景自定义" }}</span>
                 <el-icon class="more-chevron"><ArrowRight /></el-icon>
               </button>
-              <button data-cpu-button="action"
+              <button
                 v-if="canShowAndroidClientDownload"
                 type="button"
                 class="more-action"
@@ -118,7 +118,7 @@
                 <span>下载 Android 客户端</span>
                 <el-icon class="more-chevron"><ArrowRight /></el-icon>
               </button>
-              <button data-cpu-button="action"
+              <button
                 v-if="widgetMenuPlatform"
                 type="button"
                 class="more-action"
@@ -129,7 +129,7 @@
                 <span>{{ widgetMenuLabel }}</span>
                 <el-icon class="more-chevron"><ArrowRight /></el-icon>
               </button>
-              <button data-cpu-button="action"
+              <button
                 v-if="isAndroidScheduleApp"
                 type="button"
                 class="more-action"
@@ -142,12 +142,12 @@
             </template>
 
             <template v-else-if="moreMenuView === 'theme'">
-              <button data-cpu-button="text" type="button" class="more-back" @click="moreMenuView = 'menu'">
+              <button type="button" class="more-back" @click="moreMenuView = 'menu'">
                 <el-icon><ArrowLeft /></el-icon>
                 <span>主题选择</span>
               </button>
               <div class="more-theme-grid" role="radiogroup" aria-label="选择课表主题">
-                <button data-cpu-button="media"
+                <button
                   v-for="themeOption in scheduleThemeOptions"
                   :key="themeOption.key"
                   type="button"
@@ -164,7 +164,7 @@
             </template>
 
             <template v-else>
-              <button data-cpu-button="text" type="button" class="more-back" @click="moreMenuView = 'menu'">
+              <button type="button" class="more-back" @click="moreMenuView = 'menu'">
                 <el-icon><ArrowLeft /></el-icon>
                 <span>背景自定义</span>
               </button>
@@ -179,8 +179,8 @@
                 <p class="background-note">
                   背景仅保存在当前设备，不会上传到服务器。现在默认直接保存本地图，是否能存下主要取决于浏览器本地空间；浅色插画或照片的效果会更接近参考图。
                 </p>
-                <div class="background-actions cpu-button-row">
-                  <button data-cpu-button="primary"
+                <div class="background-actions">
+                  <button
                     type="button"
                     class="more-subaction primary"
                     :disabled="backgroundSaving"
@@ -188,7 +188,7 @@
                   >
                     {{ backgroundSaving ? "处理中..." : hasScheduleBackground ? "更换图片" : "选择图片" }}
                   </button>
-                  <button data-cpu-button="action"
+                  <button
                     type="button"
                     class="more-subaction"
                     :disabled="!hasScheduleBackground || backgroundSaving"
@@ -229,7 +229,7 @@
             </template>
           </div>
         </el-popover>
-        <button data-cpu-button="icon"
+        <button
           type="button"
           class="icon-btn"
           :class="{ spinning: loading }"
@@ -254,11 +254,11 @@
     />
 
     <section v-if="parsed" class="week-switcher">
-      <button data-cpu-button="action" type="button" class="week-btn" :disabled="!canChangeWeek(-1)" @click="changeWeek(-1)">
+      <button type="button" class="week-btn" :disabled="!canChangeWeek(-1)" @click="changeWeek(-1)">
         <el-icon><ArrowLeft /></el-icon>
         上一周
       </button>
-      <button data-cpu-button="surface"
+      <button
         type="button"
         class="week-title clickable"
         :disabled="loading"
@@ -267,14 +267,14 @@
         <b>第 {{ currentWeekValue() || "--" }} 周</b>
         <span v-if="currentWeekRange">{{ currentWeekRange }}</span>
       </button>
-      <button data-cpu-button="action" type="button" class="week-btn" :disabled="!canChangeWeek(1)" @click="changeWeek(1)">
+      <button type="button" class="week-btn" :disabled="!canChangeWeek(1)" @click="changeWeek(1)">
         下一周
         <el-icon><ArrowRight /></el-icon>
       </button>
     </section>
 
     <section v-if="parsed && viewMode === 'day'" class="week-strip">
-      <button data-cpu-button="surface"
+      <button
         v-for="d in dayTabs"
         :key="d.day"
         type="button"
@@ -297,7 +297,7 @@
       <h2>暂无教务数据</h2>
       <p>学校没有返回授权失效提示，但尚未创建可读取的教务入口或课表数据。</p>
       <p>如果学校原站已经有课表，可以重新核验授权；新生暂无课表时不会被误报为登录失效。</p>
-      <el-button type="primary" size="large" @click="$router.push({ name: 'jwxt', query: { reauthorize: '1', redirect: '/schedule' } })">
+      <el-button data-cpu-button-theme="schedule" type="primary" size="large" @click="$router.push({ name: 'jwxt', query: { reauthorize: '1', redirect: '/schedule' } })">
         重新核验授权
       </el-button>
     </section>
@@ -307,7 +307,7 @@
       <h2>{{ jwxt.authorizationExpired ? "教务授权已失效" : "需要先登录教务" }}</h2>
       <p>{{ jwxt.authorizationExpired ? "学校返回了登录或统一认证提示，请重新完成教务授权。" : "登录后可快速查看课表，也可以把这个页面加到桌面方便下次打开。勾选保持登录后会在当前浏览器加密保存账号密码，验证码不会保存。" }}</p>
       <p class="scope-note">{{ scheduleLoginScopeText }}</p>
-      <el-button type="primary" size="large" @click="$router.push({ name: 'jwxt', query: { reauthorize: jwxt.authorizationExpired ? '1' : undefined, redirect: '/schedule' } })">
+      <el-button data-cpu-button-theme="schedule" type="primary" size="large" @click="$router.push({ name: 'jwxt', query: { reauthorize: jwxt.authorizationExpired ? '1' : undefined, redirect: '/schedule' } })">
         {{ jwxt.authorizationExpired ? "重新授权" : "前往登录" }}
       </el-button>
       <PrivacyPolicyNotice />
@@ -441,7 +441,7 @@
       :style="pageStyle"
     >
       <div class="week-grid-pick">
-        <button data-cpu-button="surface"
+        <button
           v-for="w in weeks"
           :key="w.value"
           type="button"
@@ -454,8 +454,8 @@
         </button>
       </div>
       <template #footer>
-        <el-button v-if="canJumpToCurrentWeek" type="primary" :disabled="loading" @click="onJumpAndClose">回到本周</el-button>
-        <el-button @click="weekDialogOpen = false">关闭</el-button>
+        <el-button data-cpu-button-theme="schedule" v-if="canJumpToCurrentWeek" type="primary" :disabled="loading" @click="onJumpAndClose">回到本周</el-button>
+        <el-button data-cpu-button-theme="schedule" @click="weekDialogOpen = false">关闭</el-button>
       </template>
     </el-dialog>
 
@@ -482,11 +482,11 @@
           <span>本地样例</span>
           <code>{{ GRAD_DEBUG_FIXTURE_PATH }}</code>
         </div>
-        <div class="grad-debug-actions cpu-button-row">
-          <el-button type="primary" :loading="gradDebugLoading" :disabled="gradDebugLoading" @click="loadGraduateDebugSchedule()">
+        <div class="grad-debug-actions">
+          <el-button data-cpu-button-theme="schedule" type="primary" :loading="gradDebugLoading" :disabled="gradDebugLoading" @click="loadGraduateDebugSchedule()">
             载入本地抓取样例
           </el-button>
-          <el-button @click="openGradSystemDebug">打开研究生管理系统</el-button>
+          <el-button data-cpu-button-theme="schedule" @click="openGradSystemDebug">打开研究生管理系统</el-button>
         </div>
         <div class="grad-debug-tips">
           <b>当前调试会做这两件事：</b>
@@ -498,9 +498,9 @@
         </div>
         <div class="grad-debug-foot">
           <span>{{ gradDebugStatusText }}</span>
-          <div class="grad-debug-foot-actions cpu-button-row">
-            <el-button @click="copyGradDebugGuide">复制调试说明</el-button>
-            <el-button
+          <div class="grad-debug-foot-actions">
+            <el-button data-cpu-button-theme="schedule" @click="copyGradDebugGuide">复制调试说明</el-button>
+            <el-button data-cpu-button-theme="schedule"
               v-if="isGraduateDebugSource"
               type="primary"
               plain
@@ -530,7 +530,7 @@
               小组件只能读取你的课表；如果登录状态失效，会先显示最近一次成功加载的内容。重新登录后会自动恢复，不需要重新添加组件。
             </p>
             <template #reference>
-              <button data-cpu-button="action" type="button" class="widget-help-btn" aria-label="查看小组件安全说明">
+              <button type="button" class="widget-help-btn" aria-label="查看小组件安全说明">
                 <el-icon><QuestionFilled /></el-icon>
               </button>
             </template>
@@ -543,12 +543,12 @@
           <span>安装 Scriptable</span>
           <el-icon class="widget-step-arrow"><ArrowRight /></el-icon>
         </a>
-        <button data-cpu-button="surface" type="button" class="widget-step" :disabled="widgetConfigCopying" @click="copyScriptableWidgetScript">
+        <button type="button" class="widget-step" :disabled="widgetConfigCopying" @click="copyScriptableWidgetScript">
           <b>2</b>
           <span>{{ widgetConfigCopied ? "已复制，继续第 3 步" : "复制配置" }}</span>
           <el-icon class="widget-step-arrow"><ArrowRight /></el-icon>
         </button>
-        <button data-cpu-button="surface" type="button" class="widget-step" @click="openScriptableInstruction">
+        <button type="button" class="widget-step" @click="openScriptableInstruction">
           <b>3</b>
           <span>打开 Scriptable 导入</span>
           <el-icon class="widget-step-arrow"><ArrowRight /></el-icon>
@@ -562,12 +562,12 @@
       </p>
       <p class="support-note">
         仍有疑问，建议
-        <button data-cpu-button="text" type="button" @click="openUserGroup">加入用户 QQ 群 {{ USER_QQ_GROUP }}</button>
+        <button type="button" @click="openUserGroup">加入用户 QQ 群 {{ USER_QQ_GROUP }}</button>
         咨询。
       </p>
       <template #footer>
-        <el-button @click="widgetDialogOpen = false">关闭</el-button>
-              <el-button type="primary" :loading="widgetConfigCopying" :disabled="widgetConfigCopying" @click="copyScriptableWidgetScript">
+        <el-button data-cpu-button-theme="schedule" @click="widgetDialogOpen = false">关闭</el-button>
+              <el-button data-cpu-button-theme="schedule" type="primary" :loading="widgetConfigCopying" :disabled="widgetConfigCopying" @click="copyScriptableWidgetScript">
           {{ scriptableWidgetScript ? "复制配置" : "生成并复制" }}
         </el-button>
       </template>
@@ -598,12 +598,12 @@
       </p>
       <p class="support-note">
         仍有疑问，建议
-        <button data-cpu-button="text" type="button" @click="openUserGroup">加入用户 QQ 群 {{ USER_QQ_GROUP }}</button>
+        <button type="button" @click="openUserGroup">加入用户 QQ 群 {{ USER_QQ_GROUP }}</button>
         咨询。
       </p>
       <template #footer>
-        <el-button @click="widgetInstructionOpen = false">再看看</el-button>
-        <el-button type="primary" :disabled="widgetInstructionCountdown > 0" @click="continueToScriptable">
+        <el-button data-cpu-button-theme="schedule" @click="widgetInstructionOpen = false">再看看</el-button>
+        <el-button data-cpu-button-theme="schedule" type="primary" :disabled="widgetInstructionCountdown > 0" @click="continueToScriptable">
           {{ widgetInstructionCountdown > 0 ? `${widgetInstructionCountdown}s` : "继续打开 Scriptable" }}
         </el-button>
       </template>
@@ -631,11 +631,11 @@
       </p>
       <p class="support-note">
         仍有疑问，建议
-        <button data-cpu-button="text" type="button" @click="openUserGroup">加入用户 QQ 群 {{ USER_QQ_GROUP }}</button>
+        <button type="button" @click="openUserGroup">加入用户 QQ 群 {{ USER_QQ_GROUP }}</button>
         咨询。
       </p>
       <template #footer>
-        <el-button type="primary" @click="androidWidgetGuideOpen = false">我知道了</el-button>
+        <el-button data-cpu-button-theme="schedule" type="primary" @click="androidWidgetGuideOpen = false">我知道了</el-button>
       </template>
     </el-dialog>
 
@@ -644,16 +644,16 @@
         <div v-if="editDialogOpen" class="course-editor-overlay" :style="pageStyle" @click.self="closeCourseEditor">
           <section class="course-editor-panel" role="dialog" aria-modal="true">
             <header class="course-editor-nav">
-              <button data-cpu-button="action" type="button" :disabled="courseEditBusy" @click="closeCourseEditor">取消</button>
+              <button type="button" :disabled="courseEditBusy" @click="closeCourseEditor">取消</button>
               <h2>{{ editingCourseBlock ? "修改课程" : "添加课程" }}</h2>
-              <button data-cpu-button="primary" type="button" class="primary" :disabled="courseEditBusy" @click="saveCourseEdit()">
+              <button type="button" class="primary" :disabled="courseEditBusy" @click="saveCourseEdit()">
                 {{ courseEditAction === "save" ? "保存中" : "保存" }}
               </button>
             </header>
 
             <div class="course-editor-scroll">
               <ScheduleCourseStatus v-if="editingCourseBlock" :course="editingCourseBlock.course" detail>
-                <button data-cpu-button="action" v-if="editingCourseBlock.course.orphaned" type="button" :disabled="courseEditBusy" @click="saveCourseEdit(true)">
+                <button v-if="editingCourseBlock.course.orphaned" type="button" :disabled="courseEditBusy" @click="saveCourseEdit(true)">
                   保留为自定义课程
                 </button>
               </ScheduleCourseStatus>
@@ -678,11 +678,11 @@
 
               <div class="editor-section-title">
                 <span>时间段</span>
-                <div class="editor-actions cpu-button-row">
-                  <button data-cpu-button="action" v-if="canRestoreOriginalCourse" type="button" :disabled="courseEditBusy" @click="restoreOriginalCourse">
+                <div class="editor-actions">
+                  <button v-if="canRestoreOriginalCourse" type="button" :disabled="courseEditBusy" @click="restoreOriginalCourse">
                     {{ courseEditAction === "restore" ? "处理中" : "使用教务安排" }}
                   </button>
-                  <button data-cpu-button="danger" v-if="editingCourseBlock" type="button" class="danger" :disabled="courseEditBusy" @click="deleteEditingCourse">
+                  <button v-if="editingCourseBlock" type="button" class="danger" :disabled="courseEditBusy" @click="deleteEditingCourse">
                     {{ courseEditAction === "delete" ? "删除中" : "删除" }}
                   </button>
                 </div>
@@ -700,7 +700,7 @@
                 <div v-if="customCourseForm.weekMode === 'custom'" class="editor-week-picker">
                   <span>指定周</span>
                   <div class="week-chip-grid">
-                    <button data-cpu-button="option"
+                    <button
                       v-for="w in weekNumberOptions"
                       :key="w"
                       type="button"
@@ -732,7 +732,7 @@
               <section v-if="hiddenCourseItems.length" class="editor-card hidden-restore-card">
                 <div class="editor-card-title">已编辑课程</div>
                 <div class="hidden-list">
-                  <button data-cpu-button="surface" v-for="item in hiddenCourseItems" :key="item.key" type="button" :disabled="courseEditBusy" @click="restoreHiddenCourse(item.key)">
+                  <button v-for="item in hiddenCourseItems" :key="item.key" type="button" :disabled="courseEditBusy" @click="restoreHiddenCourse(item.key)">
                     {{ courseEditAction === "restoreHidden" ? "恢复中" : item.label }}
                   </button>
                 </div>

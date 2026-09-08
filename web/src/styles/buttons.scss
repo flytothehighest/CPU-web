@@ -1,3 +1,4 @@
+// 课表按钮使用独立的背景透明度和主题变量，保留其组件样式。
 :root {
   --cpu-button-radius: 12px;
   --cpu-button-height: 38px;
@@ -17,7 +18,7 @@ html[data-theme="dark"] {
 }
 
 // 异步页面仍有旧的局部按钮样式；统一外观的优先级只作用于按钮本身。
-.el-button,
+.el-button:where(:not([data-cpu-button-theme="schedule"])),
 [data-cpu-button]:where(:not([data-cpu-button="surface"]):not([data-cpu-button="media"])) {
   --cpu-button-tone: var(--cpu-button-primary);
   --cpu-button-fill: var(--cpu-surface-subtle);
@@ -35,7 +36,7 @@ html[data-theme="dark"] {
   -webkit-tap-highlight-color: transparent;
 }
 
-.el-button:not(.is-link),
+.el-button:where(:not([data-cpu-button-theme="schedule"])):not(.is-link),
 [data-cpu-button="action"],
 [data-cpu-button="primary"],
 [data-cpu-button="danger"] {
@@ -47,7 +48,7 @@ html[data-theme="dark"] {
   flex-shrink: 0;
 }
 
-.el-button--primary,
+.el-button--primary:where(:not([data-cpu-button-theme="schedule"])),
 [data-cpu-button="primary"],
 [data-cpu-button].primary {
   --cpu-button-fill: var(--cpu-button-primary);
@@ -56,14 +57,14 @@ html[data-theme="dark"] {
   --cpu-button-hover-ink: var(--cpu-button-on-primary);
 }
 
-.el-button--danger,
+.el-button--danger:where(:not([data-cpu-button-theme="schedule"])),
 [data-cpu-button="danger"],
 [data-cpu-button].danger { --cpu-button-tone: var(--cpu-button-danger); }
-.el-button--warning { --cpu-button-tone: var(--cpu-button-warning); }
-.el-button--success { --cpu-button-tone: var(--cpu-button-success); }
-.el-button--info { --cpu-button-tone: var(--cpu-text-secondary); }
+.el-button--warning:where(:not([data-cpu-button-theme="schedule"])) { --cpu-button-tone: var(--cpu-button-warning); }
+.el-button--success:where(:not([data-cpu-button-theme="schedule"])) { --cpu-button-tone: var(--cpu-button-success); }
+.el-button--info:where(:not([data-cpu-button-theme="schedule"])) { --cpu-button-tone: var(--cpu-text-secondary); }
 
-.el-button:is(.el-button--danger, .el-button--warning, .el-button--success, .el-button--info),
+.el-button:where(:not([data-cpu-button-theme="schedule"])):is(.el-button--danger:where(:not([data-cpu-button-theme="schedule"])), .el-button--warning:where(:not([data-cpu-button-theme="schedule"])), .el-button--success:where(:not([data-cpu-button-theme="schedule"])), .el-button--info:where(:not([data-cpu-button-theme="schedule"]))),
 [data-cpu-button="danger"],
 [data-cpu-button].danger {
   --cpu-button-fill: color-mix(in srgb, var(--cpu-button-tone) 10%, var(--cpu-card));
@@ -72,14 +73,14 @@ html[data-theme="dark"] {
   --cpu-button-hover-ink: var(--cpu-button-tone);
 }
 
-.el-button.is-plain {
+.el-button:where(:not([data-cpu-button-theme="schedule"])).is-plain {
   --cpu-button-fill: color-mix(in srgb, var(--cpu-button-tone) 8%, var(--cpu-card));
   --cpu-button-ink: var(--cpu-button-tone);
   --cpu-button-hover-fill: color-mix(in srgb, var(--cpu-button-tone) 15%, var(--cpu-card));
   --cpu-button-hover-ink: var(--cpu-button-tone);
 }
 
-.el-button:is(.is-text, .is-link),
+.el-button:where(:not([data-cpu-button-theme="schedule"])):is(.is-text, .is-link),
 [data-cpu-button="text"],
 [data-cpu-button="icon"],
 [data-cpu-button="option"] {
@@ -89,25 +90,25 @@ html[data-theme="dark"] {
   --cpu-button-hover-ink: var(--cpu-text);
 }
 
-.el-button:is(.is-text, .is-link):is(.el-button--primary, .el-button--danger, .el-button--warning, .el-button--success),
-.el-button.is-liked,
+.el-button:where(:not([data-cpu-button-theme="schedule"])):is(.is-text, .is-link):is(.el-button--primary:where(:not([data-cpu-button-theme="schedule"])), .el-button--danger:where(:not([data-cpu-button-theme="schedule"])), .el-button--warning:where(:not([data-cpu-button-theme="schedule"])), .el-button--success:where(:not([data-cpu-button-theme="schedule"]))),
+.el-button:where(:not([data-cpu-button-theme="schedule"])).is-liked,
 [data-cpu-button="text"].danger {
   --cpu-button-ink: var(--cpu-button-tone);
   --cpu-button-hover-ink: var(--cpu-button-tone);
 }
 
-.el-button.is-round { border-radius: 999px !important; }
-.el-button.is-circle {
+.el-button:where(:not([data-cpu-button-theme="schedule"])).is-round { border-radius: 999px !important; }
+.el-button:where(:not([data-cpu-button-theme="schedule"])).is-circle {
   border-radius: 50% !important;
   width: var(--cpu-button-height);
   height: var(--cpu-button-height);
   padding: 8px;
 }
-.el-button.is-link { min-height: 0; padding: 2px 0; }
-.el-button--small:not(.is-link) { min-height: 30px; padding: 5px 10px; font-size: 12px; }
-.el-button--large:not(.is-link) { min-height: 44px; padding: 11px 20px; }
-.el-button > span { min-width: 0; overflow-wrap: anywhere; }
-.el-button .el-icon + span { margin-left: 6px; }
+.el-button:where(:not([data-cpu-button-theme="schedule"])).is-link { min-height: 0; padding: 2px 0; }
+.el-button--small:where(:not([data-cpu-button-theme="schedule"])):not(.is-link) { min-height: 30px; padding: 5px 10px; font-size: 12px; }
+.el-button--large:where(:not([data-cpu-button-theme="schedule"])):not(.is-link) { min-height: 44px; padding: 11px 20px; }
+.el-button:where(:not([data-cpu-button-theme="schedule"])) > span { min-width: 0; overflow-wrap: anywhere; }
+.el-button:where(:not([data-cpu-button-theme="schedule"])) .el-icon + span { margin-left: 6px; }
 
 [data-cpu-button="text"] { min-height: 28px; padding: 3px 6px; }
 [data-cpu-button="icon"] { min-width: 36px; min-height: 36px; }
@@ -120,7 +121,7 @@ html[data-theme="dark"] {
 }
 
 @media (hover: hover) {
-  .el-button:not(.is-disabled):not(.is-loading):hover,
+  .el-button:where(:not([data-cpu-button-theme="schedule"])):not(.is-disabled):not(.is-loading):hover,
   [data-cpu-button]:not([data-cpu-button="surface"]):not([data-cpu-button="media"]):not(:disabled):not(.is-disabled):hover {
     background: var(--cpu-button-hover-fill) !important;
     color: var(--cpu-button-hover-ink) !important;
@@ -129,17 +130,17 @@ html[data-theme="dark"] {
   }
 }
 
-.el-button:not(.is-disabled):not(.is-loading):active,
+.el-button:where(:not([data-cpu-button-theme="schedule"])):not(.is-disabled):not(.is-loading):active,
 [data-cpu-button]:not([data-cpu-button="surface"]):not([data-cpu-button="media"]):not(:disabled):not(.is-disabled):active {
   background: var(--cpu-button-hover-fill) !important;
   color: var(--cpu-button-hover-ink) !important;
 }
 
-.el-button.is-disabled,
+.el-button:where(:not([data-cpu-button-theme="schedule"])).is-disabled,
 [data-cpu-button]:disabled,
 [data-cpu-button].is-disabled { opacity: 0.45; cursor: not-allowed; }
 
-.el-button:focus-visible,
+.el-button:where(:not([data-cpu-button-theme="schedule"])):focus-visible,
 [data-cpu-button]:focus-visible,
 .el-radio-button:has(input:focus-visible) .el-radio-button__inner {
   outline: 2px solid var(--cpu-button-primary) !important;
@@ -154,7 +155,7 @@ html[data-theme="dark"] {
   border-radius: calc(var(--cpu-button-radius) + 4px);
   background: var(--cpu-surface-soft);
 }
-.el-button-group > .el-button { margin: 0 !important; float: none; }
+.el-button-group > .el-button:where(:not([data-cpu-button-theme="schedule"])) { margin: 0 !important; float: none; }
 
 .el-radio-group:has(> .el-radio-button) {
   gap: 4px;
@@ -182,16 +183,16 @@ html[data-theme="dark"] {
   gap: 8px;
   min-width: 0;
 }
-.cpu-button-row > .el-button + .el-button { margin-left: 0; }
+.cpu-button-row > .el-button:where(:not([data-cpu-button-theme="schedule"])) + .el-button:where(:not([data-cpu-button-theme="schedule"])) { margin-left: 0; }
 
 @media (max-width: 768px) {
   :root { --cpu-button-height: 44px; }
-  .el-button--small:not(.is-link) { min-height: 36px; padding: 7px 10px; }
+  .el-button--small:where(:not([data-cpu-button-theme="schedule"])):not(.is-link) { min-height: 36px; padding: 7px 10px; }
   [data-cpu-button="icon"] { min-width: 40px; min-height: 40px; }
   .cpu-button-row { gap: 8px; }
-  .cpu-button-row > :is(.el-button, [data-cpu-button]) { max-width: 100%; }
+  .cpu-button-row > :is(.el-button:where(:not([data-cpu-button-theme="schedule"])), [data-cpu-button]) { max-width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .el-button, [data-cpu-button] { transition: none !important; }
+  .el-button:where(:not([data-cpu-button-theme="schedule"])), [data-cpu-button] { transition: none !important; }
 }

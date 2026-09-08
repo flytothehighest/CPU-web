@@ -1,6 +1,6 @@
 <template>
   <div ref="pickerRef" class="theme-picker" :class="{ 'is-colorful': modelValue === 'color-glass' }">
-    <button data-cpu-button="option"
+    <button
       type="button"
       class="icon-btn theme-trigger"
       :class="{ active: open }"
@@ -12,7 +12,7 @@
     </button>
 
     <div v-if="open" class="theme-panel" role="menu" aria-label="选择课表主题" @click.stop>
-      <button data-cpu-button="media"
+      <button
         v-for="theme in scheduleThemeOptions"
         :key="theme.key"
         type="button"
