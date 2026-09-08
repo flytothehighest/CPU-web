@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { modernFirst, parseRecognizedSchedule } from "../src/services/jwxtFacade";
+import { modernFirst, parseRecognizedSchedule, scheduleQuery } from "../src/services/jwxtFacade";
 import { HttpError } from "../src/utils/response";
 
 test("modern-first queries report the modern data source", async () => {
@@ -53,4 +53,13 @@ test("schedule facade rejects an unrelated empty shell instead of overwriting ca
     () => parseRecognizedSchedule("<html><head><title>首页</title></head><body></body></html>"),
     (error: unknown) => error instanceof HttpError && error.status === 502,
   );
+});
+
+test("semester query sends the upstream empty all-weeks value explicitly", () => {
+  const all = scheduleQuery({ semester: "2026-2027-1", week: "all" });
+  assert.equal(all.has("zc"), true);
+  assert.equal(all.get("zc"), "");
+  assert.equal(all.get("xnxq01id"), "2026-2027-1");
+  assert.equal(scheduleQuery({ week: "3" }).get("zc"), "3");
+  assert.equal(scheduleQuery().has("zc"), false);
 });

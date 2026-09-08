@@ -305,3 +305,14 @@ test("parsePyfa maps the modern paged JSON response", () => {
   assert.equal(result.list[0].courseName, "药物分析");
   assert.deepEqual(result.bySemester, [{ semester: "2026-2027-1", courses: 1, credits: 2 }]);
 });
+
+test("schedule scope distinguishes selected all-weeks rules from weekly and unknown responses", () => {
+  const table = '<table id="kbtable"><tr><th>时间</th></tr></table>';
+  const options = '<option value="">(全部)</option><option value="3" selected>第3周</option>';
+  assert.equal(parseSchedule(`<select id="zc">${options}</select>${table}`).scope, "week");
+  const all = options.replace('value=""', 'value="" selected').replace('value="3" selected', 'value="3"');
+  assert.equal(parseSchedule(`<select id="zc">${all}</select>${table}`).scope, "semester");
+  assert.equal(parseSchedule(`<select id="zc">${options.replace(' selected', '')}</select>${table}`).scope, "semester");
+  assert.equal(parseSchedule(table).scope, "unknown");
+  assert.equal(parseSchedule(`<select id="zc"><option value="" selected>请选择</option></select>${table}`).scope, "unknown");
+});

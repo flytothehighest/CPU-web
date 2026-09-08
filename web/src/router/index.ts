@@ -7,7 +7,7 @@ import { useSiteStore } from "@/stores/site";
 import type { FeatureKey } from "@/api/site";
 import { boardApi } from "@/api/board";
 import { topicApi } from "@/api/topic";
-import { isLikelyIosDevice, isIosNativeApp } from "@/utils/clientInfo";
+import { isIosNextNativeShell, isLikelyIosDevice, isIosNativeApp } from "@/utils/clientInfo";
 import { preloadScheduleBackgroundAsset } from "@/utils/scheduleBackgroundStorage";
 
 const MainLayout = () => import("@/layouts/MainLayout.vue");
@@ -198,6 +198,11 @@ export const router = createRouter({
 router.beforeEach(async (to) => {
   if (isIosNativeApp() && /^\/(vip|sponsor|sponsor-wall)(\/|$)/.test(to.path)) {
     return { path: "/profile", replace: true };
+  }
+  const nativeShell = (window as any).CPUTimeNative;
+  if (to.path === "/schedule" && isIosNextNativeShell() && typeof nativeShell?.navigate === "function") {
+    nativeShell.navigate(to.fullPath);
+    return false;
   }
   if (usesImmediateIosScroll()) {
     iosRouteTransitionEnabled.value = !iosHistoryTraversalPending;

@@ -6,7 +6,8 @@
       'keyboard-geometry-open': keyboardGeometryOpen,
       'layout-root--full-width': fullWidthContent && !hideChrome,
       'layout-root--full-height': fullHeightContent && !hideChrome,
-      'layout-root--native-shell': useNativeShell,
+      'layout-root--native-shell': useFlutterShell,
+      'layout-root--ios-next': useIosNextShell,
       'layout-root--tabbar-fallback': useTabbarFallback,
     }"
     :style="layoutStyle"
@@ -399,7 +400,7 @@ import { useMessageStore } from "@/stores/message";
 import { useSiteStore } from "@/stores/site";
 import { useAppearanceStore, type AppearanceMode } from "@/stores/appearance";
 import { iosRouteTransitionEnabled } from "@/router";
-import { isDesktopNativeApp, isFlutterNativeShell, isLikelyIosDevice, isIosNativeApp } from "@/utils/clientInfo";
+import { isDesktopNativeApp, isFlutterNativeShell, isIosNextNativeShell, isLikelyIosDevice, isIosNativeApp } from "@/utils/clientInfo";
 
 const ShijianAssistant = defineAsyncComponent(() => import("@/views/search/Result.vue"));
 const DesktopToolsPanel = defineAsyncComponent(() => import("@/components/common/DesktopToolsPanel.vue"));
@@ -460,7 +461,9 @@ const messageAriaLabel = computed(() => {
 const hideChrome = computed(() => Boolean(route.meta?.hideChrome));
 const fullWidthContent = computed(() => Boolean(route.meta?.fullWidthContent));
 const fullHeightContent = computed(() => Boolean(route.meta?.fullHeightContent));
-const useNativeShell = computed(() => isFlutterNativeShell());
+const useFlutterShell = computed(() => isFlutterNativeShell());
+const useIosNextShell = computed(() => isIosNextNativeShell());
+const useNativeShell = computed(() => useFlutterShell.value || useIosNextShell.value);
 const useIosRouteTransition = isLikelyIosDevice();
 // 两个悬浮球共用同一套显示条件
 const showFloatingActions = computed(() => (
@@ -1533,6 +1536,13 @@ function setAppearanceMode(command: string | number | object) {
   min-width: 0;
 }
 
+/* Keep the existing horizontal layout. Scrollable bottom clearance lets the
+   last item move above SwiftUI's floating tab bar without an opaque safe area. */
+.layout-root--ios-next .main {
+  padding-top: 0 !important;
+  padding-bottom: var(--cpu-ios-bottom-clearance, 96px) !important;
+}
+
 .footer {
   background: var(--cpu-surface);
   border-top: 1px solid var(--cpu-border-soft);
@@ -1844,7 +1854,7 @@ function setAppearanceMode(command: string | number | object) {
 }
 
 @media (max-width: 768px) {
-  .layout-root:not(.layout-root--native-shell) {
+  .layout-root:not(.layout-root--native-shell):not(.layout-root--ios-next) {
     --layout-mobile-tabbar-reserve: calc(68px + env(safe-area-inset-bottom));
   }
 
