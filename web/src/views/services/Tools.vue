@@ -27,7 +27,7 @@
       </div>
 
       <div class="tools-grid">
-        <button
+        <button data-cpu-button="surface"
           v-for="tool in visibleTools"
           :key="tool.slug"
           type="button"

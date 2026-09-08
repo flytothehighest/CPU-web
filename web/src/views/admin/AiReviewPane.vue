@@ -31,7 +31,7 @@
           <h3 class="section-title">AI 服务池</h3>
           <p class="section-desc">每个服务只填写一次地址和密钥，再把拾间 AI、网课解题、文字审核及其他识别场景分别路由到需要的厂家。</p>
         </div>
-        <div class="provider-actions">
+        <div class="provider-actions cpu-button-row">
           <el-button :loading="loadingAllModels" :disabled="!form.aiServices.length" @click="loadAllModels">
             刷新全部模型列表
           </el-button>
@@ -52,7 +52,7 @@
         <article v-for="(service, index) in form.aiServices" :key="service.id" class="service-card">
           <div class="service-card-head">
             <span class="service-index">服务 {{ index + 1 }}</span>
-            <div class="service-card-actions">
+            <div class="service-card-actions cpu-button-row">
               <el-button size="small" plain :loading="serviceCatalogState(service.id).loading" :disabled="!service.apiUrl.trim()" @click="loadModelsForService(service.id)">
                 刷新此服务模型
               </el-button>
@@ -306,7 +306,7 @@
       </div>
 
       <div class="prompt-card">
-        <button type="button" class="sub-toggle" :class="{ expanded: textPromptsExpanded }" @click="textPromptsExpanded = !textPromptsExpanded">
+        <button data-cpu-button="text" type="button" class="sub-toggle" :class="{ expanded: textPromptsExpanded }" @click="textPromptsExpanded = !textPromptsExpanded">
           <div>
             <div class="card-title">文字审核 Prompt</div>
             <div class="desc">支持按帖子、回复和编辑相似度分别配置提示词。</div>
@@ -439,7 +439,7 @@
       </div>
 
       <div class="prompt-card">
-        <button type="button" class="sub-toggle" :class="{ expanded: qqGroupAdPromptsExpanded }" @click="qqGroupAdPromptsExpanded = !qqGroupAdPromptsExpanded">
+        <button data-cpu-button="text" type="button" class="sub-toggle" :class="{ expanded: qqGroupAdPromptsExpanded }" @click="qqGroupAdPromptsExpanded = !qqGroupAdPromptsExpanded">
           <div>
             <div class="card-title">QQ群广告过滤 Prompt</div>
             <div class="desc">可单独配置实时广告过滤的系统提示词和用户提示词。</div>
@@ -461,7 +461,7 @@
         </div>
       </div>
 
-      <div class="actions-row">
+      <div class="actions-row cpu-button-row">
         <el-button type="primary" :loading="saving" :disabled="saving || Boolean(configLoadError)" @click="saveConfig">保存审核配置</el-button>
         <el-button plain :disabled="loadingPromptDefaults || Boolean(configLoadError)" @click="resetAllPrompts">重置全部 Prompt</el-button>
       </div>
@@ -499,7 +499,7 @@
       </div>
 
       <div class="prompt-card">
-        <button type="button" class="sub-toggle" :class="{ expanded: imagePromptsExpanded }" @click="imagePromptsExpanded = !imagePromptsExpanded">
+        <button data-cpu-button="text" type="button" class="sub-toggle" :class="{ expanded: imagePromptsExpanded }" @click="imagePromptsExpanded = !imagePromptsExpanded">
           <div>
             <div class="card-title">图片审核 Prompt</div>
             <div class="desc">可单独配置图片审核系统提示词和用户提示词。</div>
@@ -521,7 +521,7 @@
         </div>
       </div>
 
-      <div class="actions-row">
+      <div class="actions-row cpu-button-row">
         <el-button type="primary" :loading="saving" :disabled="saving || Boolean(configLoadError)" @click="saveConfig">保存审核配置</el-button>
         <el-button plain :disabled="loadingPromptDefaults || Boolean(configLoadError)" @click="resetAllPrompts">重置全部 Prompt</el-button>
         <el-button plain :loading="sweepingImages" :disabled="sweepingImages" @click="sweepForumImages">一键补扫全站图片</el-button>
@@ -557,7 +557,7 @@
       </div>
 
       <div class="prompt-card">
-        <button type="button" class="sub-toggle" :class="{ expanded: videoPromptsExpanded }" @click="videoPromptsExpanded = !videoPromptsExpanded">
+        <button data-cpu-button="text" type="button" class="sub-toggle" :class="{ expanded: videoPromptsExpanded }" @click="videoPromptsExpanded = !videoPromptsExpanded">
           <div>
             <div class="card-title">视频审核 Prompt</div>
             <div class="desc">可单独配置视频审核系统提示词和用户提示词。</div>
@@ -579,7 +579,7 @@
         </div>
       </div>
 
-      <div class="actions-row">
+      <div class="actions-row cpu-button-row">
         <el-button type="primary" :loading="saving" :disabled="saving || Boolean(configLoadError)" @click="saveConfig">保存审核配置</el-button>
         <el-button plain :disabled="loadingPromptDefaults || Boolean(configLoadError)" @click="resetAllPrompts">重置全部 Prompt</el-button>
         <el-button plain :loading="sweepingVideos" :disabled="sweepingVideos" @click="sweepForumVideos">一键补扫全站视频</el-button>
@@ -640,7 +640,7 @@
           </el-table-column>
           <el-table-column label="操作" width="180">
             <template #default="{ row }">
-              <div class="table-actions">
+              <div class="table-actions cpu-button-row">
                 <el-button size="small" type="success" plain :loading="isVideoReviewBusy(row)" :disabled="loadingVideos || isVideoReviewBusy(row)" @click="approveVideo(row)">通过</el-button>
                 <el-button size="small" type="danger" plain :loading="isVideoReviewBusy(row)" :disabled="loadingVideos || isVideoReviewBusy(row)" @click="rejectVideo(row)">驳回</el-button>
               </div>

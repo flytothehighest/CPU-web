@@ -8,7 +8,7 @@
 
     <div class="cpu-card profile-card" :class="[profileThemeClass, profileFrameClass]">
       <UserAvatar :size="80" class="avatar" :src="avatarDisplayUrl" :name="user?.nickname" :seed="user?.id" :profile-frame="user?.profileFrame" alt="用户头像" />
-      <div class="avatar-actions">
+      <div class="avatar-actions cpu-button-row">
         <el-button size="small" plain :loading="avatarSaving" :disabled="avatarSaving" @click="pickAvatar">上传头像</el-button>
         <el-button v-if="user?.avatar" size="small" text :loading="avatarSaving" :disabled="avatarSaving" @click="removeAvatar">移除头像</el-button>
         <el-button v-if="avatarPreviewFailed" size="small" plain :loading="avatarSaving" @click="retryAvatarPreview">重新加载头像</el-button>
@@ -41,7 +41,7 @@
         <li><span>声望</span><span>{{ user?.reputation }}</span></li>
         <li v-if="!iosCommerceHidden && (user?.sponsorAmount ?? 0) > 0"><span>赞助</span><span class="sponsor-total">¥{{ formatMoney(user?.sponsorAmount) }}</span></li>
       </ul>
-      <div class="profile-actions">
+      <div class="profile-actions cpu-button-row">
         <el-button type="primary" plain :disabled="saving || logoutBusy" @click="editing = true">编辑资料</el-button>
         <el-button plain @click="router.push('/profile/privacy')">账号与隐私</el-button>
         <el-button plain :disabled="saving || logoutBusy" @click="router.push('/profile/verification')">拾间认证</el-button>
@@ -60,7 +60,7 @@
       <div class="vip-style-group">
         <span class="vip-style-label">主页主题</span>
         <div class="vip-style-options">
-          <button
+          <button data-cpu-button="media"
             v-for="item in vipThemeOptions"
             :key="item.value"
             type="button"
@@ -75,7 +75,7 @@
       <div class="vip-style-group">
         <span class="vip-style-label">头像框</span>
         <div class="vip-style-options">
-          <button
+          <button data-cpu-button="media"
             v-for="item in vipFrameOptions"
             :key="item.value"
             type="button"
@@ -95,7 +95,7 @@
         <p>当前为{{ appearance.modeLabel }}，{{ appearance.isDark ? "正在使用深色界面。" : "正在使用浅色界面。" }}</p>
       </div>
       <div class="appearance-options" role="radiogroup" aria-label="外观模式">
-        <button
+        <button data-cpu-button="option"
           v-for="item in appearanceOptions"
           :key="item.value"
           type="button"
@@ -116,7 +116,7 @@
         <p>绑定后可通过微信接收已开启的站内通知。</p>
         <strong>{{ wechatBindingStateText }}</strong>
       </div>
-      <div class="wechat-bind-actions">
+      <div class="wechat-bind-actions cpu-button-row">
         <el-button type="primary" @click="openWechatBinding">
           <el-icon><Bell /></el-icon>
           {{ wechatProfile?.binding ? "管理微信通知" : "去绑定微信" }}
@@ -174,7 +174,7 @@
           <template v-if="site.features.sponsor">
             <div v-if="sponsorOptions.enabled" class="sponsor-form">
               <div class="sponsor-category-grid" role="radiogroup" aria-label="赞助类别">
-                <button
+                <button data-cpu-button="option"
                   v-for="category in sponsorOptions.categories"
                   :key="category.id"
                   type="button"
@@ -208,7 +208,7 @@
               </div>
 
               <div class="amount-grid">
-                <button
+                <button data-cpu-button="option"
                   v-for="amount in sponsorOptions.amounts"
                   :key="amount"
                   type="button"
@@ -276,7 +276,7 @@
         <div class="sponsor-confirm-field">
           <span>展示方式</span>
           <div class="sponsor-display-tabs" role="radiogroup" aria-label="展示方式">
-            <button
+            <button data-cpu-button="option"
               v-for="item in sponsorDisplayOptions"
               :key="item.value"
               type="button"

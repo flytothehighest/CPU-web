@@ -13,17 +13,17 @@
           <h1>拾间AI</h1>
           <p>问功能、找入口，也可以直接聊天</p>
         </div>
-        <div class="assistant-head-actions">
-          <button type="button" aria-label="查看历史对话" :disabled="!auth.isLoggedIn" @click="historyOpen = true">
+        <div class="assistant-head-actions cpu-button-row">
+          <button data-cpu-button="icon" type="button" aria-label="查看历史对话" :disabled="!auth.isLoggedIn" @click="historyOpen = true">
             <el-icon><Clock /></el-icon>
           </button>
-          <button type="button" aria-label="新建对话" :disabled="!messages.length" @click="startNewConversation">
+          <button data-cpu-button="icon" type="button" aria-label="新建对话" :disabled="!messages.length" @click="startNewConversation">
             <el-icon><Plus /></el-icon>
           </button>
-          <button v-if="embedded" type="button" aria-label="在完整页面打开拾间AI" @click="openFullPage">
+          <button data-cpu-button="icon" v-if="embedded" type="button" aria-label="在完整页面打开拾间AI" @click="openFullPage">
             <el-icon><FullScreen /></el-icon>
           </button>
-          <button v-if="embedded" type="button" aria-label="关闭拾间AI" @click="emit('close')">
+          <button data-cpu-button="icon" v-if="embedded" type="button" aria-label="关闭拾间AI" @click="emit('close')">
             <el-icon><Close /></el-icon>
           </button>
         </div>
@@ -44,7 +44,7 @@
           <a href="/privacy.html" target="_blank" rel="noopener noreferrer">查看隐私说明</a>
         </small>
         <div class="welcome-prompts">
-          <button v-for="prompt in welcomePrompts" :key="prompt" type="button" @click="sendPrompt(prompt)">
+          <button data-cpu-button="action" v-for="prompt in welcomePrompts" :key="prompt" type="button" @click="sendPrompt(prompt)">
             {{ prompt }}
           </button>
         </div>
@@ -77,7 +77,7 @@
               ></div>
             </template>
             <div v-if="message.role === 'assistant' && message.images?.length" class="generated-images">
-              <button
+              <button data-cpu-button="media"
                 v-for="(image, index) in message.images"
                 :key="image.url"
                 type="button"
@@ -105,7 +105,7 @@
               <i></i>{{ message.streamStatus || "正在生成回答…" }}
             </div>
             <div v-if="message.actions?.length" class="action-list">
-              <button
+              <button data-cpu-button="surface"
                 v-for="action in message.actions"
                 :key="action.id"
                 type="button"
@@ -121,7 +121,7 @@
               </button>
             </div>
             <div v-if="message.suggestions?.length" class="suggestions">
-              <button
+              <button data-cpu-button="action"
                 v-for="suggestion in message.suggestions"
                 :key="suggestion"
                 type="button"
@@ -151,7 +151,7 @@
           @focus="handleComposerFocus"
           @blur="handleComposerBlur"
         />
-        <button
+        <button data-cpu-button="primary"
           type="button"
           class="composer-send"
           :aria-label="assistantLoading ? '正在回答' : '发送'"
@@ -177,12 +177,12 @@
       >
         <div class="embedded-history-head">
           <strong>历史对话</strong>
-          <button type="button" aria-label="关闭历史对话" @click="historyOpen = false">
+          <button data-cpu-button="icon" type="button" aria-label="关闭历史对话" @click="historyOpen = false">
             <el-icon><Close /></el-icon>
           </button>
         </div>
         <div class="history-caption">{{ historyCaption }}</div>
-        <button type="button" class="history-new" @click="startNewConversation">
+        <button data-cpu-button="action" type="button" class="history-new" @click="startNewConversation">
           <el-icon><Plus /></el-icon>
           <span>新对话</span>
         </button>
@@ -193,12 +193,12 @@
             class="history-item"
             :class="{ active: session.id === activeSessionId }"
           >
-            <button type="button" class="history-open" @click="openConversation(session.id)">
+            <button data-cpu-button="surface" type="button" class="history-open" @click="openConversation(session.id)">
               <strong>{{ session.title }}</strong>
               <span>{{ sessionPreview(session) }}</span>
               <time>{{ formatSessionTime(session.updatedAt) }}</time>
             </button>
-            <button type="button" class="history-delete" aria-label="删除此对话" @click="deleteConversation(session.id)">
+            <button data-cpu-button="danger" type="button" class="history-delete" aria-label="删除此对话" @click="deleteConversation(session.id)">
               <el-icon><Delete /></el-icon>
             </button>
           </div>
@@ -220,7 +220,7 @@
       append-to-body
     >
       <div class="history-caption">{{ historyCaption }}</div>
-      <button type="button" class="history-new" @click="startNewConversation">
+      <button data-cpu-button="action" type="button" class="history-new" @click="startNewConversation">
         <el-icon><Plus /></el-icon>
         <span>新对话</span>
       </button>
@@ -231,12 +231,12 @@
           class="history-item"
           :class="{ active: session.id === activeSessionId }"
         >
-          <button type="button" class="history-open" @click="openConversation(session.id)">
+          <button data-cpu-button="surface" type="button" class="history-open" @click="openConversation(session.id)">
             <strong>{{ session.title }}</strong>
             <span>{{ sessionPreview(session) }}</span>
             <time>{{ formatSessionTime(session.updatedAt) }}</time>
           </button>
-          <button type="button" class="history-delete" aria-label="删除此对话" @click="deleteConversation(session.id)">
+          <button data-cpu-button="danger" type="button" class="history-delete" aria-label="删除此对话" @click="deleteConversation(session.id)">
             <el-icon><Delete /></el-icon>
           </button>
         </div>

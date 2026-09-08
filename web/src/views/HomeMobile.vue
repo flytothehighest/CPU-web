@@ -3,7 +3,7 @@
     <section class="home-entry" aria-label="首页快捷入口">
       <SiteSearchBar :placeholder="auth.canAccessForum ? '搜索帖子或校园服务' : '搜索校园服务'" />
       <nav class="quick-grid">
-        <button v-for="entry in quickEntries" :key="entry.label" type="button" @click="openQuickEntry(entry.to)">
+        <button data-cpu-button="surface" v-for="entry in quickEntries" :key="entry.label" type="button" @click="openQuickEntry(entry.to)">
           <span class="quick-icon" aria-hidden="true"><el-icon><component :is="entry.icon" /></el-icon></span>
           <span>{{ entry.label }}</span>
         </button>
@@ -14,7 +14,7 @@
 
     <section v-if="showForumContent && hotPreview.length" class="hot-strip" aria-label="热榜">
       <header><b>热榜</b><router-link to="/forum?channel=hot">查看全部 →</router-link></header>
-      <button v-for="(topic, index) in hotPreview" :key="topic.id" type="button" @click="openTopic(topic.id)">
+      <button data-cpu-button="surface" v-for="(topic, index) in hotPreview" :key="topic.id" type="button" @click="openTopic(topic.id)">
         <span :class="{ top: index < 3 }">{{ index + 1 }}</span>
         <b>{{ topic.title }}</b>
         <small>{{ topic.board?.name }}</small>
@@ -31,10 +31,10 @@
         <router-link :to="activeFeedLink">{{ activeFeedLinkLabel }} →</router-link>
       </header>
       <nav class="feed-tabs" role="tablist" aria-label="校园动态分流">
-        <button type="button" role="tab" :aria-selected="activeFeedStream === 'forum'" :class="{ active: activeFeedStream === 'forum' }" @click="selectFeedStream('forum')">
+        <button data-cpu-button="option" type="button" role="tab" :aria-selected="activeFeedStream === 'forum'" :class="{ active: activeFeedStream === 'forum' }" @click="selectFeedStream('forum')">
           <el-icon><ChatDotRound /></el-icon>论坛
         </button>
-        <button v-if="marketFeedEnabled" type="button" role="tab" :aria-selected="activeFeedStream === 'market'" :class="{ active: activeFeedStream === 'market' }" @click="selectFeedStream('market')">
+        <button data-cpu-button="option" v-if="marketFeedEnabled" type="button" role="tab" :aria-selected="activeFeedStream === 'market'" :class="{ active: activeFeedStream === 'market' }" @click="selectFeedStream('market')">
           <el-icon><Sell /></el-icon>二手
         </button>
       </nav>

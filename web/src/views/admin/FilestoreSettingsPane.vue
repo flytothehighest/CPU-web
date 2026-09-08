@@ -121,7 +121,7 @@
         :title="config.oneDriveChinaLastError"
       />
 
-      <div class="form-actions">
+      <div class="form-actions cpu-button-row">
         <el-button type="primary" :loading="saving" :disabled="saving || loading || Boolean(loadError)" @click="save">
           保存文件收集设置
         </el-button>

@@ -1,7 +1,7 @@
 <template>
   <div class="auth-wrap">
     <div class="auth-card">
-      <div class="auth-nav">
+      <div class="auth-nav cpu-button-row">
         <el-button text class="nav-btn" @click="goHome">
           <el-icon><ArrowLeft /></el-icon>
           返回首页
@@ -23,13 +23,13 @@
           <div style="line-height:1.7">
             <p style="margin:0 0 6px"><b>公开注册已关闭。</b></p>
             <p style="margin:0">
-              药大学生请在 <button type="button" class="inline-link" @click="goLogin">登录页</button> 使用<b>学校统一认证</b>登录，首次登录会自动创建账号。<br>
+              药大学生请在 <button data-cpu-button="text" type="button" class="inline-link" @click="goLogin">登录页</button> 使用<b>学校统一认证</b>登录，首次登录会自动创建账号。<br>
               暂时无法使用统一认证的账号，可联系站务协助处理。
             </p>
           </div>
         </el-alert>
         <div class="alt" style="margin-top:18px">
-          <button type="button" @click="goLogin">去登录页</button>
+          <button data-cpu-button="action" type="button" @click="goLogin">去登录页</button>
         </div>
         <PrivacyPolicyNotice />
       </template>
@@ -53,7 +53,7 @@
             <el-input-number v-model="form.enrollYear" :min="2010" :max="2030" :step="1" style="width:100%" :disabled="loading" />
           </el-form-item>
           <el-form-item>
-            <el-checkbox v-model="agree" :disabled="loading">我已阅读并同意 <button type="button" class="inline-link" @click.stop="showTerms = true">用户协议</button></el-checkbox>
+            <el-checkbox v-model="agree" :disabled="loading">我已阅读并同意 <button data-cpu-button="text" type="button" class="inline-link" @click.stop="showTerms = true">用户协议</button></el-checkbox>
           </el-form-item>
           <el-form-item>
             <el-button type="primary" class="btn-submit" :loading="loading" :disabled="loading || !agree" @click="submit">注 册</el-button>
@@ -61,7 +61,7 @@
         </el-form>
 
         <div class="alt">
-          已有账号？<button type="button" @click="goLogin">直接登录</button>
+          已有账号？<button data-cpu-button="action" type="button" @click="goLogin">直接登录</button>
         </div>
         <PrivacyPolicyNotice />
       </template>

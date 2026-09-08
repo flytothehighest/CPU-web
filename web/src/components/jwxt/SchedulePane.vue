@@ -25,10 +25,10 @@
       <div class="top-actions">
         <AcademicDataSourceBadge v-if="!isGraduateSource" :source="parsed?.source" />
         <div v-if="parsed" class="view-switch" aria-label="切换课表视图">
-          <button type="button" :class="{ active: viewMode === 'day' }" :disabled="loading" @click="setViewMode('day')">日</button>
-          <button type="button" :class="{ active: viewMode === 'week' }" :disabled="loading" @click="setViewMode('week')">周</button>
+          <button data-cpu-button="option" type="button" :class="{ active: viewMode === 'day' }" :disabled="loading" @click="setViewMode('day')">日</button>
+          <button data-cpu-button="option" type="button" :class="{ active: viewMode === 'week' }" :disabled="loading" @click="setViewMode('week')">周</button>
         </div>
-        <button
+        <button data-cpu-button="option"
           v-if="parsed"
           type="button"
           class="icon-btn"
@@ -40,7 +40,7 @@
         >
           <el-icon><Aim /></el-icon>
         </button>
-        <button
+        <button data-cpu-button="icon"
           type="button"
           class="icon-btn"
           :class="{ spinning: loading }"
@@ -55,22 +55,22 @@
     </header>
 
     <section v-if="parsed" class="week-switcher">
-      <button type="button" class="week-btn" :disabled="!canChangeWeek(-1)" @click="changeWeek(-1)">
+      <button data-cpu-button="action" type="button" class="week-btn" :disabled="!canChangeWeek(-1)" @click="changeWeek(-1)">
         <el-icon><ArrowLeft /></el-icon>
         上一周
       </button>
-      <button type="button" class="week-title clickable" :disabled="loading" @click="weekDialogOpen = true">
+      <button data-cpu-button="surface" type="button" class="week-title clickable" :disabled="loading" @click="weekDialogOpen = true">
         <b>第 {{ currentWeekValue() || "--" }} 周</b>
         <span v-if="currentWeekRange">{{ currentWeekRange }}</span>
       </button>
-      <button type="button" class="week-btn" :disabled="!canChangeWeek(1)" @click="changeWeek(1)">
+      <button data-cpu-button="action" type="button" class="week-btn" :disabled="!canChangeWeek(1)" @click="changeWeek(1)">
         下一周
         <el-icon><ArrowRight /></el-icon>
       </button>
     </section>
 
     <section v-if="parsed && viewMode === 'day'" class="week-strip">
-      <button
+      <button data-cpu-button="surface"
         v-for="d in dayTabs"
         :key="d.day"
         type="button"
@@ -218,7 +218,7 @@
       :style="pageStyle"
     >
       <div class="week-grid-pick">
-        <button
+        <button data-cpu-button="surface"
           v-for="w in weeks"
           :key="w.value"
           type="button"
@@ -241,16 +241,16 @@
         <div v-if="editDialogOpen" class="course-editor-overlay" :style="pageStyle" @click.self="closeCourseEditor">
           <section class="course-editor-panel" role="dialog" aria-modal="true">
             <header class="course-editor-nav">
-              <button type="button" :disabled="courseEditBusy" @click="closeCourseEditor">取消</button>
+              <button data-cpu-button="action" type="button" :disabled="courseEditBusy" @click="closeCourseEditor">取消</button>
               <h2>{{ editingCourseBlock ? "修改课程" : "添加课程" }}</h2>
-              <button type="button" class="primary" :disabled="courseEditBusy" @click="saveCourseEdit()">
+              <button data-cpu-button="primary" type="button" class="primary" :disabled="courseEditBusy" @click="saveCourseEdit()">
                 {{ courseEditAction === "save" ? "保存中" : "保存" }}
               </button>
             </header>
 
             <div class="course-editor-scroll">
               <ScheduleCourseStatus v-if="editingCourseBlock" :course="editingCourseBlock.course" detail>
-                <button v-if="editingCourseBlock.course.orphaned" type="button" :disabled="courseEditBusy" @click="saveCourseEdit(true)">
+                <button data-cpu-button="action" v-if="editingCourseBlock.course.orphaned" type="button" :disabled="courseEditBusy" @click="saveCourseEdit(true)">
                   保留为自定义课程
                 </button>
               </ScheduleCourseStatus>
@@ -275,11 +275,11 @@
 
               <div class="editor-section-title">
                 <span>时间段</span>
-                <div class="editor-actions">
-                  <button v-if="canRestoreOriginalCourse" type="button" :disabled="courseEditBusy" @click="restoreOriginalCourse">
+                <div class="editor-actions cpu-button-row">
+                  <button data-cpu-button="action" v-if="canRestoreOriginalCourse" type="button" :disabled="courseEditBusy" @click="restoreOriginalCourse">
                     {{ courseEditAction === "restore" ? "处理中" : "使用教务安排" }}
                   </button>
-                  <button v-if="editingCourseBlock" type="button" class="danger" :disabled="courseEditBusy" @click="deleteEditingCourse">
+                  <button data-cpu-button="danger" v-if="editingCourseBlock" type="button" class="danger" :disabled="courseEditBusy" @click="deleteEditingCourse">
                     {{ courseEditAction === "delete" ? "删除中" : "删除" }}
                   </button>
                 </div>
@@ -297,7 +297,7 @@
                 <div v-if="customCourseForm.weekMode === 'custom'" class="editor-week-picker">
                   <span>指定周</span>
                   <div class="week-chip-grid">
-                    <button
+                    <button data-cpu-button="option"
                       v-for="w in weekNumberOptions"
                       :key="w"
                       type="button"
@@ -329,7 +329,7 @@
               <section v-if="hiddenCourseItems.length" class="editor-card hidden-restore-card">
                 <div class="editor-card-title">已编辑课程</div>
                 <div class="hidden-list">
-                  <button v-for="item in hiddenCourseItems" :key="item.key" type="button" :disabled="courseEditBusy" @click="restoreHiddenCourse(item.key)">
+                  <button data-cpu-button="surface" v-for="item in hiddenCourseItems" :key="item.key" type="button" :disabled="courseEditBusy" @click="restoreHiddenCourse(item.key)">
                     {{ courseEditAction === "restoreHidden" ? "恢复中" : item.label }}
                   </button>
                 </div>

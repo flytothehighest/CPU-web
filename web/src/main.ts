@@ -28,6 +28,7 @@ import "@fontsource-variable/inter/standard.css";
 import "@fontsource/jetbrains-mono";
 import "./styles/harmonyos-sans.css";
 import "./styles/index.scss";
+import "./styles/buttons.scss";
 import "./styles/image-viewer.scss";
 
 const SCHEDULE_OFFLINE_WARMUP_MESSAGE = "cpu-schedule-offline-warmup";

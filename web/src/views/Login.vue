@@ -45,7 +45,7 @@
         <el-form-item v-if="auth.ssoNeedCaptcha" prop="captcha">
           <div class="vcode-row">
             <el-input v-model="form.captcha" placeholder="看图输入验证码" maxlength="8" style="flex:1" :disabled="auth.ssoLoading || captchaRefreshing" />
-            <button
+            <button data-cpu-button="media"
               v-if="auth.ssoCaptchaImage"
               type="button"
               class="vcode-img-button"
@@ -85,16 +85,16 @@
           <el-input v-model="dev.password" name="password" type="password" show-password autocomplete="current-password" placeholder="密码" :disabled="dev.loading" />
           <el-button native-type="submit" :loading="dev.loading" :disabled="dev.loading">登录</el-button>
         </el-form>
-        <div v-if="isDev" class="dev-accounts">
-          <button type="button" @click="fillDev('alice', '123456')">alice / 123456</button>
-          <button type="button" @click="fillDev('bob', '123456')">bob / 123456</button>
-          <button type="button" @click="fillDev('carol', '123456')">carol / 123456</button>
-          <button type="button" @click="fillDev('admin', 'admin123')">admin / admin123</button>
+        <div v-if="isDev" class="dev-accounts cpu-button-row">
+          <button data-cpu-button="action" type="button" @click="fillDev('alice', '123456')">alice / 123456</button>
+          <button data-cpu-button="action" type="button" @click="fillDev('bob', '123456')">bob / 123456</button>
+          <button data-cpu-button="action" type="button" @click="fillDev('carol', '123456')">carol / 123456</button>
+          <button data-cpu-button="action" type="button" @click="fillDev('admin', 'admin123')">admin / admin123</button>
         </div>
       </details>
 
       <div class="alt-actions">
-        <button type="button" @click="goHome">暂不登录，继续浏览</button>
+        <button data-cpu-button="text" type="button" @click="goHome">暂不登录，继续浏览</button>
         <span>·</span>
         <span class="muted-note">多数同学可直接使用统一认证登录</span>
       </div>

@@ -76,12 +76,12 @@
 
     <p v-if="!isStandalone && !isNativeApp" class="support-note">
       仍有疑问，建议
-      <button type="button" @click="openUserGroup">加入用户 QQ 群 {{ USER_QQ_GROUP }}</button>
+      <button data-cpu-button="text" type="button" @click="openUserGroup">加入用户 QQ 群 {{ USER_QQ_GROUP }}</button>
       咨询。
     </p>
 
     <template #footer>
-      <div class="footer">
+      <div class="footer cpu-button-row">
         <el-button
           v-if="canDownloadAndroidApk"
           :type="deferredPrompt && platform !== 'android' ? 'default' : 'primary'"

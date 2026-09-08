@@ -28,7 +28,7 @@
         <el-button text size="small" :loading="toolsLoading" @click="loadToolMetas">重试</el-button>
       </div>
       <div class="tool-grid">
-        <button
+        <button data-cpu-button="surface"
           v-for="tool in visibleTools"
           :key="tool.slug"
           type="button"
@@ -55,7 +55,7 @@
 
     <!-- 客户端下载对访客也可见；电费查询只需要站内登录 -->
     <div class="quick-row">
-      <button v-if="auth.isLoggedIn && site.features.electric" type="button" class="quick-card electric-card" @click="electricOpen = true">
+      <button data-cpu-button="surface" v-if="auth.isLoggedIn && site.features.electric" type="button" class="quick-card electric-card" @click="electricOpen = true">
         <span class="quick-icon"><AppIcon name="electric" /></span>
         <div class="quick-body">
           <div class="quick-title">宿舍电费查询</div>
@@ -63,7 +63,7 @@
         </div>
         <el-icon class="quick-arrow"><Right /></el-icon>
       </button>
-      <button type="button" class="quick-card network-card" @click="router.push('/download')">
+      <button data-cpu-button="surface" type="button" class="quick-card network-card" @click="router.push('/download')">
         <span class="quick-icon"><AppIcon name="desktop" /></span>
         <div class="quick-body">
           <div class="quick-title-row">

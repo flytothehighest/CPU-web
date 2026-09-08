@@ -1,6 +1,6 @@
 <template>
   <div class="boards-pane">
-    <div class="ctrl-bar">
+    <div class="ctrl-bar cpu-button-row">
       <el-button type="primary" :disabled="saving || loading" @click="openCreate">新增板块</el-button>
       <el-button :loading="loading" :disabled="loading" @click="reload">刷新</el-button>
     </div>

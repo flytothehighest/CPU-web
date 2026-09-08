@@ -19,7 +19,7 @@
       </div>
       <el-empty v-else-if="!conversations.length" description="还没有私聊" :image-size="72" />
       <div v-else class="conversation-list">
-        <button
+        <button data-cpu-button="surface"
           v-for="conversation in conversations"
           :key="conversation.id"
           type="button"
@@ -66,7 +66,7 @@
       </div>
       <template v-else>
         <header class="chat-head">
-          <button type="button" class="mobile-back" aria-label="返回会话列表" title="返回会话列表" @click="backToList">
+          <button data-cpu-button="icon" type="button" class="mobile-back" aria-label="返回会话列表" title="返回会话列表" @click="backToList">
             <el-icon><ArrowLeft /></el-icon>
             <span>返回</span>
           </button>
@@ -85,7 +85,7 @@
             </b>
             <span>{{ activeChatSubtitle }}</span>
           </div>
-          <div class="chat-actions">
+          <div class="chat-actions cpu-button-row">
             <el-button text type="danger" @click="blockCounterpart">屏蔽</el-button>
             <el-button v-if="!activeCounterpart.anonymous && activeCounterpart.id > 0" class="remark-link" text type="primary" @click="editCounterpartRemark">
               {{ activeRemark ? "改备注" : "备注" }}
@@ -126,7 +126,7 @@
               <span>
                 {{ messageTime(message.createdAt) }}
                 <template v-if="message.senderId === auth.user?.id"> · {{ messageDeliveryText(message) }}</template>
-                <button
+                <button data-cpu-button="text"
                   v-else
                   type="button"
                   class="message-report-button"

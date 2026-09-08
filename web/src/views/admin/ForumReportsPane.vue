@@ -37,7 +37,7 @@
           <span>{{ fmtDate(row.createdAt) }}</span>
         </div>
         <div class="target-line">
-          <button v-if="row.targetUrl" type="button" class="target-link" @click="openTarget(row)">{{ row.targetLabel }}</button>
+          <button data-cpu-button="text" v-if="row.targetUrl" type="button" class="target-link" @click="openTarget(row)">{{ row.targetLabel }}</button>
           <b v-else>{{ row.targetLabel }}</b>
         </div>
         <div class="people-line">

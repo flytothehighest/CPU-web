@@ -1,7 +1,7 @@
 <template>
   <div class="file-submit-page">
     <section class="file-submit-shell" v-loading="loading">
-      <button type="button" class="back-link" @click="$router.push('/services/tools/file_collect')">
+      <button data-cpu-button="text" type="button" class="back-link" @click="$router.push('/services/tools/file_collect')">
         <el-icon><ArrowLeft /></el-icon>
         <span>文件收集</span>
       </button>
@@ -54,9 +54,9 @@
                 <small>{{ savedPathPreview(file, index + 1, files.length) }}</small>
               </span>
               <small>{{ formatBytes(file.size) }}</small>
-              <button type="button" class="file-move-action" :disabled="submitting || index === 0" @click="moveFile(index, index - 1)">上移</button>
-              <button type="button" class="file-move-action" :disabled="submitting || index === files.length - 1" @click="moveFile(index, index + 1)">下移</button>
-              <button type="button" class="file-delete-action" :disabled="submitting" @click="removeFile(index)">删除</button>
+              <button data-cpu-button="action" type="button" class="file-move-action" :disabled="submitting || index === 0" @click="moveFile(index, index - 1)">上移</button>
+              <button data-cpu-button="action" type="button" class="file-move-action" :disabled="submitting || index === files.length - 1" @click="moveFile(index, index + 1)">下移</button>
+              <button data-cpu-button="danger" type="button" class="file-delete-action" :disabled="submitting" @click="removeFile(index)">删除</button>
             </div>
           </div>
 

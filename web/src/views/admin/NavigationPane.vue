@@ -17,7 +17,7 @@
 
     <div class="toolbar">
       <div><strong>{{ items.length }}</strong> 个导航项<small>最多 30 个，可拖拽或使用箭头排序</small></div>
-      <div class="toolbar-actions"><el-button @click="addItem">新增导航</el-button><el-button @click="importOpen = true">JSON 导入</el-button><el-button @click="copyJson">复制 JSON</el-button><el-button type="warning" plain @click="resetDefaults">恢复默认</el-button><el-button type="primary" :loading="saving" @click="save">保存并发布</el-button></div>
+      <div class="toolbar-actions cpu-button-row"><el-button @click="addItem">新增导航</el-button><el-button @click="importOpen = true">JSON 导入</el-button><el-button @click="copyJson">复制 JSON</el-button><el-button type="warning" plain @click="resetDefaults">恢复默认</el-button><el-button type="primary" :loading="saving" @click="save">保存并发布</el-button></div>
     </div>
 
     <el-empty v-if="!loading && !items.length" description="当前顶部导航为空"><el-button type="primary" @click="addItem">添加第一个入口</el-button></el-empty>
@@ -39,7 +39,7 @@
           <div class="item-title"><strong>{{ item.fullLabel || item.label || '未命名入口' }}</strong><small>{{ item.to || '尚未填写链接' }}</small></div>
           <el-tag size="small" :type="item.primary ? 'success' : 'info'">{{ item.primary ? '主导航' : '更多' }}</el-tag>
           <el-switch v-model="item.enabled" inline-prompt active-text="显" inactive-text="隐" />
-          <div class="row-actions"><el-button circle size="small" :icon="ArrowUp" :disabled="index === 0" @click="move(index, -1)" /><el-button circle size="small" :icon="ArrowDown" :disabled="index === items.length - 1" @click="move(index, 1)" /><el-button size="small" @click="duplicate(index)">复制</el-button><el-button size="small" type="danger" plain @click="remove(index)">删除</el-button></div>
+          <div class="row-actions cpu-button-row"><el-button circle size="small" :icon="ArrowUp" :disabled="index === 0" @click="move(index, -1)" /><el-button circle size="small" :icon="ArrowDown" :disabled="index === items.length - 1" @click="move(index, 1)" /><el-button size="small" @click="duplicate(index)">复制</el-button><el-button size="small" type="danger" plain @click="remove(index)">删除</el-button></div>
         </header>
 
         <div class="editor-grid">

@@ -38,7 +38,7 @@
           class="date-range"
           @change="applyFilters"
         />
-        <div class="actions">
+        <div class="actions cpu-button-row">
           <el-button :loading="loading" :disabled="loading" @click="reload">刷新</el-button>
           <el-button :disabled="loading" @click="resetFilters">重置</el-button>
           <el-button v-if="auth.isAdmin" type="primary" :disabled="loading || creating" @click="openCreate">

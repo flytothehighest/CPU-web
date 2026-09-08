@@ -160,7 +160,7 @@
             </div>
           </div>
 
-          <div class="storage-actions">
+          <div class="storage-actions cpu-button-row">
             <el-button type="primary" :loading="savingMediaStorage" :disabled="savingMediaStorage || Boolean(configLoadError)" @click="saveMediaStorageConfig">保存媒体存储配置</el-button>
             <el-button :loading="validatingOneDriveChinaClient" :disabled="validatingOneDriveChinaClient || Boolean(configLoadError)" @click="validateOneDriveChinaClient">校验密钥</el-button>
             <el-button :loading="authorizingOneDriveChina" :disabled="authorizingOneDriveChina || Boolean(configLoadError)" @click="startOneDriveChinaAuth">登录授权</el-button>
@@ -216,7 +216,7 @@
             <el-input v-model="tencentCosPublicBaseUrl" maxlength="500" placeholder="https://media.cputime.cn" />
           </div>
         </div>
-        <div class="storage-actions">
+        <div class="storage-actions cpu-button-row">
           <el-button type="primary" :loading="savingMediaStorage" :disabled="savingMediaStorage || Boolean(configLoadError)" @click="saveMediaStorageConfig">保存 COS 配置</el-button>
           <el-button :loading="validatingTencentCos" :disabled="validatingTencentCos || Boolean(configLoadError)" @click="validateTencentCos">连接测试</el-button>
         </div>
@@ -256,7 +256,7 @@
             <el-input v-model="aliyunOssPublicBaseUrl" maxlength="500" placeholder="https://static.cputime.cn" />
           </div>
         </div>
-        <div class="storage-actions">
+        <div class="storage-actions cpu-button-row">
           <el-button type="primary" :loading="savingMediaStorage" :disabled="savingMediaStorage || Boolean(configLoadError)" @click="saveMediaStorageConfig">保存 OSS 配置</el-button>
           <el-button :loading="validatingAliyunOss" :disabled="validatingAliyunOss || Boolean(configLoadError)" @click="validateAliyunOss">连接测试</el-button>
         </div>
@@ -269,7 +269,7 @@
           <h3 class="section-title">站点文件总览</h3>
           <p class="section-desc">展示当前由 <code>/uploads</code> 管理的文件，并分别标出本地、缓存、世纪互联、腾讯云 COS 与阿里云 OSS 副本。</p>
         </div>
-        <div class="inventory-actions">
+        <div class="inventory-actions cpu-button-row">
           <el-button :loading="loadingInventory" :disabled="loadingInventory" @click="reloadInventory">刷新列表</el-button>
           <el-button
             type="primary"

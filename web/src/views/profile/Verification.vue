@@ -1,7 +1,7 @@
 <template>
   <main class="verification-page" v-loading="loading && !snapshot">
     <header class="page-bar">
-      <button type="button" class="back-link" @click="router.push('/profile')">
+      <button data-cpu-button="text" type="button" class="back-link" @click="router.push('/profile')">
         <el-icon><ArrowLeft /></el-icon><span>个人中心</span>
       </button>
       <span>拾间认证</span>
@@ -52,7 +52,7 @@
         </div>
       </div>
       <p class="trust-note">认证标记仅表示该账号与所标注个人身份或组织关系已经平台核验，不代表学校官方立场，也不代表平台为其发布内容背书。</p>
-      <div class="card-actions">
+      <div class="card-actions cpu-button-row">
         <el-button type="primary" plain :disabled="snapshot.submission.hasPending" @click="showForm = true">申请更新说明</el-button>
         <el-button type="danger" text :loading="removing" @click="removeVerification">解除认证</el-button>
       </div>

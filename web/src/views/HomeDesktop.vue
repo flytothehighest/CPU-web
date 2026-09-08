@@ -5,7 +5,7 @@
       <div class="hero-text">
         <h1>药大拾间</h1>
         <p>{{ heroIntro }}</p>
-        <div class="hero-actions">
+        <div class="hero-actions cpu-button-row">
           <el-button v-if="showForumContent" type="primary" size="large" @click="$router.push('/forum')">
             <el-icon><ChatLineRound /></el-icon>
             <span class="action-label-full">{{ forumActionLabel }}</span>

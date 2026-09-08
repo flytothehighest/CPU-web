@@ -52,7 +52,7 @@
     </p>
 
     <template #footer>
-      <div class="migration-actions">
+      <div class="migration-actions cpu-button-row">
         <el-button size="large" @click="remindTomorrow">稍后提醒</el-button>
         <el-button type="primary" size="large" @click="openPrimarySite">
           前往 cputime.cn

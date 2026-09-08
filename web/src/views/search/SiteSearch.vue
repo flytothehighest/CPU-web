@@ -54,7 +54,7 @@
           </div>
           <strong>{{ result.courses.length }}</strong>
         </div>
-        <button
+        <button data-cpu-button="surface"
           v-for="course in result.courses"
           :key="course.id"
           type="button"
@@ -78,7 +78,7 @@
           </div>
           <strong>{{ result.services.length }}</strong>
         </div>
-        <button
+        <button data-cpu-button="surface"
           v-for="service in result.services"
           :key="service.id || service.url"
           type="button"

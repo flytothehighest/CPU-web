@@ -61,7 +61,7 @@
         </div>
       </div>
       <template #footer>
-        <div class="strong-notice-footer">
+        <div class="strong-notice-footer cpu-button-row">
           <el-button
             v-if="currentStrongNotice?.link"
             plain
@@ -99,7 +99,7 @@
         </div>
       </div>
       <template #footer>
-        <div class="direct-notice-footer">
+        <div class="direct-notice-footer cpu-button-row">
           <el-button @click="deferDirectNotice">稍后查看</el-button>
           <el-button type="primary" @click="openDirectNotice">立即查看</el-button>
         </div>

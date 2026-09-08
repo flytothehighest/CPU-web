@@ -38,7 +38,7 @@
             </div>
           </div>
           <div class="status-tools">
-            <button type="button" class="chip" @click="goSubmit">返回提交</button>
+            <button data-cpu-button="action" type="button" class="chip" @click="goSubmit">返回提交</button>
             <input v-model="query" placeholder="搜索姓名、编号或文件名">
           </div>
           <div class="status-list">

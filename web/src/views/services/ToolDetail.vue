@@ -2,7 +2,7 @@
   <div class="tool-detail-page">
     <section v-if="tool" class="tool-shell">
       <div class="tool-head">
-        <button type="button" class="back-btn" @click="$router.push('/services/tools')">
+        <button data-cpu-button="text" type="button" class="back-btn" @click="$router.push('/services/tools')">
           <el-icon><ArrowLeft /></el-icon>
           <span>小工具</span>
         </button>

@@ -12,7 +12,7 @@
   </div>
 
   <div class="user-page" v-else-if="user">
-    <button type="button" class="back-btn" @click="goBack">
+    <button data-cpu-button="text" type="button" class="back-btn" @click="goBack">
       <el-icon><ArrowLeft /></el-icon>
       返回上一页
     </button>
@@ -42,7 +42,7 @@
           <span>声望 {{ user.reputation }}</span>
           <span v-if="!isIosNativeApp() && user.sponsorAmount > 0" class="sponsor-badge">已赞助 ¥{{ formatMoney(user.sponsorAmount) }}</span>
         </div>
-        <div v-if="user.id !== auth.user?.id && user.role !== 'bot'" class="profile-actions">
+        <div v-if="user.id !== auth.user?.id && user.role !== 'bot'" class="profile-actions cpu-button-row">
           <el-button type="primary" plain @click="startDirectMessage">
             <el-icon><Message /></el-icon>
             站内私聊

@@ -3,7 +3,7 @@
     <div class="admin-body">
       <div :class="['sidebar-scrim', { open: sidebarOpen }]" @click="sidebarOpen = false"></div>
       <div class="mobile-nav">
-        <button type="button" class="icon-button" title="菜单" @click="sidebarOpen = true"><AppIcon name="menu" /></button>
+        <button data-cpu-button="icon" type="button" class="icon-button" title="菜单" @click="sidebarOpen = true"><AppIcon name="menu" /></button>
         <div class="mobile-brand">
           <span class="brand-mark">药</span>
           <strong>文件收集工作台</strong>
@@ -27,7 +27,7 @@
               <span>{{ busyState.current }}/{{ busyState.total }}</span>
             </div>
             <div v-if="busyState.cancelable" class="busy-actions">
-              <button type="button" class="secondary" :disabled="busyState.cancelRequested" @click="cancelBusy">
+              <button data-cpu-button="action" type="button" class="secondary" :disabled="busyState.cancelRequested" @click="cancelBusy">
                 {{ busyState.cancelRequested ? "正在取消" : "取消" }}
               </button>
             </div>
@@ -42,7 +42,7 @@
             <strong>{{ siteTitle }}</strong>
             <small>CPU 校园小工具</small>
           </div>
-          <button type="button" class="icon-button mobile-only-close" title="关闭" @click="sidebarOpen = false">×</button>
+          <button data-cpu-button="icon" type="button" class="icon-button mobile-only-close" title="关闭" @click="sidebarOpen = false">×</button>
         </div>
         <a class="back-to-site sidebar-back-to-site" href="/services/tools/file_collect">← 返回文件收集菜单</a>
         <section class="sidebar-intro">
@@ -51,10 +51,10 @@
           <p>统一管理提交链接、回收记录、名单核对与文件导出。</p>
         </section>
 
-        <button type="button" class="primary full" :disabled="loading || denied" @click="openEditor()">新建收集任务</button>
+        <button data-cpu-button="primary" type="button" class="primary full" :disabled="loading || denied" @click="openEditor()">新建收集任务</button>
         <input v-model="taskQuery" class="sidebar-search" placeholder="搜索任务">
         <div class="task-list">
-          <button
+          <button data-cpu-button="surface"
             v-for="task in filteredTasks"
             :key="task.id"
             type="button"
@@ -80,12 +80,12 @@
             <h1>{{ detail?.title || "请选择或新建任务" }}</h1>
             <p>{{ activeMeta }}</p>
           </div>
-          <div class="top-actions">
-            <button type="button" :disabled="!detail" @click="openEditor(detail)">编辑任务</button>
-            <button v-if="viewer?.isSuperAdmin" type="button" :disabled="!detail" @click="bindTaskOwner">绑定创建者</button>
-            <button type="button" :disabled="!detail" @click="copySubmitLink">复制链接</button>
-            <button type="button" :disabled="!detail" @click="showQr">二维码</button>
-            <button type="button" :disabled="!detail" @click="openFileManager">文件管理</button>
+          <div class="top-actions cpu-button-row">
+            <button data-cpu-button="action" type="button" :disabled="!detail" @click="openEditor(detail)">编辑任务</button>
+            <button data-cpu-button="action" v-if="viewer?.isSuperAdmin" type="button" :disabled="!detail" @click="bindTaskOwner">绑定创建者</button>
+            <button data-cpu-button="action" type="button" :disabled="!detail" @click="copySubmitLink">复制链接</button>
+            <button data-cpu-button="action" type="button" :disabled="!detail" @click="showQr">二维码</button>
+            <button data-cpu-button="action" type="button" :disabled="!detail" @click="openFileManager">文件管理</button>
           </div>
         </header>
 
@@ -94,7 +94,7 @@
             <span class="empty-icon">!</span>
             <h2>暂时不能进入工作台</h2>
             <p>当前账号没有文件收集管理权限。公开提交链接仍可正常访问。</p>
-            <button type="button" class="primary" @click="$router.push('/services/tools')">返回小工具</button>
+            <button data-cpu-button="primary" type="button" class="primary" @click="$router.push('/services/tools')">返回小工具</button>
           </div>
         </section>
 
@@ -103,7 +103,7 @@
             <span class="empty-icon">+</span>
             <h2>{{ loading ? "正在加载任务" : "还没有选中任务" }}</h2>
             <p>创建一个收集任务后，系统会生成提交链接。提交者无需登录，填写表单并上传文件即可。</p>
-            <button type="button" class="primary" :disabled="loading" @click="openEditor()">新建收集任务</button>
+            <button data-cpu-button="primary" type="button" class="primary" :disabled="loading" @click="openEditor()">新建收集任务</button>
           </div>
         </section>
 
@@ -145,12 +145,12 @@
               <div class="share-row">
                 <span class="share-label">提交链接</span>
                 <input :value="absoluteSubmitUrl(detail)" readonly>
-                <button type="button" @click="copySubmitLink">复制</button>
+                <button data-cpu-button="action" type="button" @click="copySubmitLink">复制</button>
               </div>
               <div class="share-row">
                 <span class="share-label">成功名单</span>
                 <input :value="absoluteStatusUrl(detail)" readonly>
-                <button type="button" @click="copyStatusLink">复制</button>
+                <button data-cpu-button="action" type="button" @click="copyStatusLink">复制</button>
               </div>
             </div>
           </section>
@@ -164,11 +164,11 @@
                 </div>
                 <div class="table-tools">
                   <input v-model="submissionQuery" placeholder="搜索姓名、学号/考试号、文件">
-                  <button type="button" @click="openFileManager">文件管理</button>
-                  <button type="button" :disabled="repairing" @click="repairFilenames">修复乱码文件名</button>
-                  <button type="button" :disabled="repairing" @click="repairRemoteFilenames">修复云端文件名</button>
-                  <button type="button" @click="exportCsv">导出 CSV</button>
-                  <button type="button" :disabled="zipDownloading" @click="downloadZip">下载 ZIP</button>
+                  <button data-cpu-button="action" type="button" @click="openFileManager">文件管理</button>
+                  <button data-cpu-button="action" type="button" :disabled="repairing" @click="repairFilenames">修复乱码文件名</button>
+                  <button data-cpu-button="action" type="button" :disabled="repairing" @click="repairRemoteFilenames">修复云端文件名</button>
+                  <button data-cpu-button="action" type="button" @click="exportCsv">导出 CSV</button>
+                  <button data-cpu-button="action" type="button" :disabled="zipDownloading" @click="downloadZip">下载 ZIP</button>
                 </div>
               </div>
               <div v-if="!filteredSubmissions.length" class="table-empty">
@@ -202,10 +202,10 @@
                               <strong>{{ file.storedName }}</strong>
                               <span class="cell-sub">{{ file.originalName }} · {{ formatBytes(file.size) }}</span>
                             </div>
-                            <div class="file-actions">
-                              <button type="button" @click="previewFile(file)">查看</button>
-                              <button type="button" @click="downloadFile(file)">下载</button>
-                              <button type="button" class="danger" @click="deleteFile(file)">删除</button>
+                            <div class="file-actions cpu-button-row">
+                              <button data-cpu-button="action" type="button" @click="previewFile(file)">查看</button>
+                              <button data-cpu-button="action" type="button" @click="downloadFile(file)">下载</button>
+                              <button data-cpu-button="danger" type="button" class="danger" @click="deleteFile(file)">删除</button>
                             </div>
                           </div>
                         </td>
@@ -213,7 +213,7 @@
                           {{ formatDateTime(submission.createdAt) }}
                         </td>
                         <td>
-                          <button type="button" class="icon-button danger" title="删除" @click="deleteSubmission(submission.id)">×</button>
+                          <button data-cpu-button="danger" type="button" class="icon-button danger" title="删除" @click="deleteSubmission(submission.id)">×</button>
                         </td>
                       </tr>
                     </tbody>
@@ -226,7 +226,7 @@
                         <strong>{{ submission.data.name || `#${submission.id}` }}</strong>
                         <span>IP {{ submission.ip || "-" }}</span>
                       </div>
-                      <button type="button" class="mobile-delete-submission" title="删除提交" @click="deleteSubmission(submission.id)">删除</button>
+                      <button data-cpu-button="action" type="button" class="mobile-delete-submission" title="删除提交" @click="deleteSubmission(submission.id)">删除</button>
                     </div>
                     <dl class="mobile-submission-fields">
                       <template v-for="field in detail.fields.filter((field) => field.key !== 'name')" :key="field.key">
@@ -246,10 +246,10 @@
                           <strong>{{ file.storedName }}</strong>
                           <span>{{ file.originalName }} · {{ formatBytes(file.size) }}</span>
                         </div>
-                        <div class="file-actions">
-                          <button type="button" @click="previewFile(file)">查看</button>
-                          <button type="button" @click="downloadFile(file)">下载</button>
-                          <button type="button" class="danger" @click="deleteFile(file)">删除</button>
+                        <div class="file-actions cpu-button-row">
+                          <button data-cpu-button="action" type="button" @click="previewFile(file)">查看</button>
+                          <button data-cpu-button="action" type="button" @click="downloadFile(file)">下载</button>
+                          <button data-cpu-button="danger" type="button" class="danger" @click="deleteFile(file)">删除</button>
                         </div>
                       </div>
                     </div>
@@ -262,7 +262,7 @@
               <div class="side-block">
                 <div class="side-head">
                   <h2>缺交名单</h2>
-                  <button type="button" :disabled="!detail.stats?.missing?.length" @click="copyMissing">复制</button>
+                  <button data-cpu-button="action" type="button" :disabled="!detail.stats?.missing?.length" @click="copyMissing">复制</button>
                 </div>
                 <div class="missing-list">
                   <span v-for="item in detail.stats?.missing || []" :key="item">{{ item }}</span>
@@ -305,7 +305,7 @@
               <p class="eyebrow">任务配置</p>
               <h2>{{ editorMode === "edit" ? "编辑任务" : "新建任务" }}</h2>
             </div>
-            <button type="button" class="icon-button" title="关闭" @click="closeEditor">×</button>
+            <button data-cpu-button="icon" type="button" class="icon-button" title="关闭" @click="closeEditor">×</button>
           </div>
 
           <div class="steps-container">
@@ -356,13 +356,13 @@
                   <select v-model="templateKey" title="选择模板">
                     <option v-for="option in templateOptions" :key="option.key" :value="option.key">{{ option.label }}</option>
                   </select>
-                  <button type="button" class="chip" @click="applySelectedTemplate">应用模板</button>
-                  <button type="button" class="chip danger" :disabled="!viewer?.isManager || !templateKey.startsWith('custom:')" @click="deleteSelectedTemplate">删除模板</button>
+                  <button data-cpu-button="action" type="button" class="chip" @click="applySelectedTemplate">应用模板</button>
+                  <button data-cpu-button="danger" type="button" class="chip danger" :disabled="!viewer?.isManager || !templateKey.startsWith('custom:')" @click="deleteSelectedTemplate">删除模板</button>
                 </div>
               </div>
               <div class="section-line" style="margin-top: 16px;">
                 <h3>表单字段列表</h3>
-                <button type="button" class="chip primary" @click="addDraftField">+ 添加自定义字段</button>
+                <button data-cpu-button="primary" type="button" class="chip primary" @click="addDraftField">+ 添加自定义字段</button>
               </div>
               <div class="field-stack" style="margin-top: 10px;">
                 <div v-for="(field, index) in draft.fields" :key="index" class="field-row">
@@ -382,9 +382,9 @@
                     <input v-model="field.required" type="checkbox">
                     必填
                   </label>
-                  <div class="field-row-actions">
-                    <button type="button" class="chip" title="AI 生成正则" @click="generateRegex(field)">AI 正则</button>
-                    <button type="button" class="chip danger" :disabled="draft.fields.length <= 1" @click="draft.fields.splice(index, 1)">删除</button>
+                  <div class="field-row-actions cpu-button-row">
+                    <button data-cpu-button="action" type="button" class="chip" title="AI 生成正则" @click="generateRegex(field)">AI 正则</button>
+                    <button data-cpu-button="danger" type="button" class="chip danger" :disabled="draft.fields.length <= 1" @click="draft.fields.splice(index, 1)">删除</button>
                   </div>
                 </div>
               </div>
@@ -402,7 +402,7 @@
                   <h3>问卷题目</h3>
                   <p class="hint">不会参与文件命名，也不会影响覆盖提交的身份判断。</p>
                 </div>
-                <button type="button" class="chip primary" @click="addSurveyField">+ 添加题目</button>
+                <button data-cpu-button="primary" type="button" class="chip primary" @click="addSurveyField">+ 添加题目</button>
               </div>
 
               <div v-if="!draft.surveyFields.length" class="survey-empty">
@@ -414,9 +414,9 @@
                 <article v-for="(field, index) in draft.surveyFields" :key="field.id || index" class="survey-field-row">
                   <div class="survey-field-head">
                     <strong>题目 {{ index + 1 }}</strong>
-                    <div class="field-row-actions">
-                      <button type="button" class="chip" @click="duplicateSurveyField(index)">复制</button>
-                      <button type="button" class="chip danger" @click="draft.surveyFields.splice(index, 1)">删除</button>
+                    <div class="field-row-actions cpu-button-row">
+                      <button data-cpu-button="action" type="button" class="chip" @click="duplicateSurveyField(index)">复制</button>
+                      <button data-cpu-button="danger" type="button" class="chip danger" @click="draft.surveyFields.splice(index, 1)">删除</button>
                     </div>
                   </div>
                   <div class="survey-field-grid">
@@ -488,11 +488,11 @@
                   <label>文件命名格式
                     <input v-model="draft.renameTemplate">
                   </label>
-                  <div class="rename-tools">
-                    <button v-for="field in draft.fields" :key="`file-${field.key}`" type="button" class="chip" @click="insertToken('renameTemplate', `{${field.key}}`)">{{ field.label }}</button>
-                    <button type="button" class="chip" @click="insertToken('renameTemplate', '{original}')">原文件名</button>
-                    <button type="button" class="chip" @click="insertToken('renameTemplate', '{index}')">序号</button>
-                    <button type="button" class="chip" @click="draft.renameTemplate = '{name}-{student_id}'">恢复默认</button>
+                  <div class="rename-tools cpu-button-row">
+                    <button data-cpu-button="action" v-for="field in draft.fields" :key="`file-${field.key}`" type="button" class="chip" @click="insertToken('renameTemplate', `{${field.key}}`)">{{ field.label }}</button>
+                    <button data-cpu-button="action" type="button" class="chip" @click="insertToken('renameTemplate', '{original}')">原文件名</button>
+                    <button data-cpu-button="action" type="button" class="chip" @click="insertToken('renameTemplate', '{index}')">序号</button>
+                    <button data-cpu-button="action" type="button" class="chip" @click="draft.renameTemplate = '{name}-{student_id}'">恢复默认</button>
                   </div>
                   <p class="rename-preview">{{ renamePreview }}</p>
                   <label v-if="editorMode === 'edit'" class="checkline rename-existing">
@@ -505,9 +505,9 @@
                   <label>归档文件夹命名格式 (仅多文件有效)
                     <input v-model="draft.folderTemplate">
                   </label>
-                  <div class="rename-tools">
-                    <button v-for="field in draft.fields" :key="`folder-${field.key}`" type="button" class="chip" @click="insertToken('folderTemplate', `{${field.key}}`)">{{ field.label }}</button>
-                    <button type="button" class="chip" @click="draft.folderTemplate = '{name}-{student_id}'">恢复默认</button>
+                  <div class="rename-tools cpu-button-row">
+                    <button data-cpu-button="action" v-for="field in draft.fields" :key="`folder-${field.key}`" type="button" class="chip" @click="insertToken('folderTemplate', `{${field.key}}`)">{{ field.label }}</button>
+                    <button data-cpu-button="action" type="button" class="chip" @click="draft.folderTemplate = '{name}-{student_id}'">恢复默认</button>
                   </div>
                   <p class="rename-preview">{{ folderPreview }}</p>
                 </div>
@@ -529,12 +529,12 @@
           </div>
         </div>
 
-        <div class="drawer-actions">
-          <button type="button" class="secondary prev-action" :disabled="currentStep <= 1" @click="currentStep -= 1">上一步</button>
-          <button v-if="currentStep < lastStep" type="button" class="primary main-action" @click="currentStep += 1">下一步</button>
-          <button v-else type="button" class="primary main-action" :disabled="saving" @click="saveTask">保存任务</button>
-          <button type="button" class="secondary template-action" :disabled="!viewer?.isManager" @click="saveTemplateFromDraft">保存当前模版</button>
-          <button type="button" class="danger delete-action" :disabled="editorMode !== 'edit' || saving" @click="deleteTask">删除任务</button>
+        <div class="drawer-actions cpu-button-row">
+          <button data-cpu-button="action" type="button" class="secondary prev-action" :disabled="currentStep <= 1" @click="currentStep -= 1">上一步</button>
+          <button data-cpu-button="primary" v-if="currentStep < lastStep" type="button" class="primary main-action" @click="currentStep += 1">下一步</button>
+          <button data-cpu-button="primary" v-else type="button" class="primary main-action" :disabled="saving" @click="saveTask">保存任务</button>
+          <button data-cpu-button="action" type="button" class="secondary template-action" :disabled="!viewer?.isManager" @click="saveTemplateFromDraft">保存当前模版</button>
+          <button data-cpu-button="danger" type="button" class="danger delete-action" :disabled="editorMode !== 'edit' || saving" @click="deleteTask">删除任务</button>
         </div>
       </aside>
       <div :class="['drawer-scrim', { open: editorVisible }]" @click="closeEditor"></div>
@@ -542,7 +542,7 @@
       <dialog ref="qrDialog">
         <div class="dialog-head">
           <h2>提交二维码</h2>
-          <button type="button" class="icon-button" @click="qrDialog?.close()">×</button>
+          <button data-cpu-button="icon" type="button" class="icon-button" @click="qrDialog?.close()">×</button>
         </div>
         <img v-if="qrData" :src="qrImageUrl" alt="提交二维码">
         <p class="hint">{{ qrData }}</p>
@@ -554,12 +554,12 @@
             <h2>文件管理</h2>
             <p class="hint">{{ detail?.title || "" }} · 共 {{ allFiles.length }} 个文件</p>
           </div>
-          <button type="button" class="icon-button" @click="fileDialog?.close()">×</button>
+          <button data-cpu-button="icon" type="button" class="icon-button" @click="fileDialog?.close()">×</button>
         </div>
         <div class="file-manager-tools">
           <input v-model="fileQuery" placeholder="搜索文件名、姓名、编号">
-          <button type="button" :disabled="repairing" @click="repairFilenames">修复乱码文件名</button>
-          <button type="button" :disabled="repairing" @click="repairRemoteFilenames">修复云端文件名</button>
+          <button data-cpu-button="action" type="button" :disabled="repairing" @click="repairFilenames">修复乱码文件名</button>
+          <button data-cpu-button="action" type="button" :disabled="repairing" @click="repairRemoteFilenames">修复云端文件名</button>
         </div>
         <div class="file-manager">
           <div v-if="!filteredFiles.length" class="table-empty">
@@ -571,10 +571,10 @@
               <strong>{{ item.file.storedName }}</strong>
               <span>{{ item.owner }} {{ item.identifier ? `· ${item.identifier}` : "" }} · {{ formatBytes(item.file.size) }}</span>
             </div>
-            <div class="file-actions">
-              <button type="button" @click="previewFile(item.file)">预览</button>
-              <button type="button" @click="downloadFile(item.file)">下载</button>
-              <button type="button" class="danger" @click="deleteFile(item.file)">删除</button>
+            <div class="file-actions cpu-button-row">
+              <button data-cpu-button="action" type="button" @click="previewFile(item.file)">预览</button>
+              <button data-cpu-button="action" type="button" @click="downloadFile(item.file)">下载</button>
+              <button data-cpu-button="danger" type="button" class="danger" @click="deleteFile(item.file)">删除</button>
             </div>
           </article>
         </div>
@@ -587,9 +587,9 @@
             <p class="hint">{{ confirmState.body }}</p>
           </div>
         </div>
-        <div class="dialog-actions">
-          <button type="button" :class="confirmState.danger ? 'danger' : 'primary'" @click="resolveConfirm(true)">{{ confirmState.okText }}</button>
-          <button type="button" @click="resolveConfirm(false)">取消</button>
+        <div class="dialog-actions cpu-button-row">
+          <button data-cpu-button="action" type="button" :class="confirmState.danger ? 'danger' : 'primary'" @click="resolveConfirm(true)">{{ confirmState.okText }}</button>
+          <button data-cpu-button="action" type="button" @click="resolveConfirm(false)">取消</button>
         </div>
       </dialog>
 
@@ -603,9 +603,9 @@
         <label>{{ promptState.label }}
           <input v-model="promptState.value" @keyup.enter="resolvePrompt(true)">
         </label>
-        <div class="dialog-actions">
-          <button type="button" class="primary" @click="resolvePrompt(true)">{{ promptState.okText }}</button>
-          <button type="button" @click="resolvePrompt(false)">取消</button>
+        <div class="dialog-actions cpu-button-row">
+          <button data-cpu-button="primary" type="button" class="primary" @click="resolvePrompt(true)">{{ promptState.okText }}</button>
+          <button data-cpu-button="action" type="button" @click="resolvePrompt(false)">取消</button>
         </div>
       </dialog>
     </div>

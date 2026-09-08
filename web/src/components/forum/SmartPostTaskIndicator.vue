@@ -5,7 +5,7 @@
       class="smart-post-task-card"
       :class="[`is-${smartPost.status.state}`, { 'is-collapsed': !expanded }]"
     >
-      <button v-if="!expanded" type="button" class="smart-post-task-pill" :aria-label="collapsedLabel" @click="expanded = true">
+      <button data-cpu-button="surface" v-if="!expanded" type="button" class="smart-post-task-pill" :aria-label="collapsedLabel" @click="expanded = true">
         <span class="smart-post-task-dot" aria-hidden="true" />
         <span class="smart-post-task-pill-copy">
           <strong>{{ collapsedTitle }}</strong>

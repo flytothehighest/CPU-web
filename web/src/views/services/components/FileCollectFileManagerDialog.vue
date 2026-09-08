@@ -28,16 +28,16 @@
             <span>{{ item.folderPath }}</span>
             <small>{{ item.submission.identity || `提交 #${item.submission.id}` }} · {{ fmtDate(item.submission.createdAt) }} · {{ formatBytes(item.size) }}</small>
           </div>
-          <div class="file-manager-actions">
-            <button type="button" :disabled="isActionDisabled(item.id)" @click="emit('preview-file', item.id, item.storedName)">
+          <div class="file-manager-actions cpu-button-row">
+            <button data-cpu-button="action" type="button" :disabled="isActionDisabled(item.id)" @click="emit('preview-file', item.id, item.storedName)">
               <el-icon><View /></el-icon>
               {{ previewingId === item.id ? "预览中" : "预览" }}
             </button>
-            <button type="button" :disabled="isActionDisabled(item.id)" @click="emit('download-file', item.id, item.storedName)">
+            <button data-cpu-button="action" type="button" :disabled="isActionDisabled(item.id)" @click="emit('download-file', item.id, item.storedName)">
               <el-icon><Download /></el-icon>
               {{ downloadingId === item.id ? "下载中" : "下载" }}
             </button>
-            <button type="button" :disabled="isActionDisabled(item.id)" @click="emit('delete-file', item.id)">
+            <button data-cpu-button="action" type="button" :disabled="isActionDisabled(item.id)" @click="emit('delete-file', item.id)">
               <el-icon><Delete /></el-icon>
               删除
             </button>

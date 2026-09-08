@@ -11,7 +11,7 @@
         <el-button text :loading="markingAll" :disabled="markingAll" @click="readAll">全部标为已读</el-button>
       </div>
       <nav class="mobile-message-modes" aria-label="消息中心主要功能">
-        <button
+        <button data-cpu-button="option"
           type="button"
           :class="{ active: tab === 'private' }"
           :aria-current="tab === 'private' ? 'page' : undefined"
@@ -21,19 +21,19 @@
           <span class="mode-copy"><b>私聊</b><small>会话消息</small></span>
           <span v-if="msg.directUnreadCount" class="mode-count">{{ Math.min(msg.directUnreadCount, 99) }}</span>
         </button>
-        <button type="button" :class="{ active: tab !== 'settings' && tab !== 'private' }" :aria-current="tab !== 'settings' && tab !== 'private' ? 'page' : undefined" @click="selectMobileMessageMode('all')">
+        <button data-cpu-button="option" type="button" :class="{ active: tab !== 'settings' && tab !== 'private' }" :aria-current="tab !== 'settings' && tab !== 'private' ? 'page' : undefined" @click="selectMobileMessageMode('all')">
           <span class="mode-icon"><el-icon><Bell /></el-icon></span>
           <span class="mode-copy"><b>通知</b><small>{{ unreadCount ? `${unreadCount} 条未读` : "全部已读" }}</small></span>
           <span v-if="unreadCount" class="mode-count">{{ Math.min(unreadCount, 99) }}</span>
         </button>
-        <button type="button" :class="{ active: tab === 'settings' }" :aria-current="tab === 'settings' ? 'page' : undefined" @click="selectMobileMessageMode('settings')">
+        <button data-cpu-button="option" type="button" :class="{ active: tab === 'settings' }" :aria-current="tab === 'settings' ? 'page' : undefined" @click="selectMobileMessageMode('settings')">
           <span class="mode-icon"><el-icon><Setting /></el-icon></span>
           <span class="mode-copy"><b>设置</b><small>通知渠道</small></span>
         </button>
       </nav>
     </div>
     <nav v-if="tab !== 'private' && tab !== 'settings'" class="mobile-notice-filters" aria-label="通知分类">
-      <button
+      <button data-cpu-button="option"
         v-for="item in mobileNoticeTabs"
         :key="item.name"
         type="button"
@@ -163,7 +163,7 @@
                 <div ref="wechatSubscribeContainer" class="wechat-subscribe-button-host" />
                 <small v-if="wechatSubscribeState">{{ wechatSubscribeState }}</small>
               </div>
-              <div class="qq-channel-actions">
+              <div class="qq-channel-actions cpu-button-row">
                 <el-button
                   v-if="!wechatProfile?.binding && isWechatBrowser"
                   type="primary"
@@ -256,7 +256,7 @@
                 </span>
                 <el-switch v-model="settings.qqBotNotifyEnabled" />
               </label>
-              <div class="qq-channel-actions">
+              <div class="qq-channel-actions cpu-button-row">
                 <el-button
                   v-if="!qqBotProfile?.binding"
                   type="primary"
@@ -312,7 +312,7 @@
           </div>
           <el-divider />
           <h4>小工具提醒</h4>
-          <button type="button" class="settings-action-row" @click="openQqBotReminderSettings">
+          <button data-cpu-button="surface" type="button" class="settings-action-row" @click="openQqBotReminderSettings">
             <span class="settings-action-icon">
               <el-icon><Bell /></el-icon>
             </span>
@@ -350,7 +350,7 @@
         </div>
       </div>
       <template #footer>
-        <div class="notice-actions">
+        <div class="notice-actions cpu-button-row">
           <el-button v-if="canOpenActiveNoticeTarget" @click="goNoticeLink">前往查看</el-button>
           <el-button
             v-if="canRequestManualReviewFromNotice"

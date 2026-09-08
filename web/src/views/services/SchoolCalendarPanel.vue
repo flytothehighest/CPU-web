@@ -1,7 +1,7 @@
 <template>
   <div class="calendar-map-panel">
     <div class="view-switcher" role="tablist" aria-label="校历与地图">
-      <button
+      <button data-cpu-button="option"
         id="calendar-tab"
         type="button"
         role="tab"
@@ -13,7 +13,7 @@
         <el-icon><Calendar /></el-icon>
         校历
       </button>
-      <button
+      <button data-cpu-button="option"
         id="map-tab"
         type="button"
         role="tab"
@@ -68,12 +68,12 @@
             <p>完整教学安排以学校发布的原图和后续通知为准</p>
           </div>
           <div class="media-actions">
-            <button type="button" @click="openImageViewer('calendar')">放大查看</button>
+            <button data-cpu-button="action" type="button" @click="openImageViewer('calendar')">放大查看</button>
             <a :href="calendar.sourcePage" target="_blank" rel="noopener noreferrer">官方页面</a>
             <a :href="calendar.officialPdf" target="_blank" rel="noopener noreferrer">PDF</a>
           </div>
         </div>
-        <button class="image-frame calendar-image" type="button" aria-label="放大查看校历原图" @click="openImageViewer('calendar')">
+        <button data-cpu-button="media" class="image-frame calendar-image" type="button" aria-label="放大查看校历原图" @click="openImageViewer('calendar')">
           <img :src="calendarImage" :alt="`${calendar.title}${calendar.academicYear}`" loading="lazy" />
         </button>
       </section>
@@ -102,7 +102,7 @@
             <p>点击地图可放大拖动查看，实际位置与通行安排以校内指引为准</p>
           </div>
           <div class="media-actions">
-            <button type="button" @click="openImageViewer('map')">放大查看</button>
+            <button data-cpu-button="action" type="button" @click="openImageViewer('map')">放大查看</button>
             <a
               :href="campusMapOriginalDownloadUrl"
               download="中国药科大学校园地图-原图.png"
@@ -111,7 +111,7 @@
             >下载原图</a>
           </div>
         </div>
-        <button class="image-frame map-image" type="button" aria-label="放大查看校园地图" @click="openImageViewer('map')">
+        <button data-cpu-button="media" class="image-frame map-image" type="button" aria-label="放大查看校园地图" @click="openImageViewer('map')">
           <img :src="campusMapOriginalViewUrl" alt="中国药科大学校园地图，含教学楼、宿舍区、出入口和校园设施" loading="lazy" />
         </button>
         <p class="image-credit">图片来自用户提供素材，图中署名：药学卷王。</p>

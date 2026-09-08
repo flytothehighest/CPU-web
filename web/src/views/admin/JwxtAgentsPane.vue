@@ -5,7 +5,7 @@
         <h2>教务服务节点</h2>
         <p>Agent 主动连接本站，不需要公网端口或 FRP。会话正常粘在创建节点，节点故障时可加密迁移到其他教务节点。</p>
       </div>
-      <div class="head-actions">
+      <div class="head-actions cpu-button-row">
         <el-button @click="load">刷新状态</el-button>
         <el-button type="primary" :loading="saving" @click="save">保存配置</el-button>
       </div>
@@ -157,7 +157,7 @@
             {{ agent.replicaIdentityPinned ? 'Agent 加密身份已固定' : '首次上线后固定加密身份' }}
           </span>
           <span class="token-state">密钥已配置，服务端不会再次返回明文</span>
-          <div>
+          <div class="cpu-button-row">
             <el-button
               text
               type="success"

@@ -1,7 +1,7 @@
 <template>
   <div class="grade-lookup-page">
     <section class="grade-sheet" v-loading="loading">
-      <button type="button" class="back-btn" @click="$router.push('/services/tools/grade_check')">
+      <button data-cpu-button="text" type="button" class="back-btn" @click="$router.push('/services/tools/grade_check')">
         <el-icon><ArrowLeft /></el-icon>
         <span>成绩表核对</span>
       </button>

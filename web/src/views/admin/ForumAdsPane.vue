@@ -89,7 +89,7 @@
             :active-text="campaignPlacementSelected ? '活动面向全部用户' : 'VIP 免广告'"
           />
         </div>
-        <div class="form-actions">
+        <div class="form-actions cpu-button-row">
           <el-button type="primary" :loading="saving" @click="save">{{ editingId ? "保存修改" : "创建广告" }}</el-button>
           <el-button @click="resetForm">清空</el-button>
         </div>
@@ -135,7 +135,7 @@
               </div>
             </div>
           </div>
-          <div class="row-actions">
+          <div class="row-actions cpu-button-row">
             <el-button size="small" @click="edit(item)">编辑</el-button>
             <el-button size="small" type="danger" plain @click="remove(item)">删除</el-button>
           </div>

@@ -24,7 +24,7 @@
       <p>校园网自动连接、学习通辅助与桌面常驻能力已经整合到药大拾间桌面客户端。</p>
 
       <div class="platform-picker" role="tablist" aria-label="选择桌面客户端平台">
-        <button
+        <button data-cpu-button="option"
           type="button"
           role="tab"
           :aria-selected="activePlatform === 'windows'"
@@ -34,7 +34,7 @@
           <strong>Windows</strong>
           <small>10 / 11 · 64 位</small>
         </button>
-        <button
+        <button data-cpu-button="option"
           type="button"
           role="tab"
           :aria-selected="activePlatform === 'macos'"
@@ -68,7 +68,7 @@
     </div>
 
     <template #footer>
-      <div class="dialog-actions">
+      <div class="dialog-actions cpu-button-row">
         <el-button @click="$emit('update:modelValue', false)">关闭</el-button>
         <el-button type="primary" :loading="loading" :disabled="!currentDownload.available" @click="openDownload">
           <el-icon><Download /></el-icon>

@@ -12,7 +12,7 @@
     <section v-if="campaignAds.length" class="campaign-section">
       <ForumAdCarousel :ads="campaignAds" compact />
       <div class="campaign-grid">
-        <button
+        <button data-cpu-button="surface"
           v-for="theme in CAMPUS_LIFE_ACTIVITY_THEMES"
           :key="theme.key"
           type="button"
@@ -27,7 +27,7 @@
     </section>
     <div v-if="campaignAds.length" class="compose-divider"><span>其他发布</span></div>
     <div class="compose-grid">
-      <button v-for="action in actions" :key="action.label" type="button" class="compose-action" @click="go(action.to)">
+      <button data-cpu-button="surface" v-for="action in actions" :key="action.label" type="button" class="compose-action" @click="go(action.to)">
         <span class="compose-icon"><AppIcon :name="action.icon" /></span>
         <span><b>{{ action.label }}</b><small>{{ action.description }}</small></span>
       </button>

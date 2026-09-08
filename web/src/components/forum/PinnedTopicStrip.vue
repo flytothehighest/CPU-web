@@ -4,7 +4,7 @@
       <span class="pinned-label">重要</span>
       <span class="pinned-count">{{ topics.length }} 条置顶</span>
     </div>
-    <button
+    <button data-cpu-button="surface"
       v-for="(topic, index) in topics"
       :key="topic.id"
       :ref="(element) => setTopicElement(topic.id, element)"

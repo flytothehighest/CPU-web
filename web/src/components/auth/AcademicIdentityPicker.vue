@@ -5,7 +5,7 @@
       <span v-if="hint">{{ hint }}</span>
     </div>
     <div class="identity-switch" :aria-label="ariaLabel" role="radiogroup">
-      <button
+      <button data-cpu-button="option"
         v-for="option in academicIdentityOptions"
         :key="option.value"
         type="button"

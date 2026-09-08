@@ -7,16 +7,16 @@
           <h1>失物招领</h1>
           <p>公开信息，私下核验。联系方式只在认领流程或私聊中发送。</p>
         </div>
-        <div class="mobile-lost-actions">
-          <button type="button" @click="openPublish('found')">
+        <div class="mobile-lost-actions cpu-button-row">
+          <button data-cpu-button="action" type="button" @click="openPublish('found')">
             <span class="mobile-action-icon"><el-icon><Plus /></el-icon></span>
             <span><b>发布招领</b><small>我捡到了</small></span>
           </button>
-          <button type="button" @click="openPublish('lost')">
+          <button data-cpu-button="action" type="button" @click="openPublish('lost')">
             <span class="mobile-action-icon is-lost"><el-icon><Search /></el-icon></span>
             <span><b>发布寻物</b><small>我丢了东西</small></span>
           </button>
-          <button v-if="auth.isLoggedIn" type="button" class="mobile-mine-action" @click="mineOpen = true; loadMine()">
+          <button data-cpu-button="action" v-if="auth.isLoggedIn" type="button" class="mobile-mine-action" @click="mineOpen = true; loadMine()">
             我的发布与认领 <el-icon><ArrowRight /></el-icon>
           </button>
         </div>
@@ -27,22 +27,22 @@
           <el-input v-model="filters.q" clearable placeholder="搜索物品、地点或描述" @clear="applyFilters">
             <template #prefix><el-icon><Search /></el-icon></template>
           </el-input>
-          <button type="button" class="mobile-filter-button" aria-label="更多筛选" @click="mobileFiltersOpen = true">
+          <button data-cpu-button="action" type="button" class="mobile-filter-button" aria-label="更多筛选" @click="mobileFiltersOpen = true">
             <el-icon><Filter /></el-icon>
             <span v-if="mobileFilterCount">{{ mobileFilterCount }}</span>
           </button>
         </form>
         <nav class="mobile-kind-tabs" aria-label="信息类型">
-          <button type="button" :class="{ active: !filters.kind }" @click="filters.kind = ''; applyFilters()">全部</button>
-          <button type="button" :class="{ active: filters.kind === 'found' }" @click="filters.kind = 'found'; applyFilters()">捡到物品</button>
-          <button type="button" :class="{ active: filters.kind === 'lost' }" @click="filters.kind = 'lost'; applyFilters()">寻找物品</button>
+          <button data-cpu-button="option" type="button" :class="{ active: !filters.kind }" @click="filters.kind = ''; applyFilters()">全部</button>
+          <button data-cpu-button="option" type="button" :class="{ active: filters.kind === 'found' }" @click="filters.kind = 'found'; applyFilters()">捡到物品</button>
+          <button data-cpu-button="option" type="button" :class="{ active: filters.kind === 'lost' }" @click="filters.kind = 'lost'; applyFilters()">寻找物品</button>
         </nav>
       </section>
 
       <section class="mobile-lost-feed">
         <header class="mobile-list-head">
           <div><h2>最新信息</h2><p>{{ total }} 条公开记录</p></div>
-          <button type="button" :disabled="loading" @click="loadItems">{{ loading ? '刷新中' : '刷新' }}</button>
+          <button data-cpu-button="action" type="button" :disabled="loading" @click="loadItems">{{ loading ? '刷新中' : '刷新' }}</button>
         </header>
         <div v-loading="loading" class="mobile-item-list">
           <article
@@ -93,7 +93,7 @@
         <span class="eyebrow">校园互助 · 信息公开 · 私下核验</span>
         <h1>失物招领</h1>
         <p>把丢失和捡到的信息放到一个清楚、好找的地方。联系方式不会公开展示，认领通过站内表单完成。</p>
-        <div class="hero-actions">
+        <div class="hero-actions cpu-button-row">
           <el-button size="large" @click="openPublish('found')">我捡到了</el-button>
           <el-button size="large" @click="openPublish('lost')">我丢了</el-button>
           <el-button v-if="auth.isLoggedIn" size="large" @click="mineOpen = true; loadMine()">我的信息</el-button>
@@ -103,9 +103,9 @@
 
     <section class="filter-card cpu-card">
       <div class="quick-types">
-        <button type="button" :class="{ active: !filters.kind }" @click="filters.kind = ''; applyFilters()">全部</button>
-        <button type="button" :class="{ active: filters.kind === 'found' }" @click="filters.kind = 'found'; applyFilters()">我捡到了</button>
-        <button type="button" :class="{ active: filters.kind === 'lost' }" @click="filters.kind = 'lost'; applyFilters()">我丢了</button>
+        <button data-cpu-button="option" type="button" :class="{ active: !filters.kind }" @click="filters.kind = ''; applyFilters()">全部</button>
+        <button data-cpu-button="option" type="button" :class="{ active: filters.kind === 'found' }" @click="filters.kind = 'found'; applyFilters()">我捡到了</button>
+        <button data-cpu-button="option" type="button" :class="{ active: filters.kind === 'lost' }" @click="filters.kind = 'lost'; applyFilters()">我丢了</button>
       </div>
       <div class="filters">
         <el-input v-model="filters.q" clearable placeholder="搜索物品、地点或描述" @keyup.enter="applyFilters">
@@ -171,7 +171,7 @@
         <el-form-item label="时间范围"><el-date-picker v-model="filters.dates" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始日期" end-placeholder="结束日期" /></el-form-item>
         <el-form-item label="认领状态"><el-select v-model="filters.status" clearable placeholder="全部状态"><el-option label="等待认领" value="active" /><el-option label="已认领" value="claimed" /></el-select></el-form-item>
       </el-form>
-      <div class="mobile-filter-actions"><el-button @click="resetMobileFilters">重置</el-button><el-button type="primary" @click="mobileFiltersOpen = false; applyFilters()">查看结果</el-button></div>
+      <div class="mobile-filter-actions cpu-button-row"><el-button @click="resetMobileFilters">重置</el-button><el-button type="primary" @click="mobileFiltersOpen = false; applyFilters()">查看结果</el-button></div>
     </el-drawer>
 
     <el-dialog v-model="publishOpen" width="min(720px, 94vw)" :title="publishForm.kind === 'found' ? '发布：我捡到了' : '发布：我丢了'" destroy-on-close>
@@ -179,15 +179,15 @@
         <div class="two-cols">
           <el-form-item label="发布类型" required>
             <div class="choice-tabs" role="radiogroup" aria-label="发布类型">
-              <button type="button" :class="{ active: publishForm.kind === 'found' }" @click="publishForm.kind = 'found'">我捡到了</button>
-              <button type="button" :class="{ active: publishForm.kind === 'lost' }" @click="publishForm.kind = 'lost'">我丢了</button>
+              <button data-cpu-button="option" type="button" :class="{ active: publishForm.kind === 'found' }" @click="publishForm.kind = 'found'">我捡到了</button>
+              <button data-cpu-button="option" type="button" :class="{ active: publishForm.kind === 'lost' }" @click="publishForm.kind = 'lost'">我丢了</button>
             </div>
           </el-form-item>
           <el-form-item label="物品名称" required><el-input v-model="publishForm.itemName" maxlength="80" placeholder="例如：蓝色校园卡套" /></el-form-item>
         </div>
         <el-form-item label="校区" required>
           <div class="choice-tabs campus-tabs" role="radiogroup" aria-label="校区">
-            <button v-for="campus in campusOptions" :key="campus" type="button" :class="{ active: publishForm.campus === campus }" @click="publishForm.campus = campus">{{ campus }}</button>
+            <button data-cpu-button="option" v-for="campus in campusOptions" :key="campus" type="button" :class="{ active: publishForm.campus === campus }" @click="publishForm.campus = campus">{{ campus }}</button>
           </div>
         </el-form-item>
         <div class="two-cols location-time-row">
@@ -205,7 +205,7 @@
         </el-form-item>
         <el-form-item label="图片（最多 6 张）">
           <div class="image-grid">
-            <div v-for="(url, index) in publishForm.images" :key="url" class="image-cell"><img :src="url" alt="物品图片" @click="openPublishImages(index)" /><button type="button" @click="publishForm.images.splice(index, 1)">×</button></div>
+            <div v-for="(url, index) in publishForm.images" :key="url" class="image-cell"><img :src="url" alt="物品图片" @click="openPublishImages(index)" /><button data-cpu-button="media" type="button" @click="publishForm.images.splice(index, 1)">×</button></div>
             <label v-if="publishForm.images.length < 6" class="upload-cell" :class="{ disabled: uploading }">
               <input type="file" accept="image/*" multiple :disabled="uploading" @change="uploadImages" />
               <el-icon :class="{ 'is-loading': uploading }"><Loading v-if="uploading" /><Plus v-else /></el-icon>
@@ -234,7 +234,7 @@
         <p v-if="detail.description" class="description">{{ detail.description }}</p>
         <el-alert v-if="!canViewRawDetail" title="联系方式已保护" description="请通过站内认领表单描述物品特征或持有凭据。发布者核验通过后，再按双方留下的联系方式完成交接。" type="info" :closable="false" show-icon />
         <div v-else-if="detail.contact" class="private-contact"><small>仅发布者和失物招领管理员可见的原始联系方式</small><strong>{{ detail.contact }}</strong></div>
-        <div class="detail-actions">
+        <div class="detail-actions cpu-button-row">
           <el-button v-if="detail.status === 'active' && !detail.mine" type="primary" @click="openClaim">{{ detail.kind === 'found' ? '这是我的，提交认领' : '我找到了，联系失主' }}</el-button>
           <el-button v-if="canDirectMessageDetail" plain @click="openDirectChat">私聊发布者</el-button>
           <el-button v-if="detail.mine && detail.status === 'active'" type="success" plain @click="setItemStatus('claimed')">标记已认领</el-button>
@@ -243,7 +243,7 @@
           <el-button v-if="auth.canAccessForum" @click="router.push(`/forum/topic/${detail.topicId}`)">去论坛讨论（{{ detail.topic.replyCount }}）</el-button>
         </div>
         <section v-if="detail.myClaim" class="my-claim"><h3>我的认领申请</h3><el-tag :type="claimTagType(detail.myClaim.status)">{{ claimStatusText(detail.myClaim.status) }}</el-tag><p>{{ detail.myClaim.message }}</p><el-button v-if="detail.myClaim.status === 'pending'" text type="danger" @click="withdrawClaim(detail.myClaim.id)">撤回申请</el-button></section>
-        <section v-if="canViewRawDetail && detail.claims?.length" class="claims"><h3>认领申请</h3><article v-for="claim in detail.claims" :key="claim.id"><div><strong>{{ claim.claimant?.nickname || '认领同学' }}</strong><el-tag size="small" :type="claimTagType(claim.status)">{{ claimStatusText(claim.status) }}</el-tag></div><p>{{ claim.message }}</p><p v-if="claim.evidence"><b>核验线索：</b>{{ claim.evidence }}</p><p class="claim-contact"><b>联系方式：</b>{{ claim.contact }}</p><footer v-if="claim.status === 'pending'"><el-button size="small" type="success" @click="resolveClaim(claim.id, 'accepted')">核验通过</el-button><el-button size="small" @click="resolveClaim(claim.id, 'rejected')">不匹配</el-button></footer></article></section>
+        <section v-if="canViewRawDetail && detail.claims?.length" class="claims"><h3>认领申请</h3><article v-for="claim in detail.claims" :key="claim.id"><div><strong>{{ claim.claimant?.nickname || '认领同学' }}</strong><el-tag size="small" :type="claimTagType(claim.status)">{{ claimStatusText(claim.status) }}</el-tag></div><p>{{ claim.message }}</p><p v-if="claim.evidence"><b>核验线索：</b>{{ claim.evidence }}</p><p class="claim-contact"><b>联系方式：</b>{{ claim.contact }}</p><footer class="cpu-button-row" v-if="claim.status === 'pending'"><el-button size="small" type="success" @click="resolveClaim(claim.id, 'accepted')">核验通过</el-button><el-button size="small" @click="resolveClaim(claim.id, 'rejected')">不匹配</el-button></footer></article></section>
       </div>
       <div v-else class="detail detail-skeleton" aria-live="polite">
         <el-skeleton :rows="7" animated />
@@ -257,7 +257,7 @@
     </el-dialog>
 
     <el-drawer v-model="mineOpen" size="min(760px, 100vw)" title="我的失物招领">
-      <el-tabs v-model="mineTab"><el-tab-pane label="我发布的" name="published"><div class="mine-list"><button v-for="item in mine.published" :key="item.id" type="button" @click="mineOpen = false; openDetail(item.id)"><span>{{ item.kind === 'found' ? '捡到' : '寻找' }}</span><strong>{{ item.itemName }}</strong><small>{{ item.location }} · {{ statusText(item.status) }}</small></button><el-empty v-if="!mine.published.length" description="还没有发布记录" /></div></el-tab-pane><el-tab-pane label="我的认领" name="claims"><div class="mine-list"><button v-for="claim in mine.claims" :key="claim.id" type="button" @click="mineOpen = false; openDetail(claim.itemId)"><span>认领</span><strong>{{ claim.item?.itemName }}</strong><small>{{ claimStatusText(claim.status) }}</small></button><el-empty v-if="!mine.claims.length" description="还没有认领记录" /></div></el-tab-pane></el-tabs>
+      <el-tabs v-model="mineTab"><el-tab-pane label="我发布的" name="published"><div class="mine-list"><button data-cpu-button="surface" v-for="item in mine.published" :key="item.id" type="button" @click="mineOpen = false; openDetail(item.id)"><span>{{ item.kind === 'found' ? '捡到' : '寻找' }}</span><strong>{{ item.itemName }}</strong><small>{{ item.location }} · {{ statusText(item.status) }}</small></button><el-empty v-if="!mine.published.length" description="还没有发布记录" /></div></el-tab-pane><el-tab-pane label="我的认领" name="claims"><div class="mine-list"><button data-cpu-button="surface" v-for="claim in mine.claims" :key="claim.id" type="button" @click="mineOpen = false; openDetail(claim.itemId)"><span>认领</span><strong>{{ claim.item?.itemName }}</strong><small>{{ claimStatusText(claim.status) }}</small></button><el-empty v-if="!mine.claims.length" description="还没有认领记录" /></div></el-tab-pane></el-tabs>
     </el-drawer>
   </div>
 </template>

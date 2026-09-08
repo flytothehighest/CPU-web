@@ -116,7 +116,7 @@
           </el-form-item>
         </el-form>
 
-        <div class="actions">
+        <div class="actions cpu-button-row">
           <el-button type="primary" :loading="saving" :disabled="saving || configDisabled" @click="saveConfig">保存配置</el-button>
           <el-button :loading="dispatching" :disabled="dispatching || configDisabled" @click="dispatchNow">立即派发最近通知</el-button>
           <el-button v-if="config?.hasAccessToken" text type="danger" :loading="clearingToken" :disabled="clearingToken || configDisabled" @click="clearToken">清除 Token</el-button>
@@ -234,7 +234,7 @@
             <span>新成员欢迎：{{ row.memberWelcomeEnabled ? "开启" : "关闭" }}</span>
             <span>群管授权：{{ row.commandUserQqIds.length ? `${row.commandUserQqIds.length} 人` : "未设置" }}</span>
           </div>
-          <div class="record-actions">
+          <div class="record-actions cpu-button-row">
             <el-button link type="primary" :disabled="isGroupBusy(row)" @click="openGroupDialog(row)">编辑</el-button>
             <el-button link type="danger" :loading="isGroupBusy(row)" :disabled="isGroupBusy(row)" @click="removeGroup(row)">删除</el-button>
           </div>

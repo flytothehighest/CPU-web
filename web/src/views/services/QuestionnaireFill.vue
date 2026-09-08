@@ -1,7 +1,7 @@
 <template>
   <div class="questionnaire-page">
     <section class="fill-card" v-loading="loading">
-      <button type="button" class="back-btn" @click="$router.push('/services/tools')">
+      <button data-cpu-button="text" type="button" class="back-btn" @click="$router.push('/services/tools')">
         <el-icon><ArrowLeft /></el-icon>
         <span>校园小工具</span>
       </button>
@@ -77,7 +77,7 @@
               @update:model-value="answers[field.id] = String($event || '')"
             />
             <div v-else-if="field.type === 'rating'" class="rating-field">
-              <button
+              <button data-cpu-button="option"
                 v-for="score in ratingRange(field)"
                 :key="score"
                 type="button"

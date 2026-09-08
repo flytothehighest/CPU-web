@@ -32,12 +32,12 @@
 
   <div v-else-if="topic" class="topic-page">
     <header class="mobile-topic-header">
-      <button type="button" class="mobile-topic-back" :aria-label="backLabel" @click="goBackFromTopic">
+      <button data-cpu-button="icon" type="button" class="mobile-topic-back" :aria-label="backLabel" @click="goBackFromTopic">
         <el-icon><ArrowLeft /></el-icon>
       </button>
       <strong>{{ boardDisplayName || "帖子详情" }}</strong>
       <el-dropdown trigger="click" placement="bottom-end" @command="onMobileTopicCommand">
-        <button type="button" class="mobile-topic-more" aria-label="帖子操作">
+        <button data-cpu-button="icon" type="button" class="mobile-topic-more" aria-label="帖子操作">
           <el-icon><MoreFilled /></el-icon>
         </button>
         <template #dropdown>
@@ -57,10 +57,10 @@
     <!-- 主帖 -->
     <article class="cpu-card main-post">
       <header class="post-head">
-        <button type="button" class="board-back board-back-btn" @click="goBackFromTopic">
+        <button data-cpu-button="text" type="button" class="board-back board-back-btn" @click="goBackFromTopic">
           <el-icon><ArrowLeft /></el-icon> {{ backLabel }}
         </button>
-        <div class="actions">
+        <div class="actions cpu-button-row">
           <el-button v-if="canEdit" text :disabled="isTopicActionBusy || topicEditDisabled" @click="onEdit">{{ topicEditLabel }}</el-button>
           <el-dropdown v-if="canPin || canEdit" trigger="click" @command="onTopicManageCommand">
             <el-button text :loading="isTopicActionBusy" :disabled="isTopicActionBusy">帖子管理⌄</el-button>
@@ -92,13 +92,13 @@
               <span v-else>{{ displayAuthorName(topic) }}</span>
               <UserVerificationBadge :verification="topic.author?.verification" />
               <UserReputationBadge :level="topic.author?.reputationLevel" />
-              <button
+              <button data-cpu-button="text"
                 v-if="canRemarkPost(topic)"
                 type="button"
                 class="post-private-chat-button post-remark-button"
                 @click="editPostAuthorRemark(topic)"
               >{{ userRemarkForPost(topic) ? "改备注" : "备注" }}</button>
-              <button
+              <button data-cpu-button="text"
                 v-if="canPrivateChatPost(topic)"
                 type="button"
                 class="post-private-chat-button"
@@ -217,7 +217,7 @@
           <b>{{ topic.lostFoundItem.kind === 'found' ? '这是一条招领信息' : '这是一条寻物信息' }}</b>
           <span>前往对应失物招领详情，可提交认领说明、提供线索或私聊发布者。</span>
         </div>
-        <button type="button" @click="openLinkedLostFoundItem">
+        <button data-cpu-button="action" type="button" @click="openLinkedLostFoundItem">
           {{ lostFoundActionLabel }} <el-icon><ArrowRight /></el-icon>
         </button>
       </section>
@@ -294,7 +294,7 @@
           <p v-if="topic.aiReviewReason">AI 说明：{{ topic.aiReviewReason }}</p>
           <p class="cpu-muted">通过后会立即公开展示；驳回后会继续隐藏，并给作者发送结果通知。</p>
         </div>
-        <div class="topic-review-actions">
+        <div class="topic-review-actions cpu-button-row">
           <el-button
             type="success"
             :loading="topicAdminReviewAction === 'approved'"
@@ -321,7 +321,7 @@
           <p v-if="topic.aiReviewReason">审核说明：{{ topic.aiReviewReason }}</p>
           <p class="cpu-muted">你可以修改后再试，或申请人工复核。复核期间暂时不能继续提交新内容。</p>
         </div>
-        <div class="topic-review-actions">
+        <div class="topic-review-actions cpu-button-row">
           <el-button type="primary" :disabled="requestingTopicManualReview" @click="onEdit">修改后重新提交</el-button>
           <el-button type="warning" :loading="requestingTopicManualReview" :disabled="requestingTopicManualReview" @click="topicManualReviewConfirmOpen = true">申请人工复核</el-button>
         </div>
@@ -337,7 +337,7 @@
         <MarkdownView :content="displayContent" class="topic-markdown" clickable-images media-loading="eager" />
       </div>
 
-      <footer class="post-foot">
+      <footer class="post-foot cpu-button-row">
         <el-button text class="post-action" :class="{ 'is-liked': liked }" :aria-pressed="liked" :icon="liked ? StarFilled : Star" :loading="topicActionBusy === 'like'" :disabled="isTopicActionBusy || topic.hidden" @click="onLike">
           <span>{{ liked ? '已赞' : '点赞' }}</span><span class="post-action-count">{{ topic.likeCount }}</span>
         </el-button>
@@ -387,13 +387,13 @@
               >{{ displayAuthorName(entry.item) }}</router-link>
               <span v-else class="author">{{ displayAuthorName(entry.item) }}</span>
               <UserVerificationBadge :verification="entry.item.author?.verification" />
-              <button
+              <button data-cpu-button="text"
                 v-if="canRemarkPost(entry.item)"
                 type="button"
                 class="post-private-chat-button post-remark-button"
                 @click="editPostAuthorRemark(entry.item)"
               >{{ userRemarkForPost(entry.item) ? "改备注" : "备注" }}</button>
-              <button
+              <button data-cpu-button="text"
                 v-if="canPrivateChatPost(entry.item)"
                 type="button"
                 class="post-private-chat-button"
@@ -465,7 +465,7 @@
       </template>
     </section>
 
-    <button v-if="canReply && auth.isLoggedIn" type="button" class="mobile-reply-composer" @click="openReplyDialog()">
+    <button data-cpu-button="surface" v-if="canReply && auth.isLoggedIn" type="button" class="mobile-reply-composer" @click="openReplyDialog()">
       <UserAvatar :size="34" :src="auth.user?.avatar" :name="auth.user?.nickname" :seed="auth.user?.id" alt="我的头像" />
       <span>说点什么…</span>
       <b>发布</b>
@@ -481,7 +481,7 @@
       class="reply-dialog"
       modal-class="reply-dialog-overlay"
     >
-      <button v-if="isMobileLayout" type="button" class="reply-original-peek" @click="peekOriginalPost">
+      <button data-cpu-button="text" v-if="isMobileLayout" type="button" class="reply-original-peek" @click="peekOriginalPost">
         <span>需要回看帖子？草稿会自动保留</span>
         <b>收起并回看</b>
       </button>
@@ -511,7 +511,7 @@
       <template #footer>
         <div class="reply-form-actions reply-dialog-actions">
           <span class="cpu-muted reply-status-text">{{ replying ? replySubmissionProgress : "草稿自动保存" }}</span>
-          <div class="reply-submit-actions">
+          <div class="reply-submit-actions cpu-button-row">
             <el-button v-if="editingReplyId" :disabled="replying" @click="cancelReplyEdit">取消编辑</el-button>
             <el-button type="primary" :loading="replying" :disabled="replying" @click="submitReply">
               {{ replying ? "处理中" : (editingReplyId ? "保存修改" : "发布回复") }}
@@ -530,7 +530,7 @@
     >
       <div class="share-panel">
         <p class="share-copy">分享这里收成两件事：要么复制链接，要么直接保存一张分享卡片。</p>
-        <div class="share-actions">
+        <div class="share-actions cpu-button-row">
           <el-button v-if="canUseNativeShare" type="primary" class="share-action-btn" @click="shareViaSystem">系统分享</el-button>
           <el-button class="share-action-btn" @click="copyShareDialogOpen = true">复制链接</el-button>
           <el-button type="primary" plain class="share-action-btn" @click="openShareCard">保存分享卡片</el-button>
@@ -545,7 +545,7 @@
       append-to-body
       class="copy-share-dialog"
     >
-      <div class="copy-share-panel">
+      <div class="copy-share-panel cpu-button-row">
         <el-button class="share-action-btn" @click="copyShareLinkOnly">只复制链接</el-button>
         <el-button type="primary" plain class="share-action-btn" @click="copyShareTitleAndLink">复制标题和链接</el-button>
       </div>
@@ -575,11 +575,11 @@
           <el-button type="primary" plain @click="ensureShareCardRendered">重新生成</el-button>
         </div>
         <p v-if="isNativeAppClient && !hasNativeSaveBridge" class="share-card-tip">客户端受 WebView 限制，建议点开图片后截图保存。</p>
-        <div class="share-card-actions">
-          <button v-if="!isNativeAppClient || hasNativeSaveBridge" type="button" class="share-card-save-link" :disabled="shareCardSaving" @click="saveShareCardAsPng">
+        <div class="share-card-actions cpu-button-row">
+          <button data-cpu-button="primary" v-if="!isNativeAppClient || hasNativeSaveBridge" type="button" class="share-card-save-link" :disabled="shareCardSaving" @click="saveShareCardAsPng">
             保存图片
           </button>
-          <button v-else type="button" class="share-card-save-link" @click="openShareCardImagePreview">放大后截图</button>
+          <button data-cpu-button="primary" v-else type="button" class="share-card-save-link" @click="openShareCardImagePreview">放大后截图</button>
         </div>
       </div>
     </el-dialog>
@@ -596,7 +596,7 @@
         <el-empty v-if="!topicImageReviewLoading && !topicImageReviewAssets.length" description="这条帖子里没有可复核的图片" />
         <div v-else class="topic-image-review-list">
           <article v-for="(asset, index) in topicImageReviewAssets" :key="asset.id" class="topic-image-review-card">
-            <button type="button" class="topic-image-review-preview" aria-label="查看待复核原图" @click="openTopicReviewImages(index)">
+            <button data-cpu-button="media" type="button" class="topic-image-review-preview" aria-label="查看待复核原图" @click="openTopicReviewImages(index)">
               <img :src="asset.url" alt="待复核图片" loading="lazy" decoding="async" fetchpriority="low" />
             </button>
             <div class="topic-image-review-meta">
@@ -615,7 +615,7 @@
               <p v-if="asset.reviewedAt || asset.manualReviewedAt" class="topic-image-review-time">
                 最近处理时间：{{ fmtDate(asset.manualReviewedAt || asset.reviewedAt || "") }}
               </p>
-              <div class="topic-image-review-actions">
+              <div class="topic-image-review-actions cpu-button-row">
                 <el-button
                   type="success"
                   size="small"
@@ -679,7 +679,7 @@
               <p v-if="asset.reviewedAt || asset.manualReviewedAt" class="topic-video-review-time">
                 最近处理时间：{{ fmtDate(asset.manualReviewedAt || asset.reviewedAt || "") }}
               </p>
-              <div class="topic-video-review-actions">
+              <div class="topic-video-review-actions cpu-button-row">
                 <el-button
                   type="success"
                   size="small"

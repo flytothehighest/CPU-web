@@ -12,7 +12,7 @@
     <SiteSearchBar placeholder="搜索帖子标题、正文或校园服务" />
 
     <nav class="channel-tabs" aria-label="动态分类">
-      <button
+      <button data-cpu-button="option"
         v-for="channel in channels"
         :key="channel.id"
         type="button"
@@ -21,7 +21,7 @@
       >
         <AppIcon :name="channel.icon" />{{ channel.label }}
       </button>
-      <button type="button" class="all-boards-tab" @click="boardsOpen = true"><AppIcon name="board" />板块</button>
+      <button data-cpu-button="action" type="button" class="all-boards-tab" @click="boardsOpen = true"><AppIcon name="board" />板块</button>
     </nav>
 
     <PinnedTopicStrip v-if="selectedChannel === 'latest'" :topics="pinnedList" />
@@ -67,7 +67,7 @@
         <el-empty :description="boardError"><el-button type="primary" @click="loadBoards">重试</el-button></el-empty>
       </div>
       <div v-else class="board-grid" v-loading="boardsLoading && !boards.length">
-        <button v-for="board in discussionBoards" :key="board.slug" type="button" class="board-choice" @click="openBoard(board)">
+        <button data-cpu-button="surface" v-for="board in discussionBoards" :key="board.slug" type="button" class="board-choice" @click="openBoard(board)">
           <span class="board-icon" :style="{ background: board.color || '#168776' }"><AppIcon :legacy="board.icon" name="board" /></span>
           <span class="board-copy"><b>{{ board.name }}</b><small>{{ board.description }}</small></span>
           <span class="board-count">{{ board.topicCount }} 帖</span>

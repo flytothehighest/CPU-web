@@ -7,7 +7,7 @@
           <h1>VIP 中心</h1>
           <p>一次开通，永久有效。兑换、权益与记录都集中在这里。</p>
         </div>
-        <button type="button" class="back-link" @click="router.push('/profile')">返回个人中心<AppIcon name="arrow-right" /></button>
+        <button data-cpu-button="text" type="button" class="back-link" @click="router.push('/profile')">返回个人中心<AppIcon name="arrow-right" /></button>
       </header>
 
       <section class="desktop-primary-grid">
@@ -23,7 +23,7 @@
           </div>
           <div class="pass-footer">
             <span><AppIcon :name="status?.vipActive ? 'success' : 'lock'" /> {{ status?.vipActive ? "永久有效" : "尚未开通" }}</span>
-            <button v-if="status?.vipActive" type="button" @click="openDecoration">个性装扮<AppIcon name="arrow-right" /></button>
+            <button data-cpu-button="action" v-if="status?.vipActive" type="button" @click="openDecoration">个性装扮<AppIcon name="arrow-right" /></button>
           </div>
         </article>
 
@@ -90,7 +90,7 @@
         <div class="pass-main"><small>当前身份</small><h2>{{ status?.vipActive ? "永久会员" : "普通用户" }}</h2></div>
         <div class="pass-footer">
           <span><AppIcon :name="status?.vipActive ? 'success' : 'lock'" /> {{ status?.vipActive ? "永久有效" : "输入礼品码即可开通" }}</span>
-          <button v-if="status?.vipActive" type="button" aria-label="打开个性装扮" @click="openDecoration"><AppIcon name="arrow-right" /></button>
+          <button data-cpu-button="action" v-if="status?.vipActive" type="button" aria-label="打开个性装扮" @click="openDecoration"><AppIcon name="arrow-right" /></button>
         </div>
       </section>
 
@@ -126,7 +126,7 @@
         </div>
       </section>
 
-      <button type="button" class="mobile-back-link" @click="router.push('/profile')">返回个人中心<AppIcon name="arrow-right" /></button>
+      <button data-cpu-button="icon" type="button" class="mobile-back-link" @click="router.push('/profile')">返回个人中心<AppIcon name="arrow-right" /></button>
     </div>
   </div>
 </template>

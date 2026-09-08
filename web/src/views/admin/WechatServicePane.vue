@@ -62,14 +62,14 @@
           </el-form-item>
         </el-form>
 
-        <div class="endpoint-grid">
-          <button type="button" @click="copyValue(config.callbackUrl)">
+        <div class="endpoint-grid cpu-button-row">
+          <button data-cpu-button="action" type="button" @click="copyValue(config.callbackUrl)">
             <span>服务器地址 URL</span><b>{{ config.callbackUrl }}</b>
           </button>
-          <button type="button" @click="copyValue(config.oauthCallbackUrl)">
+          <button data-cpu-button="action" type="button" @click="copyValue(config.oauthCallbackUrl)">
             <span>网页授权回调</span><b>{{ config.oauthCallbackUrl }}</b>
           </button>
-          <button type="button" @click="copyValue(config.oauthDomain)">
+          <button data-cpu-button="action" type="button" @click="copyValue(config.oauthDomain)">
             <span>网页授权域名</span><b>{{ config.oauthDomain || "请先配置站点域名" }}</b>
           </button>
         </div>
@@ -137,7 +137,7 @@
           </div>
         </el-form>
 
-        <div class="section-actions">
+        <div class="section-actions cpu-button-row">
           <el-button type="primary" :loading="saving" @click="saveConfig">保存配置</el-button>
           <el-button :loading="dispatching" @click="dispatchNotifications">立即检查通知</el-button>
         </div>

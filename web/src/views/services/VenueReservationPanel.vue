@@ -18,7 +18,7 @@
         正在跳转至智慧场馆系统；如果没有自动打开，可点击下方按钮继续。
       </p>
 
-      <div class="venue-actions">
+      <div class="venue-actions cpu-button-row">
         <el-button
           v-if="launchMode === 'mobile' && isIosDevice"
           type="primary"

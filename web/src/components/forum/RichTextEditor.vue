@@ -8,7 +8,7 @@
 
       <div class="mobile-toolbar desktop-same-toolbar">
         <div class="mobile-toolbar-tabs">
-          <button
+          <button data-cpu-button="option"
             v-for="section in mobileToolbarSections"
             :key="section.key"
             type="button"
@@ -23,25 +23,25 @@
         <div v-if="activeMobileToolbar" class="mobile-toolbar-panel">
           <div class="mobile-toolbar-actions">
             <template v-if="activeMobileToolbar === 'heading'">
-              <button type="button" :class="{ active: toolbarState.block === 'p' }" @click="runMobileAction(() => applyFormat('p'))">正文</button>
-              <button type="button" :class="{ active: toolbarState.block === 'h2' }" @click="runMobileAction(() => applyFormat('h2'))">标题</button>
-              <button type="button" :class="{ active: toolbarState.block === 'h3' }" @click="runMobileAction(() => applyFormat('h3'))">小标题</button>
+              <button data-cpu-button="option" type="button" :class="{ active: toolbarState.block === 'p' }" @click="runMobileAction(() => applyFormat('p'))">正文</button>
+              <button data-cpu-button="option" type="button" :class="{ active: toolbarState.block === 'h2' }" @click="runMobileAction(() => applyFormat('h2'))">标题</button>
+              <button data-cpu-button="option" type="button" :class="{ active: toolbarState.block === 'h3' }" @click="runMobileAction(() => applyFormat('h3'))">小标题</button>
             </template>
 
             <template v-else-if="activeMobileToolbar === 'format'">
-              <button type="button" class="bold" :class="{ active: toolbarState.bold }" @click="runMobileAction(() => runCommand('bold'))">加粗</button>
-              <button type="button" class="italic" :class="{ active: toolbarState.italic }" @click="runMobileAction(() => runCommand('italic'))">斜体</button>
-              <button type="button" :class="{ active: toolbarState.block === 'blockquote' }" @click="runMobileAction(() => applyFormat('blockquote'))">引用</button>
+              <button data-cpu-button="option" type="button" class="bold" :class="{ active: toolbarState.bold }" @click="runMobileAction(() => runCommand('bold'))">加粗</button>
+              <button data-cpu-button="option" type="button" class="italic" :class="{ active: toolbarState.italic }" @click="runMobileAction(() => runCommand('italic'))">斜体</button>
+              <button data-cpu-button="option" type="button" :class="{ active: toolbarState.block === 'blockquote' }" @click="runMobileAction(() => applyFormat('blockquote'))">引用</button>
             </template>
 
             <template v-else-if="activeMobileToolbar === 'tools'">
-              <button type="button" :class="{ active: toolbarState.ul }" @click="runMobileAction(() => runCommand('insertUnorderedList'))">列表</button>
-              <button type="button" :class="{ active: toolbarState.ol }" @click="runMobileAction(() => runCommand('insertOrderedList'))">编号</button>
-              <button type="button" @click="runMobileAction(() => insertLink())">链接</button>
+              <button data-cpu-button="option" type="button" :class="{ active: toolbarState.ul }" @click="runMobileAction(() => runCommand('insertUnorderedList'))">列表</button>
+              <button data-cpu-button="option" type="button" :class="{ active: toolbarState.ol }" @click="runMobileAction(() => runCommand('insertOrderedList'))">编号</button>
+              <button data-cpu-button="action" type="button" @click="runMobileAction(() => insertLink())">链接</button>
             </template>
 
             <template v-else-if="activeMobileToolbar === 'align'">
-              <button
+              <button data-cpu-button="option"
                 v-for="item in alignOptions"
                 :key="item.value"
                 type="button"
@@ -54,7 +54,7 @@
             </template>
 
             <template v-else-if="activeMobileToolbar === 'image'">
-              <button type="button" :disabled="imageUploading" @click="runMobileAction(() => pickContentMedia(), true)">
+              <button data-cpu-button="action" type="button" :disabled="imageUploading" @click="runMobileAction(() => pickContentMedia(), true)">
                 {{ imageUploading ? "上传中" : "插入图片" }}
               </button>
             </template>
@@ -83,7 +83,7 @@
     ></div>
 
     <div v-if="isSimpleMobile" class="simple-mobile-media-row">
-      <button type="button" :disabled="imageUploading" @mousedown.prevent @click="pickContentMedia">
+      <button data-cpu-button="action" type="button" :disabled="imageUploading" @mousedown.prevent @click="pickContentMedia">
         <span>＋</span>{{ imageUploading ? "上传中" : "添加图片" }}
       </button>
       <small>{{ toolbarStatusText || "可一次选择多张" }}</small>

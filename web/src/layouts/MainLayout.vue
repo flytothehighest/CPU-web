@@ -49,7 +49,7 @@
             trigger="click"
             @command="goDesktopNav"
           >
-            <button type="button" class="top-nav-more-btn">
+            <button data-cpu-button="icon" type="button" class="top-nav-more-btn">
               <span>更多</span>
               <el-icon><ArrowDown /></el-icon>
             </button>
@@ -69,7 +69,7 @@
 
         <div class="top-right">
           <el-dropdown trigger="click" @command="setAppearanceMode">
-            <button type="button" class="appearance-cycle-btn" :aria-label="`外观：${appearance.modeLabel}`">
+            <button data-cpu-button="icon" type="button" class="appearance-cycle-btn" :aria-label="`外观：${appearance.modeLabel}`">
               <el-icon size="20"><component :is="appearanceIcon" /></el-icon>
             </button>
             <template #dropdown>
@@ -128,7 +128,7 @@
           </template>
         </div>
 
-        <div class="mobile-actions">
+        <div class="mobile-actions cpu-button-row">
           <el-button text class="touch-icon-btn" aria-label="刷新页面" @click="reloadPage">
             <el-icon><Refresh /></el-icon>
           </el-button>
@@ -203,7 +203,7 @@
       platform="windows"
     />
 
-    <button
+    <button data-cpu-button="surface"
       v-if="showForumPostFab"
       type="button"
       class="forum-post-fab"
@@ -214,7 +214,7 @@
       <span>投稿</span>
     </button>
 
-    <button
+    <button data-cpu-button="surface"
       v-if="showToolsFab"
       type="button"
       class="tools-fab"
@@ -229,7 +229,7 @@
       </el-icon>
     </button>
 
-    <button
+    <button data-cpu-button="surface"
       v-if="showFloatingActions && site.features.assistantEntry"
       type="button"
       class="assistant-fab"
@@ -281,7 +281,7 @@
       title="快捷入口"
     >
       <div class="drawer-grid">
-        <button
+        <button data-cpu-button="surface"
           v-for="item in drawerItems"
           :key="item.id"
           type="button"
@@ -291,7 +291,7 @@
           <el-icon><component :is="item.icon" /></el-icon>
           <span>{{ item.label }}</span>
         </button>
-        <button type="button" class="drawer-link" @click="reloadPage">
+        <button data-cpu-button="surface" type="button" class="drawer-link" @click="reloadPage">
           <el-icon><Refresh /></el-icon>
           <span>刷新页面</span>
         </button>
@@ -299,7 +299,7 @@
       <div class="drawer-appearance">
         <span>外观</span>
         <div class="appearance-segmented" role="radiogroup" aria-label="外观模式">
-          <button
+          <button data-cpu-button="option"
             v-for="item in appearanceOptions"
             :key="item.value"
             type="button"
@@ -318,7 +318,7 @@
           <UserAvatar :size="34" class="user-avatar" :src="auth.user?.avatar" :name="displayName" :seed="auth.user?.id" alt="用户头像" />
           <div class="drawer-user">
             <div>{{ displayName }}</div>
-            <button type="button" @click="goDrawer({ id: 'system-profile', to: '/profile', label: '个人中心', icon: UserFilled })">个人中心</button>
+            <button data-cpu-button="action" type="button" @click="goDrawer({ id: 'system-profile', to: '/profile', label: '个人中心', icon: UserFilled })">个人中心</button>
           </div>
           <el-button text type="danger" :loading="logoutPending" :disabled="logoutPending" @click="onMobileLogout">退出</el-button>
         </template>

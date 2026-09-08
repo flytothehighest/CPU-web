@@ -105,7 +105,7 @@
                 :disabled="submitting"
               >
               <div v-else-if="field.type === 'rating'" class="submit-rating-field">
-                <button
+                <button data-cpu-button="option"
                   v-for="score in ratingRange(field)"
                   :key="score"
                   type="button"
@@ -155,14 +155,14 @@
                   <span class="file-type-badge">{{ fileExt(entry.file.name).toUpperCase() || "FILE" }}</span>
                   <strong>{{ entry.file.name }}</strong>
                 </div>
-                <button type="button" class="submit-file-remove" :disabled="submitting" @click="removeFile(entry.id)">×</button>
+                <button data-cpu-button="danger" type="button" class="submit-file-remove" :disabled="submitting" @click="removeFile(entry.id)">×</button>
                 <dl class="submit-file-meta">
                   <dt>保存为</dt><dd>{{ savedPathPreview(entry.file, index + 1) }}</dd>
                   <dt>大小</dt><dd>{{ formatBytes(entry.file.size) }}</dd>
                 </dl>
-                <div class="submit-file-actions">
-                  <button type="button" :disabled="submitting || index === 0" @click="moveFile(index, index - 1)">上移</button>
-                  <button type="button" :disabled="submitting || index === fileEntries.length - 1" @click="moveFile(index, index + 1)">下移</button>
+                <div class="submit-file-actions cpu-button-row">
+                  <button data-cpu-button="action" type="button" :disabled="submitting || index === 0" @click="moveFile(index, index - 1)">上移</button>
+                  <button data-cpu-button="action" type="button" :disabled="submitting || index === fileEntries.length - 1" @click="moveFile(index, index + 1)">下移</button>
                 </div>
               </article>
             </div>
@@ -170,9 +170,9 @@
 
           <progress v-if="submitting || progress > 0" :value="progress" max="100"></progress>
 
-          <div class="submit-actions">
-            <button class="primary" type="submit" :disabled="submitting">{{ submitting ? "提交中" : "提交文件" }}</button>
-            <button type="reset" :disabled="submitting">重填</button>
+          <div class="submit-actions cpu-button-row">
+            <button data-cpu-button="primary" class="primary" type="submit" :disabled="submitting">{{ submitting ? "提交中" : "提交文件" }}</button>
+            <button data-cpu-button="action" type="reset" :disabled="submitting">重填</button>
           </div>
         </form>
         <p :class="['message', messageType, 'submit-form']">{{ submitMessage }}</p>
@@ -193,7 +193,7 @@
       </div>
       <div class="success-actions">
         <a class="primary success-status-link" :href="statusPath">查看提交成功名单</a>
-        <button type="button" @click="successDialog?.close()">关闭</button>
+        <button data-cpu-button="action" type="button" @click="successDialog?.close()">关闭</button>
       </div>
     </dialog>
 
@@ -208,9 +208,9 @@
         <span v-for="file in overwriteFiles" :key="file">{{ file }}</span>
       </div>
       <p class="overwrite-warning">继续提交会用本次填写的信息和文件覆盖旧提交。</p>
-      <div class="dialog-actions">
-        <button type="button" @click="resolveOverwrite(false)">取消</button>
-        <button class="primary" type="button" @click="resolveOverwrite(true)">覆盖旧提交</button>
+      <div class="dialog-actions cpu-button-row">
+        <button data-cpu-button="action" type="button" @click="resolveOverwrite(false)">取消</button>
+        <button data-cpu-button="primary" class="primary" type="button" @click="resolveOverwrite(true)">覆盖旧提交</button>
       </div>
     </dialog>
   </div>

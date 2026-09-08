@@ -74,7 +74,7 @@
         <div v-if="a.types.length" class="app-types">
           <span v-for="t in a.types.slice(0, 1)" :key="t" class="type-pill">{{ t }}</span>
         </div>
-        <button
+        <button data-cpu-button="option"
           class="fav-btn"
           :class="{ active: a.favorite }"
           type="button"

@@ -12,7 +12,7 @@
 
     <template v-else>
       <section class="pdf-toolbar" aria-label="PDF 工具模式">
-        <button
+        <button data-cpu-button="option"
           v-for="mode in modeOptions"
           :key="mode.key"
           type="button"
@@ -36,7 +36,7 @@
             multiple
             @change="handleFileInput"
           >
-          <button
+          <button data-cpu-button="action"
             type="button"
             class="drop-zone"
             :class="{ dragging: isDragging }"
@@ -60,13 +60,13 @@
                 <small>{{ formatBytes(item.file.size) }}<template v-if="item.pages"> · {{ item.pages }} 页</template></small>
               </span>
               <span class="file-actions">
-                <button type="button" :disabled="index === 0 || busy" title="上移" @click="moveFile(index, -1)">
+                <button data-cpu-button="action" type="button" :disabled="index === 0 || busy" title="上移" @click="moveFile(index, -1)">
                   <el-icon><SortUp /></el-icon>
                 </button>
-                <button type="button" :disabled="index === files.length - 1 || busy" title="下移" @click="moveFile(index, 1)">
+                <button data-cpu-button="action" type="button" :disabled="index === files.length - 1 || busy" title="下移" @click="moveFile(index, 1)">
                   <el-icon><SortDown /></el-icon>
                 </button>
-                <button type="button" :disabled="busy" title="移除" @click="removeFile(item.id)">
+                <button data-cpu-button="action" type="button" :disabled="busy" title="移除" @click="removeFile(item.id)">
                   <el-icon><Close /></el-icon>
                 </button>
               </span>
@@ -164,7 +164,7 @@
             </label>
           </div>
 
-          <button type="button" class="run-button" :disabled="!canRun || busy" @click="runTool">
+          <button data-cpu-button="primary" type="button" class="run-button" :disabled="!canRun || busy" @click="runTool">
             <el-icon><Download /></el-icon>
             <span>{{ busy ? progressText || '处理中' : activeModeMeta.action }}</span>
           </button>

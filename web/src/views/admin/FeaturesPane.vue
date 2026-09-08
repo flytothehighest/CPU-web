@@ -68,7 +68,7 @@
         </div>
       </div>
 
-      <button type="button" class="section-toggle" :class="{ expanded: trustConfigExpanded }" @click="trustConfigExpanded = !trustConfigExpanded">
+      <button data-cpu-button="text" type="button" class="section-toggle" :class="{ expanded: trustConfigExpanded }" @click="trustConfigExpanded = !trustConfigExpanded">
         <div class="section-toggle-copy">
           <div class="section-toggle-top">
             <h3 class="section-title">匿名与信誉规则</h3>

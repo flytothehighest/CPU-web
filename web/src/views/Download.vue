@@ -24,7 +24,7 @@
           </header>
           <p>{{ recommendedCard.summary }}</p>
           <div class="recommend-action-row">
-          <a
+          <a data-cpu-button="primary"
               v-if="recommendedCard.downloadUrl"
               class="download-action"
             :href="recommendedCard.downloadUrl"
@@ -35,7 +35,7 @@
               {{ recommendedCard.actionLabel }}
               <AppIcon name="download" />
           </a>
-          <router-link
+          <router-link data-cpu-button="primary"
               v-else-if="recommendedCard.route"
               class="download-action"
             :to="recommendedCard.route"
@@ -92,7 +92,7 @@
             </div>
 
             <footer class="desktop-platform-footer">
-            <a
+            <a data-cpu-button="action"
               v-if="card.downloadUrl"
                 class="card-action"
               :href="card.downloadUrl"
@@ -103,7 +103,7 @@
               {{ card.actionLabel }}
                 <AppIcon name="download" />
             </a>
-            <router-link
+            <router-link data-cpu-button="action"
               v-else-if="card.route"
                 class="card-action"
               :to="card.route"
@@ -111,7 +111,7 @@
               {{ card.actionLabel }}
               <AppIcon name="arrow-right" />
             </router-link>
-              <button v-else type="button" class="card-action unavailable" disabled>
+              <button data-cpu-button="action" v-else type="button" class="card-action unavailable" disabled>
               {{ card.loading ? "正在获取下载信息" : "安装包暂时不可用" }}
             </button>
               <span>{{ card.actionHint }}</span>
@@ -135,8 +135,8 @@
           <p>公共设备上无需留下安装记录；自己的设备仍推荐使用对应客户端。</p>
         </div>
         <div class="desktop-web-actions">
-          <router-link to="/home">进入药大拾间</router-link>
-          <router-link class="soft" to="/schedule">打开课表</router-link>
+          <router-link data-cpu-button="action" to="/home">进入药大拾间</router-link>
+          <router-link data-cpu-button="action" class="soft" to="/schedule">打开课表</router-link>
         </div>
       </section>
     </div>
@@ -158,7 +158,7 @@
           <span class="version-pill">{{ recommendedCard.versionLabel }}</span>
         </header>
         <p>{{ recommendedCard.summary }}</p>
-        <a
+        <a data-cpu-button="primary"
           v-if="recommendedCard.downloadUrl"
           class="mobile-primary-action"
           :href="recommendedCard.downloadUrl"
@@ -169,7 +169,7 @@
           {{ recommendedCard.actionLabel }}
           <AppIcon name="download" />
         </a>
-        <router-link
+        <router-link data-cpu-button="primary"
           v-else-if="recommendedCard.route"
           class="mobile-primary-action"
           :to="recommendedCard.route"
@@ -197,7 +197,7 @@
             </summary>
             <div class="mobile-platform-detail">
               <p>{{ card.summary }}</p>
-              <a
+              <a data-cpu-button="action"
                 v-if="card.downloadUrl"
                 class="mobile-secondary-action"
                 :href="card.downloadUrl"
@@ -205,8 +205,8 @@
                 rel="noopener noreferrer"
                 @click="openDownloadGuide(card.key, $event)"
               >{{ card.actionLabel }}<AppIcon name="download" /></a>
-              <router-link v-else-if="card.route" class="mobile-secondary-action" :to="card.route">{{ card.actionLabel }}<AppIcon name="arrow-right" /></router-link>
-              <button v-else type="button" class="mobile-secondary-action unavailable" disabled>{{ card.loading ? "正在获取下载信息" : "安装包暂时不可用" }}</button>
+              <router-link data-cpu-button="action" v-else-if="card.route" class="mobile-secondary-action" :to="card.route">{{ card.actionLabel }}<AppIcon name="arrow-right" /></router-link>
+              <button data-cpu-button="action" v-else type="button" class="mobile-secondary-action unavailable" disabled>{{ card.loading ? "正在获取下载信息" : "安装包暂时不可用" }}</button>
               <ol><li v-for="step in card.steps" :key="step">{{ step }}</li></ol>
             </div>
           </details>
@@ -216,7 +216,7 @@
       <section class="mobile-web-entry">
         <span class="platform-icon"><AppIcon name="link" /></span>
         <div><h2>不安装也能用</h2><p>临时访问可直接打开网页版。</p></div>
-        <router-link to="/home">直接进入</router-link>
+        <router-link data-cpu-button="action" to="/home">直接进入</router-link>
       </section>
     </div>
 

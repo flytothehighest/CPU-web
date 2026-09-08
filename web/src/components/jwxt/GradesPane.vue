@@ -57,7 +57,7 @@
           <span>{{ selectionSummaryText }}</span>
         </div>
         <div class="calc-mode-switch" role="group" aria-label="GPA 统计口径">
-          <button
+          <button data-cpu-button="option"
             v-for="mode in statModeOptions"
             :key="mode.value"
             type="button"
@@ -94,7 +94,7 @@
             </el-option>
           </el-select>
         </label>
-        <div class="quick-actions">
+        <div class="quick-actions cpu-button-row">
           <el-button size="small" :icon="Check" :disabled="!parsed.list.length" @click="selectAllCourses">全选</el-button>
           <el-button size="small" :icon="Filter" :disabled="!filteredList.length" @click="selectFilteredCourses">筛选内全选</el-button>
           <el-button size="small" :icon="Switch" :disabled="!filteredList.length" @click="invertFilteredCourses">反选</el-button>

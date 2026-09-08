@@ -1,6 +1,6 @@
 <template>
   <div class="feeds-pane">
-    <div class="ctrl-bar">
+    <div class="ctrl-bar cpu-button-row">
       <el-button type="primary" :loading="runningAll" :disabled="runningAll || loading" @click="runAll">
         <el-icon><Refresh /></el-icon> 全量同步
       </el-button>

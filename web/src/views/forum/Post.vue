@@ -19,7 +19,7 @@
       <el-form label-position="top" :model="form">
         <div v-if="currentBoard && !boardPickerExpanded" class="selected-board-row">
           <span><AppIcon name="board" />发布到 <b>{{ currentBoard.name }}</b></span>
-          <button v-if="!editingId" type="button" @click="boardPickerExpanded = true">更换</button>
+          <button data-cpu-button="action" v-if="!editingId" type="button" @click="boardPickerExpanded = true">更换</button>
         </div>
         <el-form-item v-else label="选择板块" required>
           <el-select v-model="form.boardSlug" placeholder="选择要发帖的板块" :disabled="!!editingId" @change="onBoardChange">
@@ -70,7 +70,7 @@
           </div>
 
           <div class="second-hand-kind-grid" role="radiogroup" aria-label="发布方式">
-            <button
+            <button data-cpu-button="option"
               v-for="option in SECOND_HAND_KINDS"
               :key="option.value"
               type="button"
@@ -250,7 +250,7 @@
             </el-select>
             <div v-if="courseLoadError" class="field-error">
               <span>{{ courseLoadError }}</span>
-              <button type="button" class="text-retry-btn" :disabled="coursesLoading" @click="loadCoursesForReview(true)">
+              <button data-cpu-button="text" type="button" class="text-retry-btn" :disabled="coursesLoading" @click="loadCoursesForReview(true)">
                 重试
               </button>
             </div>
@@ -313,7 +313,7 @@
             </div>
             <div v-if="!isMobileLayout || mobileAdvancedToolsOpen" class="post-editor-toolbar">
               <div class="editor-mode-switch" role="tablist" aria-label="正文编辑模式">
-                <button
+                <button data-cpu-button="option"
                   type="button"
                   class="editor-mode-btn"
                   :class="{ active: editorMode === 'visual' }"
@@ -321,7 +321,7 @@
                 >
                   排版
                 </button>
-                <button
+                <button data-cpu-button="option"
                   type="button"
                   class="editor-mode-btn"
                   :class="{ active: editorMode === 'markup' }"
@@ -350,12 +350,12 @@
             />
 
             <div v-else class="markup-editor-shell">
-              <div class="markup-helper-row">
-                <button type="button" class="markup-helper-btn" @click="insertMarkupSnippet(markupHeadingSnippet)">小标题</button>
-                <button type="button" class="markup-helper-btn" @click="insertMarkupSnippet(markupQuoteSnippet)">引用</button>
-                <button type="button" class="markup-helper-btn" @click="insertMarkupSnippet(markupListSnippet)">列表</button>
-                <button type="button" class="markup-helper-btn" @click="insertMarkupSnippet(markupTableSnippet)">表格</button>
-                <button type="button" class="markup-helper-btn" @click="insertMarkupSnippet(markupCenterSnippet)">居中</button>
+              <div class="markup-helper-row cpu-button-row">
+                <button data-cpu-button="action" type="button" class="markup-helper-btn" @click="insertMarkupSnippet(markupHeadingSnippet)">小标题</button>
+                <button data-cpu-button="action" type="button" class="markup-helper-btn" @click="insertMarkupSnippet(markupQuoteSnippet)">引用</button>
+                <button data-cpu-button="action" type="button" class="markup-helper-btn" @click="insertMarkupSnippet(markupListSnippet)">列表</button>
+                <button data-cpu-button="action" type="button" class="markup-helper-btn" @click="insertMarkupSnippet(markupTableSnippet)">表格</button>
+                <button data-cpu-button="action" type="button" class="markup-helper-btn" @click="insertMarkupSnippet(markupCenterSnippet)">居中</button>
               </div>
               <textarea
                 ref="markupTextareaRef"
@@ -379,7 +379,7 @@
                 <MarkdownView v-else :content="form.content" />
               </div>
             </div>
-            <button
+            <button data-cpu-button="text"
               v-if="isMobileLayout"
               type="button"
               class="creator-tools-toggle"

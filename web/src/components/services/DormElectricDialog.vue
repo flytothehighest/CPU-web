@@ -42,11 +42,11 @@
         <el-icon><WarningFilled /></el-icon>
         余额不足，建议按缴费流程尽快购电。
       </div>
-      <div class="actions">
+      <div class="actions cpu-button-row">
         <el-button text @click="refresh">
           <el-icon><Refresh /></el-icon> 刷新
         </el-button>
-        <button type="button" class="link-btn" @click="showPaymentGuide">交电费流程 →</button>
+        <button data-cpu-button="text" type="button" class="link-btn" @click="showPaymentGuide">交电费流程 →</button>
       </div>
     </div>
   </el-dialog>

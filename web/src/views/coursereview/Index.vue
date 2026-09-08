@@ -2,7 +2,7 @@
   <div class="cr-page">
     <div class="head">
       <h2><AppIcon name="chart" /> 课程点评</h2>
-      <div class="head-right">
+      <div class="head-right cpu-button-row">
         <el-button v-if="auth.canAccessForum" :loading="syncing" :disabled="syncing" @click="onSync">
           <el-icon><Refresh /></el-icon> 同步我的课程
         </el-button>

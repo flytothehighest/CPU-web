@@ -20,7 +20,7 @@
       </el-table-column>
       <el-table-column label="内容" min-width="300">
         <template #default="{ row }">
-          <button type="button" class="content-link" @click="openTarget(row)">{{ row.title }}</button>
+          <button data-cpu-button="text" type="button" class="content-link" @click="openTarget(row)">{{ row.title }}</button>
           <div v-if="row.kind === 'reply'" class="topic-name">所属帖子：{{ row.topicTitle }}</div>
         </template>
       </el-table-column>
@@ -57,7 +57,7 @@
           <span>{{ reviewLabel(row.aiReviewStatus) }}</span>
           <span v-if="row.aiRiskScore !== null && row.aiRiskScore !== undefined">{{ row.aiRiskScore }} 分</span>
         </div>
-        <button type="button" class="content-link card-title" @click="openTarget(row)">{{ row.title }}</button>
+        <button data-cpu-button="text" type="button" class="content-link card-title" @click="openTarget(row)">{{ row.title }}</button>
         <div v-if="row.kind === 'reply'" class="topic-name">所属帖子：{{ row.topicTitle }}</div>
         <div class="card-meta">
           <span>{{ row.board?.name || "-" }}</span>
@@ -65,7 +65,7 @@
           <span>{{ fmtDate(row.createdAt) }}</span>
         </div>
         <div class="review-reason">{{ row.aiReviewReason || "用户申请人工复核" }}</div>
-        <div class="card-actions">
+        <div class="card-actions cpu-button-row">
           <el-button size="small" plain @click="openTarget(row)">查看</el-button>
           <el-button size="small" type="success" plain :loading="isBusy(row)" :disabled="isBusy(row)" @click="approve(row)">通过</el-button>
           <el-button size="small" type="danger" plain :loading="isBusy(row)" :disabled="isBusy(row)" @click="reject(row)">驳回</el-button>

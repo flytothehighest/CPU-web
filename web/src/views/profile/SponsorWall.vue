@@ -9,7 +9,7 @@
         <p class="eyebrow">Support Yaoda Shijian</p>
         <h1>支持药大拾间</h1>
         <p class="hero-desc">选择你希望支持的计划，查看公开筹集进度；每一笔赞助都会保留类别记录并进入鸣谢墙。</p>
-        <div class="hero-actions">
+        <div class="hero-actions cpu-button-row">
           <el-button type="primary" @click="router.push({ path: '/profile', hash: '#sponsor' })">
             <el-icon><Money /></el-icon>
             我要赞助

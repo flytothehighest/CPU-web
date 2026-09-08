@@ -111,7 +111,7 @@
           <span>每赞助 ¥1 发放</span>
           <el-input-number v-model="sponsorPointsPerYuan" :min="0" :max="10000" />
           <span>点</span>
-          <div class="rate-actions">
+          <div class="rate-actions cpu-button-row">
             <el-button type="primary" :loading="savingSponsorRate" @click="saveSponsorRate">保存比例</el-button>
             <el-button
               type="warning"
@@ -247,7 +247,7 @@
           class="ledger-date-range"
           @change="applyLedgerFilters"
         />
-        <div class="ledger-filter-actions">
+        <div class="ledger-filter-actions cpu-button-row">
           <el-button type="primary" :loading="ledgerLoading" @click="applyLedgerFilters">查询</el-button>
           <el-button :disabled="ledgerLoading || !ledgerFiltersActive" @click="resetLedgerFilters">重置</el-button>
         </div>

@@ -116,7 +116,7 @@
                     <span v-if="row.createdBy">发起人 {{ row.createdBy?.nickname || row.createdBy?.username }}</span>
                   </div>
                 </div>
-                <div class="q-row-actions">
+                <div class="q-row-actions cpu-button-row">
                   <el-button v-if="!row.isSystem" size="small" :disabled="isQuestionnaireBusy(row)" @click="openEdit(row)">
                     <el-icon><Edit /></el-icon>
                     编辑
@@ -318,7 +318,7 @@
                 </div>
                 <div class="rename-token-list">
                   <span class="rename-token-label">快捷插入</span>
-                  <button
+                  <button data-cpu-button="action"
                     v-for="item in fileRenameQuickTokens"
                     :key="`${item.label}-${item.token}`"
                     type="button"
@@ -372,7 +372,7 @@
                 </div>
                 <div class="rename-token-list">
                   <span class="rename-token-label">快捷插入</span>
-                  <button
+                  <button data-cpu-button="action"
                     v-for="item in fileFolderQuickTokens"
                     :key="`folder-${item.label}-${item.token}`"
                     type="button"
@@ -428,22 +428,22 @@
                     <el-icon><DataAnalysis /></el-icon>
                     提交记录
                   </el-button>
-                  <div class="file-secondary-actions">
-                    <button type="button" class="file-tool-action" :disabled="isFileCollectBusy(row)" @click="copyFileCollectLink(row)">
+                  <div class="file-secondary-actions cpu-button-row">
+                    <button data-cpu-button="action" type="button" class="file-tool-action" :disabled="isFileCollectBusy(row)" @click="copyFileCollectLink(row)">
                       <el-icon><Link /></el-icon>
                       <span>链接</span>
                     </button>
-                    <button type="button" class="file-tool-action" :disabled="isFileCollectBusy(row)" @click="openFileManager(row)">
+                    <button data-cpu-button="action" type="button" class="file-tool-action" :disabled="isFileCollectBusy(row)" @click="openFileManager(row)">
                       <el-icon><View /></el-icon>
                       <span>文件</span>
                     </button>
-                    <button type="button" class="file-tool-action" :disabled="zipDownloading || isFileCollectBusy(row)" @click="downloadFileCollectionZip(row)">
+                    <button data-cpu-button="action" type="button" class="file-tool-action" :disabled="zipDownloading || isFileCollectBusy(row)" @click="downloadFileCollectionZip(row)">
                       <el-icon><Download /></el-icon>
                       <span>{{ zipDownloading ? "打包中" : "ZIP" }}</span>
                     </button>
                   </div>
                   <el-dropdown trigger="click" class="file-more-dropdown" @command="handleFileCollectCommand($event, row)">
-                    <button type="button" class="file-menu-action" :disabled="isFileCollectBusy(row)">
+                    <button data-cpu-button="action" type="button" class="file-menu-action" :disabled="isFileCollectBusy(row)">
                       更多<el-icon><ArrowDown /></el-icon>
                     </button>
                     <template #dropdown>
@@ -596,7 +596,7 @@
                     <span v-if="row.createdBy">发起人 {{ row.createdBy.nickname || row.createdBy.username }}</span>
                   </div>
                 </div>
-                <div class="q-row-actions grade-check-actions">
+                <div class="q-row-actions grade-check-actions cpu-button-row">
                   <el-button size="small" :disabled="isGradeCheckBusy(row)" @click="copyGradeLink(row)">
                     <el-icon><Link /></el-icon>
                     复制链接
@@ -667,7 +667,7 @@
       <template #header>
         <div class="builder-topbar">
           <div class="builder-titlebar">
-            <button type="button" class="builder-back" @click="editorOpen = false">
+            <button data-cpu-button="text" type="button" class="builder-back" @click="editorOpen = false">
               <el-icon><ArrowLeft /></el-icon>
             </button>
             <div>
@@ -675,7 +675,7 @@
               <span>{{ statusText(form.status) }} · {{ form.fields.length }} 题 · {{ requiredCount }} 题必填</span>
             </div>
           </div>
-          <div class="builder-top-actions">
+          <div class="builder-top-actions cpu-button-row">
             <el-button plain @click="openPreview()">
               <el-icon><View /></el-icon>
               预览
@@ -693,7 +693,7 @@
             <h4>常用题型</h4>
             <span>点击添加</span>
           </div>
-          <button v-for="type in fieldTypeOptions" :key="type.value" type="button" @click="addField(type.value)">
+          <button data-cpu-button="surface" v-for="type in fieldTypeOptions" :key="type.value" type="button" @click="addField(type.value)">
             <el-icon><component :is="type.icon" /></el-icon>
             <span>
               <b>{{ type.label }}</b>
@@ -830,24 +830,24 @@
                     <el-input-number v-model="field.maxLength" :min="1" :max="field.type === 'textarea' ? 2000 : 300" controls-position="right" />
                   </el-form-item>
                 </div>
-                <div class="field-actions">
-                  <button type="button" :disabled="index === 0" @click="moveField(index, -1)">
+                <div class="field-actions cpu-button-row">
+                  <button data-cpu-button="action" type="button" :disabled="index === 0" @click="moveField(index, -1)">
                     <el-icon><ArrowUp /></el-icon>
                     上移
                   </button>
-                  <button type="button" :disabled="index === form.fields.length - 1" @click="moveField(index, 1)">
+                  <button data-cpu-button="action" type="button" :disabled="index === form.fields.length - 1" @click="moveField(index, 1)">
                     <el-icon><ArrowDown /></el-icon>
                     下移
                   </button>
-                  <button type="button" @click="duplicateField(index)">
+                  <button data-cpu-button="action" type="button" @click="duplicateField(index)">
                     <el-icon><CopyDocument /></el-icon>
                     复制
                   </button>
-                  <button type="button" @click="addField('single', index)">
+                  <button data-cpu-button="action" type="button" @click="addField('single', index)">
                     <el-icon><Plus /></el-icon>
                     下方加题
                   </button>
-                  <button type="button" class="danger" @click="removeField(index)">
+                  <button data-cpu-button="danger" type="button" class="danger" @click="removeField(index)">
                     <el-icon><Delete /></el-icon>
                     删除
                   </button>
@@ -897,7 +897,7 @@
         </aside>
       </div>
 
-      <div class="builder-mobile-savebar builder-mobile-only">
+      <div class="builder-mobile-savebar builder-mobile-only cpu-button-row">
         <el-button :loading="saving" :disabled="saving" @click="submitEditor('draft')">草稿</el-button>
         <el-button type="primary" plain :loading="saving" :disabled="saving" @click="submitEditor()">保存</el-button>
         <el-button type="primary" :loading="saving" :disabled="saving" @click="submitEditor('open')">开放</el-button>
@@ -1052,7 +1052,7 @@
             </div>
           </div>
           <div class="file-download-list">
-            <button
+            <button data-cpu-button="action"
               v-for="file in item.files"
               :key="file.id"
               type="button"

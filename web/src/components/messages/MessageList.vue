@@ -1,7 +1,7 @@
 <template>
   <div class="message-list">
     <el-empty v-if="!list.length" description="暂无消息" class="empty-state" />
-    <button
+    <button data-cpu-button="surface"
       v-for="n in list"
       :key="n.id"
       type="button"

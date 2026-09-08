@@ -14,8 +14,8 @@
     v-html="renderedHtml"
   ></div>
   <div v-if="videoGalleryOpen" class="md-video-lightbox" @click.self="closeVideoGallery">
-    <button type="button" class="md-video-lightbox__close" @click="closeVideoGallery">关闭</button>
-    <button
+    <button data-cpu-button="media" type="button" class="md-video-lightbox__close" @click="closeVideoGallery">关闭</button>
+    <button data-cpu-button="media"
       v-if="videoGalleryItems.length > 1"
       type="button"
       class="md-video-lightbox__nav md-video-lightbox__nav--prev"
@@ -24,7 +24,7 @@
     >
       ‹
     </button>
-    <button
+    <button data-cpu-button="media"
       v-if="videoGalleryItems.length > 1"
       type="button"
       class="md-video-lightbox__nav md-video-lightbox__nav--next"

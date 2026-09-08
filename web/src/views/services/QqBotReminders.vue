@@ -6,7 +6,7 @@
         <h2>小工具提醒规则</h2>
         <p>按问卷、收集任务和成绩核对表分别设置通知事件与触发时间。</p>
       </div>
-      <div class="head-actions">
+      <div class="head-actions cpu-button-row">
         <el-button plain @click="router.push('/messages?tab=settings')">
           <el-icon><ArrowLeft /></el-icon>
           返回通知设置
@@ -122,7 +122,7 @@
               </template>
             </div>
 
-            <div class="item-actions">
+            <div class="item-actions cpu-button-row">
               <el-button text @click="router.push(item.manageLink)">
                 <el-icon><Setting /></el-icon>
                 管理

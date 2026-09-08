@@ -32,7 +32,7 @@
       </ul>
 
       <div class="platform-tabs" role="tablist" aria-label="选择桌面客户端平台">
-        <button
+        <button data-cpu-button="option"
           id="desktop-platform-tab-windows"
           type="button"
           role="tab"
@@ -49,7 +49,7 @@
             <small>10 / 11 · 64 位</small>
           </span>
         </button>
-        <button
+        <button data-cpu-button="option"
           id="desktop-platform-tab-macos"
           type="button"
           role="tab"

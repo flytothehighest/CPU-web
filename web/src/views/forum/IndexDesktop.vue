@@ -10,7 +10,7 @@
       </div>
 
       <template v-else>
-        <button type="button" class="latest-entry cpu-card" @click="$router.push('/forum/latest')">
+        <button data-cpu-button="surface" type="button" class="latest-entry cpu-card" @click="$router.push('/forum/latest')">
           <div class="latest-entry-icon"><AppIcon name="new" /></div>
           <div class="latest-entry-body">
             <div class="latest-entry-title">最新内容</div>

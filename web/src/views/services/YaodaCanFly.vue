@@ -12,7 +12,7 @@
       ></canvas>
 
       <section v-if="screen === 'menu'" class="menu-screen">
-        <button type="button" class="corner-back" aria-label="返回小工具" @click="router.push('/services/tools')">←</button>
+        <button data-cpu-button="surface" type="button" class="corner-back" aria-label="返回小工具" @click="router.push('/services/tools')">←</button>
         <img class="menu-emblem" :src="cpuEmblem" alt="中国药科大学校标" />
         <h1>药大人能飞</h1>
         <p class="menu-tagline">💊 点击起飞 · 穿越药苑 · 兴药为民</p>
@@ -21,11 +21,11 @@
           <strong>{{ displayBest }}</strong>
         </div>
         <div class="menu-actions">
-          <button type="button" class="game-button game-button--start" @click="startGame">开始游戏</button>
-          <button type="button" class="game-button game-button--achievement" @click="openScreen('achievements')">🏆 成就</button>
-          <button type="button" class="game-button game-button--ranking" @click="openScreen('ranking')">📊 全校排行</button>
-          <button type="button" class="game-button game-button--secondary" @click="openScreen('history')">📜 历史战绩</button>
-          <button type="button" class="game-button game-button--secondary" @click="openScreen('settings')">⚙ 设置</button>
+          <button data-cpu-button="surface" type="button" class="game-button game-button--start" @click="startGame">开始游戏</button>
+          <button data-cpu-button="surface" type="button" class="game-button game-button--achievement" @click="openScreen('achievements')">🏆 成就</button>
+          <button data-cpu-button="surface" type="button" class="game-button game-button--ranking" @click="openScreen('ranking')">📊 全校排行</button>
+          <button data-cpu-button="surface" type="button" class="game-button game-button--secondary" @click="openScreen('history')">📜 历史战绩</button>
+          <button data-cpu-button="surface" type="button" class="game-button game-button--secondary" @click="openScreen('settings')">⚙ 设置</button>
         </div>
         <p class="menu-footnote">{{ recoveryNotice || (isLoggedIn ? "云端排行与成就已开启" : "本机记录 · 登录后同步云端") }}</p>
       </section>
@@ -37,13 +37,13 @@
           <small>最高 {{ displayBest }}</small>
         </div>
         <div class="game-controls">
-          <button
+          <button data-cpu-button="surface"
             v-if="gamePhase === 'playing' || gamePhase === 'paused'"
             type="button"
             :aria-label="gamePhase === 'paused' ? '继续游戏' : '暂停游戏'"
             @click.stop="togglePause"
           >{{ gamePhase === "paused" ? "▶" : "Ⅱ" }}</button>
-          <button type="button" aria-label="返回主页" @click.stop="returnToMenu">×</button>
+          <button data-cpu-button="surface" type="button" aria-label="返回主页" @click.stop="returnToMenu">×</button>
         </div>
 
         <div v-if="gamePhase === 'ready'" class="ready-hint">
@@ -57,8 +57,8 @@
             <span class="modal-icon">⏸</span>
             <h2>飞行暂停</h2>
             <p>当前 {{ score }} 分</p>
-            <button type="button" class="game-button game-button--start" @click.stop="togglePause">继续飞行</button>
-            <button type="button" class="plain-button" @click.stop="returnToMenu">返回主页</button>
+            <button data-cpu-button="surface" type="button" class="game-button game-button--start" @click.stop="togglePause">继续飞行</button>
+            <button data-cpu-button="surface" type="button" class="plain-button" @click.stop="returnToMenu">返回主页</button>
           </div>
         </div>
 
@@ -75,8 +75,8 @@
             <div v-if="newlyUnlocked.length" class="new-unlocks">
               <b v-for="item in newlyUnlocked" :key="item.code">{{ item.icon }} {{ item.title }}</b>
             </div>
-            <button type="button" class="game-button game-button--start" @click.stop="startGame">再飞一次</button>
-            <button type="button" class="plain-button" @click.stop="returnToMenu">返回主页</button>
+            <button data-cpu-button="surface" type="button" class="game-button game-button--start" @click.stop="startGame">再飞一次</button>
+            <button data-cpu-button="surface" type="button" class="plain-button" @click.stop="returnToMenu">返回主页</button>
           </div>
         </div>
       </section>
@@ -84,17 +84,17 @@
       <section v-else class="panel-screen">
         <header class="panel-header">
           <h2>{{ panelTitle }}</h2>
-          <button type="button" @click="returnToMenu">返回主页</button>
+          <button data-cpu-button="surface" type="button" @click="returnToMenu">返回主页</button>
         </header>
 
         <div v-if="screen === 'ranking'" class="panel-scroll ranking-panel">
           <div class="ranking-summary">
             <div><span>全校玩家</span><strong>{{ totalPlayers }}</strong></div>
             <div v-if="cloudMe"><span>我的排名</span><strong>#{{ cloudMe.rank }}</strong></div>
-            <button type="button" :disabled="leaderboardLoading" @click="loadLeaderboard(true)">
+            <button data-cpu-button="surface" type="button" :disabled="leaderboardLoading" @click="loadLeaderboard(true)">
               {{ leaderboardLoading ? "刷新中..." : "刷新榜单" }}
             </button>
-            <button
+            <button data-cpu-button="surface"
               v-if="isLoggedIn"
               type="button"
               class="manual-sync-button"
@@ -117,7 +117,7 @@
             </li>
           </ol>
           <div v-else class="empty-panel">{{ leaderboardLoading ? "正在读取云端战绩..." : "还没有云端战绩，等你拿下第一名！" }}</div>
-          <button v-if="!isLoggedIn" type="button" class="panel-login" @click="goToLogin">登录并加入全校排行</button>
+          <button data-cpu-button="surface" v-if="!isLoggedIn" type="button" class="panel-login" @click="goToLogin">登录并加入全校排行</button>
           <p v-if="leaderboardError" class="panel-error">{{ leaderboardError }}</p>
         </div>
 
@@ -135,7 +135,7 @@
             </article>
           </div>
           <div v-else class="empty-panel">{{ leaderboardLoading ? "正在读取云端成就..." : "成就册暂时没有连接上" }}</div>
-          <button v-if="!isLoggedIn" type="button" class="panel-login" @click="goToLogin">登录并保存成就进度</button>
+          <button data-cpu-button="surface" v-if="!isLoggedIn" type="button" class="panel-login" @click="goToLogin">登录并保存成就进度</button>
         </div>
 
         <div v-else-if="screen === 'history'" class="panel-scroll">
@@ -154,11 +154,11 @@
           <img :src="cpuEmblem" alt="中国药科大学校标" />
           <div class="setting-row">
             <span><b>游戏音效</b><small>起飞、得分与碰撞提示音</small></span>
-            <button type="button" :class="{ active: soundEnabled }" @click="toggleSound">{{ soundEnabled ? "开启" : "关闭" }}</button>
+            <button data-cpu-button="surface" type="button" :class="{ active: soundEnabled }" @click="toggleSound">{{ soundEnabled ? "开启" : "关闭" }}</button>
           </div>
           <div class="setting-row">
             <span><b>云端档案</b><small>{{ isLoggedIn ? "排行榜、局数和成就自动保存" : "当前成绩仅保存在这台设备" }}</small></span>
-            <button v-if="!isLoggedIn" type="button" @click="goToLogin">登录</button>
+            <button data-cpu-button="surface" v-if="!isLoggedIn" type="button" @click="goToLogin">登录</button>
             <b v-else class="cloud-online">已连接</b>
           </div>
           <p>操作：点击 / 触摸 / 空格 / ↑ 起飞，P 暂停，Esc 返回主页。</p>

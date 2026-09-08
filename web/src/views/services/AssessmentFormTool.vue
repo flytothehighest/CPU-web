@@ -1,6 +1,6 @@
 <template>
   <main class="assessment-page">
-    <button class="back-link" type="button" @click="router.push('/services/tools')">← 返回校园小工具</button>
+    <button data-cpu-button="text" class="back-link" type="button" @click="router.push('/services/tools')">← 返回校园小工具</button>
 
     <section class="hero-card">
       <div class="hero-icon"><Monitor /></div>
@@ -18,13 +18,13 @@
         <strong>{{ download.available ? `最新版 v${download.version || '—'}` : '正在获取最新版' }}</strong>
         <small v-if="download.size">安装包约 {{ formatSize(download.size) }}</small>
         <small v-else>下载 ZIP 后解压，双击程序即可使用</small>
-        <a
+        <a data-cpu-button="primary"
           v-if="download.available"
           class="primary-action"
           :href="download.url"
           rel="noopener noreferrer"
         >下载 Windows 版</a>
-        <button v-else class="primary-action is-disabled" type="button" :disabled="loading" @click="loadDownload">
+        <button data-cpu-button="primary" v-else class="primary-action is-disabled" type="button" :disabled="loading" @click="loadDownload">
           {{ loading ? "正在连接企业盘…" : "重试获取下载" }}
         </button>
       </div>

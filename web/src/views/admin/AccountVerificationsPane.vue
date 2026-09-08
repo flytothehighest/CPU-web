@@ -101,7 +101,7 @@
         </el-input>
       </div>
       <div v-if="candidates.length" class="candidate-list">
-        <button
+        <button data-cpu-button="surface"
           v-for="candidate in candidates"
           :key="candidate.id"
           type="button"

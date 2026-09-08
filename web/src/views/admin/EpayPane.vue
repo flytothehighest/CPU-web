@@ -70,7 +70,7 @@
         <span v-if="form.merchantKeyMasked">密钥：{{ form.merchantKeyMasked }}</span>
       </div>
 
-      <div class="actions-row">
+      <div class="actions-row cpu-button-row">
         <el-button v-if="form.hasMerchantKey" plain type="danger" :loading="saving" :disabled="saving || Boolean(loadError)" @click="clearKey">清空密钥</el-button>
         <el-button type="primary" :loading="saving" :disabled="saving || Boolean(loadError)" @click="saveConfig">保存配置</el-button>
       </div>
@@ -113,7 +113,7 @@
         </label>
       </div>
 
-      <div class="actions-row">
+      <div class="actions-row cpu-button-row">
         <el-button :icon="Refresh" @click="resetPreviewNo">换订单号</el-button>
         <el-button type="primary" :loading="previewing" :disabled="previewing || Boolean(loadError)" @click="previewPayment">生成签名</el-button>
       </div>

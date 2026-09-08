@@ -91,7 +91,7 @@
           <div class="vcode-row">
             <el-input v-model="form.captcha" placeholder="看图输入" maxlength="8" class="vcode-input" :disabled="jwxt.loading || captchaLoading" />
             <div class="vcode-side">
-              <button v-if="jwxt.captchaImage" type="button" class="vcode-img-button" :disabled="jwxt.loading || captchaLoading" @click="reloadCaptcha">
+              <button data-cpu-button="media" v-if="jwxt.captchaImage" type="button" class="vcode-img-button" :disabled="jwxt.loading || captchaLoading" @click="reloadCaptcha">
                 <img :src="jwxt.captchaImage" alt="captcha" class="vcode-img" loading="lazy" decoding="async" fetchpriority="low" :title="'点击换一张'" />
               </button>
               <el-button text class="vcode-refresh" :loading="captchaLoading" :disabled="jwxt.loading || captchaLoading" @click="reloadCaptcha"><el-icon><Refresh /></el-icon></el-button>
