@@ -435,6 +435,7 @@ public final class NativeScheduleStore: ObservableObject {
         let requestedWeek = (week ?? selectedWeek).trimmedNonEmpty
         if let requestedSemester { selectedSemester = requestedSemester }
         if let requestedWeek { selectedWeek = requestedWeek }
+        webViewLoader?.prioritize(semester: selectedSemester, week: selectedWeek)
 
         let key = CacheKey(semester: requestedSemester ?? "", week: requestedWeek ?? "")
         if force { refreshStartedAt[key.semester] = .now }
@@ -481,10 +482,10 @@ public final class NativeScheduleStore: ObservableObject {
         }
     }
 
-    /// A trusted bridge pushes this only after every teaching week is present.
+    /// A trusted bridge pushes each prefetched week, then the complete semester.
     /// Cache it without changing a newer selection or a foreground loading state.
     public func receivePrefetchedSnapshot(_ snapshot: NativeScheduleSnapshot) {
-        guard snapshot.version == 1, snapshot.completeSemester, snapshot.auth.authenticated,
+        guard snapshot.version == 1, snapshot.auth.authenticated,
               snapshot.error == nil, let data = snapshot.data,
               !data.currentSemester.isEmpty, let fetchedAt = snapshot.fetchedAt else { return }
         guard cache.values.contains(where: { $0.snapshot.data?.currentSemester == data.currentSemester }),
@@ -495,8 +496,15 @@ public final class NativeScheduleStore: ObservableObject {
         guard fetchedAt >= barrier else { return }
         let entry = CacheEntry(snapshot: snapshot)
         guard entry.isFresh(at: .now, lifetime: cacheLifetime) else { return }
-        cache = cache.filter { $0.key.semester != data.currentSemester }
-        cache[CacheKey(semester: data.currentSemester, week: "*")] = entry
+        if snapshot.completeSemester {
+            cache = cache.filter { $0.key.semester != data.currentSemester }
+            cache[CacheKey(semester: data.currentSemester, week: "*")] = entry
+        } else {
+            guard let week = Int(data.currentWeek), (1...64).contains(week),
+                  cache[CacheKey(semester: data.currentSemester, week: "*")] == nil else { return }
+            cache[CacheKey(semester: data.currentSemester, week: data.currentWeek)] = entry
+            return // Prewarming must never change the visible week's state or selection.
+        }
         if selectedSemester == data.currentSemester, state == .loaded || state == .stale {
             apply(snapshot, state: .loaded, requestedSemester: selectedSemester,
                   requestedWeek: selectedWeek,
@@ -505,6 +513,7 @@ public final class NativeScheduleStore: ObservableObject {
     }
 
     public func restoreCachedSelection() -> Bool {
+        webViewLoader?.prioritize(semester: selectedSemester, week: selectedWeek)
         let key = CacheKey(semester: selectedSemester, week: selectedWeek)
         guard let entry = cachedEntry(for: key), entry.isFresh(at: .now, lifetime: cacheLifetime) else { return false }
         requestGeneration += 1
@@ -705,6 +714,16 @@ public final class NativeScheduleWebViewLoader {
 
     public init(webView: WKWebView) {
         self.webView = webView
+    }
+
+    public func prioritize(semester: String, week: String) {
+        guard !semester.isEmpty, !week.isEmpty, let webView else { return }
+        Task { @MainActor in
+            _ = try? await webView.callAsyncJavaScript(
+                "window.CPUTimeNativeSchedulePrioritize?.(semester, week);",
+                arguments: ["semester": semester, "week": week], in: nil, contentWorld: .page
+            )
+        }
     }
 
     public func load(_ request: NativeScheduleRequest) async throws -> NativeScheduleSnapshot {

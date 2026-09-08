@@ -395,6 +395,7 @@ final class HybridWebViewStore: NSObject, ObservableObject, WKScriptMessageHandl
           };
           bridge.ready = () => post({ type: 'ready' });
           bridge.schedulePrefetched = (snapshot) => post({type: 'schedulePrefetched', snapshot});
+          bridge.scheduleWeekPrefetched = bridge.schedulePrefetched;
           bridge.authChanged = () => post({ type: 'authChanged' });
           window.CPUTimeNative = bridge;
           window.CPUIOS = {

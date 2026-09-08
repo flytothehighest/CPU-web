@@ -254,3 +254,46 @@ test('unknown scope never claims a complete semester from a course week range', 
   assert.equal(result.completeSemester, false);
   assert.equal(updates, 0);
 });
+
+test('prefetch starts beside the visible week and publishes each week before semester completion', async () => {
+  const ctx = setup();
+  const requests = [];
+  const warmed = [];
+  ctx.api.schedule = async (params) => {
+    requests.push(params.week);
+    const data = sample();
+    data.currentWeek = params.week === 'all' ? '5' : params.week;
+    data.weeks = Array.from({ length: 9 }, (_, index) => ({ value: String(index + 1) }));
+    return { parsed: data };
+  };
+  ctx.window.CPUTimeNative.scheduleWeekPrefetched = value => {
+    assert.equal(value.completeSemester, false);
+    warmed.push(value.data.currentWeek);
+  };
+  const completed = new Promise(resolve => { ctx.window.CPUTimeNative.schedulePrefetched = resolve; });
+  await ctx.window.CPUTimeNativeScheduleFetch('2025-2026-2', '5');
+  await completed;
+  assert.deepEqual(requests.slice(0, 5), ['all', '6', '4', '7', '3']);
+  assert.deepEqual(warmed.slice(0, 4), ['6', '4', '7', '3']);
+  assert.equal(warmed.length, 8);
+});
+
+test('a native cache hit reprioritizes the next background week without a foreground fetch', async () => {
+  const ctx = setup();
+  const requests = [];
+  ctx.api.schedule = async (params) => {
+    requests.push(params.week);
+    const data = sample();
+    data.currentWeek = params.week === 'all' ? '5' : params.week;
+    data.weeks = Array.from({ length: 8 }, (_, index) => ({ value: String(index + 1) }));
+    return { parsed: data };
+  };
+  ctx.window.CPUTimeNative.scheduleWeekPrefetched = value => {
+    if (value.data.currentWeek === '6') ctx.window.CPUTimeNativeSchedulePrioritize('2025-2026-2', '6');
+  };
+  const completed = new Promise(resolve => { ctx.window.CPUTimeNative.schedulePrefetched = resolve; });
+  await ctx.window.CPUTimeNativeScheduleFetch('2025-2026-2', '5');
+  await completed;
+  assert.deepEqual(requests.slice(0, 3), ['all', '6', '7']);
+  assert.equal(requests.filter(value => value === '6').length, 1);
+});

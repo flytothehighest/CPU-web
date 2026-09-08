@@ -16,6 +16,7 @@ type SemesterEntry = {
   calendar: CalendarResult | null;
   edits: ScheduleEdits;
   weeks: string[];
+  preferredWeek: string;
   schedules: Map<string, ScheduleResult>;
   pending: Map<string, Promise<ScheduleResult>>;
   complete?: ScheduleResult;
@@ -82,6 +83,7 @@ export function installIosNextScheduleBridge(router?: Router) {
         if (!valid(entry, epoch)) throw new Error("课表会话已变化");
         if (data.currentSemester && data.currentSemester !== entry.semester) throw new Error("教务系统返回了其他学期的课表");
         entry.schedules.set(week, data);
+        host.CPUTimeNative?.scheduleWeekPrefetched?.(snapshot(entry, data, week));
         return data;
       }).finally(() => entry.pending.delete(week));
     entry.pending.set(week, request);
@@ -93,8 +95,13 @@ export function installIosNextScheduleBridge(router?: Router) {
       // Return the visible week first. Only one background request at a time;
       // explicit week selections can run alongside it and share pending work.
       await new Promise(resolve => setTimeout(resolve, 300));
-      for (const week of entry.weeks) {
+      while (true) {
         if (!valid(entry, epoch) || activeSemester !== entry.semester) return;
+        const current = Number(entry.preferredWeek);
+        const week = entry.weeks.filter(value => !entry.schedules.has(value)).sort((a, b) =>
+          Math.abs(Number(a) - current) - Math.abs(Number(b) - current) || Number(b) - Number(a)
+        )[0];
+        if (!week) break;
         await loadWeek(entry, week, epoch);
       }
       if (!valid(entry, epoch) || activeSemester !== entry.semester) return;
@@ -209,7 +216,7 @@ export function installIosNextScheduleBridge(router?: Router) {
         // alone cannot prove that later, unseen teaching weeks do not exist.
         const weeks = [...new Set(data.weeks.map(item => Number(item.value))
           .filter(value => Number.isInteger(value) && value >= 1 && value <= 64))].sort((a, b) => a - b).map(String);
-        entry = { semester: resolved, createdAt: Date.now(), calendar, edits, weeks,
+        entry = { semester: resolved, createdAt: Date.now(), calendar, edits, weeks, preferredWeek: week || data.currentWeek,
           schedules: new Map([[requestedDataWeek || data.currentWeek, data]]), pending: new Map(),
           complete: data.scope === "semester" ? data : undefined };
         if (selection !== selectionRevision) return { version: 1, auth: { authenticated: true }, error: "课表请求已被新选择替代" };
@@ -218,6 +225,7 @@ export function installIosNextScheduleBridge(router?: Router) {
       if (selection === selectionRevision) activeSemester = entry.semester;
       const selected = week || (entry.calendar?.currentWeek ? String(entry.calendar.currentWeek)
         : entry.schedules.values().next().value?.currentWeek || entry.complete?.currentWeek || "");
+      entry.preferredWeek = selected;
       const data = entry.complete ?? await loadWeek(entry, selected, epoch);
       if (generation !== epoch || !jwxt.isLoggedIn) return unauthorized();
       if (!valid(entry, epoch)) throw new Error("课表请求已更新，请重试。");
@@ -228,6 +236,14 @@ export function installIosNextScheduleBridge(router?: Router) {
       if (initialGeneration !== generation || !jwxt.isLoggedIn) return unauthorized();
       return { version: 1, auth: { authenticated: true }, error: error instanceof Error ? error.message : "课表暂时无法加载，请重试。" };
     }
+  };
+  // Native cache hits need no data request, but can still reprioritize upcoming weeks.
+  host.CPUTimeNativeSchedulePrioritize = (semester: string, week: string) => {
+    const entry = semesters.get(semester);
+    if (!entry || !jwxt.isLoggedIn || Date.now() - entry.createdAt > CACHE_LIFETIME) return;
+    activeSemester = semester;
+    entry.preferredWeek = week;
+    prefetch(entry, generation);
   };
   host.CPUTimeNativeScheduleFetch = (semester?: string, week?: string, force = false) => {
     const key = JSON.stringify([generation, semester || "", week || "", force]);

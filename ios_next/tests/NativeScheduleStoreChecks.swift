@@ -47,6 +47,26 @@ struct NativeScheduleStoreChecks {
         await semesterStore.selectWeek("12")
         precondition(semesterCalls == 2, "Refresh replaces the complete semester cache")
 
+        var adjacentCalls = 0
+        let adjacentStore = NativeScheduleStore(loader: { _ in adjacentCalls += 1; return snapshot() })
+        await adjacentStore.load(semester: "fall", week: "3")
+        let nextWeek = NativeScheduleSnapshot(source: .jwxt, fetchedAt: .now,
+            data: NativeScheduleResult(currentSemester: "fall", currentWeek: "4",
+                cells: [NativeScheduleCell(day: 2, bigSlot: 1, courses: [NativeScheduleCourse(name: "下周实验")])]),
+            auth: NativeScheduleAuth(authenticated: true))
+        adjacentStore.receivePrefetchedSnapshot(nextWeek)
+        precondition(adjacentStore.selectedWeek == "3" && adjacentStore.state == .loaded,
+                     "Prewarming must not change the visible week or show a spinner")
+        await adjacentStore.selectWeek("4")
+        precondition(adjacentCalls == 1 && adjacentStore.state == .loaded,
+                     "A prewarmed next week must be served locally without a bridge data request")
+        precondition(adjacentStore.result?.cells.first?.courses.first?.name == "下周实验")
+        adjacentStore.reset()
+        adjacentStore.receivePrefetchedSnapshot(nextWeek)
+        adjacentStore.selectedSemester = "fall"
+        adjacentStore.selectedWeek = "4"
+        precondition(!adjacentStore.restoreCachedSelection(), "Late weekly prefetch cannot restore logged-out data")
+
         let prefetchStore = NativeScheduleStore(loader: { _ in snapshot() })
         await prefetchStore.load(semester: "fall", week: "3")
         let whole = NativeScheduleSnapshot(completeSemester: true, source: .jwxt, fetchedAt: .now,
