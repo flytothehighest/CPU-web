@@ -1,13 +1,19 @@
 package cn.lizmt.cpuweb.schedule;
 
+import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.graphics.Bitmap;
+import android.graphics.drawable.Icon;
 import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.util.DisplayMetrics;
 import android.view.View;
 import android.widget.RemoteViews;
 import android.widget.Toast;
@@ -35,9 +41,12 @@ import java.util.concurrent.Executors;
 public class ScheduleWidgetProvider extends AppWidgetProvider {
     static final String ACTION_WIDGET_PINNED = BuildConfig.APPLICATION_ID + ".ACTION_WIDGET_PINNED";
     static final String ACTION_WIDGET_REFRESH = BuildConfig.APPLICATION_ID + ".ACTION_WIDGET_REFRESH";
+    static final String ACTION_WIDGET_TICK = BuildConfig.APPLICATION_ID + ".ACTION_WIDGET_TICK";
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor();
     private static final int COMPACT_LINE_COUNT = 4;
-    private static final int MINUTES_22_00 = 22 * 60;
+    // 今天的课上完后，往后找最近有课的一天，最远看这么多天（见 docs/schedule-widget-rules.md）。
+    static final int LOOKAHEAD_DAYS = 21;
+    private static final long FALLBACK_REFRESH_MILLIS = 30L * 60L * 1000L;
 
     enum WidgetMode {
         COMPACT,
@@ -60,6 +69,8 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
         } else if (intent != null && ACTION_WIDGET_REFRESH.equals(intent.getAction())) {
             Toast.makeText(context, "正在刷新课表", Toast.LENGTH_SHORT).show();
             updateAll(context);
+        } else if (intent != null && ACTION_WIDGET_TICK.equals(intent.getAction())) {
+            updateAll(context);
         }
     }
 
@@ -69,6 +80,12 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
         for (int appWidgetId : appWidgetIds) {
             updateWidget(context.getApplicationContext(), manager, appWidgetId, mode);
         }
+    }
+
+    /** 拖动改了大小：按新尺寸重画，保持和 iOS 一样的比例。 */
+    @Override
+    public void onAppWidgetOptionsChanged(Context context, AppWidgetManager manager, int appWidgetId, Bundle newOptions) {
+        updateWidget(context.getApplicationContext(), manager, appWidgetId, widgetMode());
     }
 
     static void updateAll(Context context) {
@@ -99,28 +116,53 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
             int appWidgetId,
             WidgetMode mode
     ) {
-        RemoteViews loading = baseViews(context, mode);
-        renderMessage(loading, mode, "正在更新", "正在读取课表...", "");
-        manager.updateAppWidget(appWidgetId, loading);
-
-        String endpoint = ScheduleWidgetPrefs.endpoint(context);
-        if (endpoint == null || endpoint.trim().isEmpty()) {
-            RemoteViews empty = baseViews(context, mode);
-            renderMessage(empty, mode, "未配置", "打开 App 里的“更多”添加课表小组件", "配置后会自动刷新");
-            manager.updateAppWidget(appWidgetId, empty);
-            return;
-        }
-
         EXECUTOR.execute(() -> {
-            RemoteViews views = baseViews(context, mode);
-            try {
-                JSONObject data = fetchSchedule(endpoint);
-                renderSchedule(views, data, mode);
-            } catch (Exception error) {
-                renderFailure(views, mode, error);
+            // 优先读 App 写在本地的课表；本地没有（还没打开过新版 App）才退回服务端小组件接口。
+            JSONObject record = ScheduleWidgetLocalDays.read(context);
+            if (record != null) {
+                ChineseCalendarInfo.usePublishedHolidays(ScheduleWidgetLocalDays.holidays(record));
+                render(context, manager, appWidgetId, mode,
+                        ScheduleWidgetLocalDays.payload(record, deviceDateOffset(0)));
+                return;
             }
-            manager.updateAppWidget(appWidgetId, views);
+            ChineseCalendarInfo.usePublishedHolidays(new ArrayList<>());
+            String endpoint = ScheduleWidgetPrefs.endpoint(context);
+            if (endpoint == null || endpoint.trim().isEmpty()) {
+                RemoteViews empty = baseViews(context, mode);
+                renderMessage(empty, mode, "未配置", "打开 App 里的课表页面即可同步", "配置后会自动刷新");
+                manager.updateAppWidget(appWidgetId, empty);
+                return;
+            }
+            RemoteViews loading = baseViews(context, mode);
+            renderMessage(loading, mode, "正在更新", "正在读取课表...", "");
+            manager.updateAppWidget(appWidgetId, loading);
+            try {
+                render(context, manager, appWidgetId, mode, fetchSchedule(endpoint));
+            } catch (Exception error) {
+                RemoteViews views = baseViews(context, mode);
+                renderFailure(views, mode, error);
+                scheduleNextRefresh(context, null);
+                manager.updateAppWidget(appWidgetId, views);
+            }
         });
+    }
+
+    private static void render(
+            Context context,
+            AppWidgetManager manager,
+            int appWidgetId,
+            WidgetMode mode,
+            JSONObject data
+    ) {
+        RemoteViews views = baseViews(context, mode);
+        if (data == null) {
+            renderMessage(views, mode, "读取失败", "本地课表无法读取，请打开 App 刷新", "");
+            scheduleNextRefresh(context, null);
+        } else {
+            renderSchedule(context, manager, appWidgetId, views, data, mode);
+            scheduleNextRefresh(context, data);
+        }
+        manager.updateAppWidget(appWidgetId, views);
     }
 
     private static RemoteViews baseViews(Context context, WidgetMode mode) {
@@ -139,10 +181,7 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
         RemoteViews views = new RemoteViews(context.getPackageName(), layout);
         Intent intent = new Intent(context, MainActivity.class);
         intent.setData(Uri.parse(BuildConfig.APP_URL));
-        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-            flags |= PendingIntent.FLAG_IMMUTABLE;
-        }
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
         PendingIntent pendingIntent = PendingIntent.getActivity(context, 0, intent, flags);
         views.setOnClickPendingIntent(R.id.widget_root, pendingIntent);
         return views;
@@ -151,11 +190,44 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
     private static PendingIntent refreshPendingIntent(Context context) {
         Intent intent = new Intent(context, ScheduleWidgetProvider.class)
                 .setAction(ACTION_WIDGET_REFRESH);
-        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-            flags |= PendingIntent.FLAG_IMMUTABLE;
-        }
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
         return PendingIntent.getBroadcast(context, 2001, intent, flags);
+    }
+
+    private static void scheduleNextRefresh(Context context, JSONObject data) {
+        AlarmManager alarms = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        if (alarms == null) return;
+        JSONObject today = data == null ? null : fullDayForDate(data, deviceDateOffset(0), 0);
+        long at = nextRefreshAt(today, System.currentTimeMillis());
+        Intent intent = new Intent(context, ScheduleWidgetProvider.class).setAction(ACTION_WIDGET_TICK);
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
+        // 不唤醒设备：息屏时没人看小组件，亮屏后系统补发即可，也用不着精确闹钟权限。
+        alarms.setWindow(AlarmManager.RTC, at, 60_000L, PendingIntent.getBroadcast(context, 2002, intent, flags));
+    }
+
+    /** 下一次刷新：今天每节课开始、结束后 1 分钟，次日 00:01，最迟 30 分钟兜底。 */
+    static long nextRefreshAt(JSONObject today, long nowMillis) {
+        Calendar midnight = Calendar.getInstance();
+        midnight.setTimeInMillis(nowMillis);
+        midnight.set(Calendar.HOUR_OF_DAY, 0);
+        midnight.set(Calendar.MINUTE, 0);
+        midnight.set(Calendar.SECOND, 0);
+        midnight.set(Calendar.MILLISECOND, 0);
+        long dayStart = midnight.getTimeInMillis();
+        midnight.add(Calendar.DAY_OF_YEAR, 1);
+        long next = Math.min(nowMillis + FALLBACK_REFRESH_MILLIS, midnight.getTimeInMillis() + 60_000L);
+        JSONArray courses = coursesOf(today);
+        if (courses == null) return next;
+        for (int i = 0; i < courses.length(); i++) {
+            JSONObject course = courses.optJSONObject(i);
+            if (course == null) continue;
+            for (int minute : new int[]{courseStartMinutes(course), courseEndMinutes(course)}) {
+                if (minute < 0) continue;
+                long at = dayStart + (minute + 1) * 60_000L;
+                if (at > nowMillis && at < next) next = at;
+            }
+        }
+        return next;
     }
 
     private static JSONObject fetchSchedule(String endpoint) throws Exception {
@@ -216,44 +288,192 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
         }
     }
 
-    private static void renderSchedule(RemoteViews views, JSONObject data, WidgetMode mode) {
-        if (mode == WidgetMode.LARGE) {
-            renderLarge(views, data);
-        } else if (mode == WidgetMode.TODAY_WIDE || mode == WidgetMode.TODAY_LARGE) {
-            renderToday(views, data, mode == WidgetMode.TODAY_LARGE);
-        } else {
-            renderUpcoming(views, data, mode == WidgetMode.WIDE);
+    /** 按当前时刻画一张课表图：先决定显示哪天的哪些课，再交给渲染器按给定的尺寸和配色画。 */
+    interface Painter {
+        Bitmap paint(ScheduleWidgetCardRenderer.Frame frame);
+    }
+
+    static ScheduleWidgetCardRenderer.Family family(WidgetMode mode) {
+        switch (mode) {
+            case COMPACT: return ScheduleWidgetCardRenderer.Family.SMALL;
+            case WIDE:
+            case TODAY_WIDE: return ScheduleWidgetCardRenderer.Family.MEDIUM;
+            default: return ScheduleWidgetCardRenderer.Family.LARGE;
         }
     }
 
-    private static void renderUpcoming(RemoteViews views, JSONObject data, boolean wide) {
-        boolean preferTomorrow = shouldPreferTomorrow(data);
-        JSONObject primaryDay = resolveDay(data, preferTomorrow ? 1 : 0);
-        List<JSONObject> courses = preferTomorrow
-                ? firstCourses(primaryDay, 2)
-                : nextCourses(primaryDay, currentMinutes(), 2);
-        if (courses.isEmpty() && !preferTomorrow) {
-            primaryDay = resolveDay(data, 1);
-            courses = firstCourses(primaryDay, 2);
+    static Painter painter(JSONObject data, WidgetMode mode, String todayDate, int now) {
+        if (mode == WidgetMode.LARGE) return twoDayPainter(data, todayDate, now);
+        if (mode == WidgetMode.TODAY_WIDE || mode == WidgetMode.TODAY_LARGE) {
+            return todayPainter(data, todayDate, now, mode == WidgetMode.TODAY_LARGE);
         }
-        showBitmap(views, ScheduleWidgetCardRenderer.renderUpcoming(primaryDay, courses, wide));
+        return upcomingPainter(data, todayDate, now, mode == WidgetMode.WIDE);
     }
 
-    private static void renderToday(RemoteViews views, JSONObject data, boolean large) {
-        JSONObject day = fullDayForDate(data, deviceDateOffset(0), 0);
-        showBitmap(views, ScheduleWidgetCardRenderer.renderToday(day, large, currentMinutes()));
+    private static void renderSchedule(
+            Context context,
+            AppWidgetManager manager,
+            int appWidgetId,
+            RemoteViews views,
+            JSONObject data,
+            WidgetMode mode
+    ) {
+        showBitmap(context, manager, appWidgetId, views, mode,
+                painter(data, mode, deviceDateOffset(0), currentMinutes()));
     }
 
-    private static void renderLarge(RemoteViews views, JSONObject data) {
-        JSONObject today = fullDayForDate(data, deviceDateOffset(0), 0);
-        JSONObject tomorrow = fullDayForDate(data, deviceDateOffset(1), 1);
-        showBitmap(views, ScheduleWidgetCardRenderer.renderTwoDay(today, tomorrow, currentMinutes()));
+    private static Painter upcomingPainter(JSONObject data, String todayDate, int now, boolean wide) {
+        JSONObject today = fullDayForDate(data, todayDate, 0);
+        List<JSONObject> courses = nextCourses(today, now, 2);
+        String tag = "";
+        String[] labels = courses.isEmpty() ? null : upcomingLabels(courses.get(0), now);
+        if (courses.isEmpty()) {
+            int offset = nextClassDayOffset(data, todayDate);
+            if (offset > 0) {
+                JSONObject day = dayForDate(data, addDays(todayDate, offset));
+                courses = firstCourses(day, 2);
+                tag = otherDayTag(offset, day.optString("date", ""));
+                labels = new String[]{"第一节", "接下来"};
+            }
+        }
+        List<JSONObject> shown = courses;
+        String shownTag = tag;
+        String[] shownLabels = labels;
+        String week = weekForDay(data, today);
+        return frame -> ScheduleWidgetCardRenderer.renderUpcoming(
+                frame, today, week, shownTag, shown, shownLabels, wide);
     }
 
-    private static void showBitmap(RemoteViews views, Bitmap bitmap) {
+    private static Painter todayPainter(JSONObject data, String todayDate, int now, boolean large) {
+        JSONObject today = fullDayForDate(data, todayDate, 0);
+        JSONObject shown = today;
+        String tag = "";
+        int shownNow = now;
+        // 今天上完了：换到 21 天内最近有课的一天；都没课就是休息状态（docs/schedule-widget-rules.md 第 2 节）。
+        // 安卓没有「只看今天」的选项，所以不把上完的课灰着留在原处。
+        if (nextCourses(today, now, 1).isEmpty()) {
+            int offset = nextClassDayOffset(data, todayDate);
+            if (offset > 0) {
+                shown = dayForDate(data, addDays(todayDate, offset));
+                tag = otherDayTag(offset, shown.optString("date", ""));
+                shownNow = -1;
+            } else {
+                shown = new JSONObject();
+            }
+        }
+        JSONObject day = shown;
+        String shownTag = tag;
+        int minutes = shownNow;
+        String week = weekForDay(data, today);
+        return frame -> ScheduleWidgetCardRenderer.renderToday(frame, today, week, day, shownTag, large, minutes);
+    }
+
+    private static Painter twoDayPainter(JSONObject data, String todayDate, int now) {
+        JSONObject today = fullDayForDate(data, todayDate, 0);
+        int offset = nextClassDayOffset(data, todayDate);
+        JSONObject other = offset > 0
+                ? dayForDate(data, addDays(todayDate, offset))
+                : fullDayForDate(data, addDays(todayDate, 1), 1);
+        String tag = offset > 1 ? otherDayTag(offset, other.optString("date", "")) : "";
+        String todayWeek = weekForDay(data, today);
+        String otherWeek = weekForDay(data, other);
+        return frame -> ScheduleWidgetCardRenderer.renderTwoDay(frame, today, todayWeek, other, otherWeek, tag, now);
+    }
+
+    /** 今天之后 21 天内第一个有课的日子距今天几天；没有返回 -1。只认服务端给出的真实日期。 */
+    static int nextClassDayOffset(JSONObject data, String todayDate) {
+        for (int offset = 1; offset <= LOOKAHEAD_DAYS; offset++) {
+            JSONArray courses = coursesOf(dayForDate(data, addDays(todayDate, offset)));
+            if (courses != null && courses.length() > 0) return offset;
+        }
+        return -1;
+    }
+
+    static JSONObject dayForDate(JSONObject data, String date) {
+        if (data == null || date == null || date.isEmpty()) return null;
+        for (String key : new String[]{"weekDays", "days"}) {
+            JSONArray days = data.optJSONArray(key);
+            if (days == null) continue;
+            for (int index = 0; index < days.length(); index++) {
+                JSONObject day = days.optJSONObject(index);
+                if (dateMatches(day, date)) return day;
+            }
+        }
+        return null;
+    }
+
+    static String otherDayTag(int offset, String date) {
+        if (offset == 1) return "明天的课";
+        if (offset == 2) return "后天的课";
+        if (date == null || date.length() < 10) return "";
+        try {
+            return Integer.parseInt(date.substring(5, 7)) + "/" + Integer.parseInt(date.substring(8, 10)) + " 的课";
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    static String[] upcomingLabels(JSONObject first, int now) {
+        int start = courseStartMinutes(first);
+        return start >= 0 && start <= now
+                ? new String[]{"当前", "接下来"}
+                : new String[]{"下一节", "之后"};
+    }
+
+    static String addDays(String date, int offset) {
+        try {
+            SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd", Locale.CHINA);
+            format.setLenient(false);
+            Calendar calendar = Calendar.getInstance();
+            calendar.setTime(format.parse(date));
+            calendar.add(Calendar.DAY_OF_YEAR, offset);
+            return format.format(calendar.getTime());
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    /**
+     * 按小组件实际大小画图。Android 12 起浅色、深色各画一张，由桌面跟着系统深色模式挑，
+     * 切换时不用等下一次刷新；更早的系统按此刻的深色模式画。
+     */
+    private static void showBitmap(
+            Context context,
+            AppWidgetManager manager,
+            int appWidgetId,
+            RemoteViews views,
+            WidgetMode mode,
+            Painter painter
+    ) {
         views.setViewVisibility(R.id.widget_message, View.GONE);
         views.setViewVisibility(R.id.widget_content_image, View.VISIBLE);
-        views.setImageViewBitmap(R.id.widget_content_image, bitmap);
+        Bundle options = manager.getAppWidgetOptions(appWidgetId);
+        float width = options == null ? 0f : options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0);
+        float height = options == null ? 0f : options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0);
+        DisplayMetrics metrics = context.getResources().getDisplayMetrics();
+        String theme = ScheduleWidgetPrefs.theme(context);
+        boolean both = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S;
+        // RemoteViews 里的位图总量上限约为整屏像素的 1.5 倍，两张图各留一半余量。
+        int screen = Math.max(1, metrics.widthPixels) * Math.max(1, metrics.heightPixels);
+        int maxPixels = Math.min(2_400_000, both ? screen * 6 / 10 : screen);
+        ScheduleWidgetCardRenderer.Family family = family(mode);
+        if (both) {
+            Bitmap light = painter.paint(ScheduleWidgetCardRenderer.Frame.fit(family, width, height,
+                    metrics.density, maxPixels, new ScheduleWidgetPalette(theme, false)));
+            Bitmap dark = painter.paint(ScheduleWidgetCardRenderer.Frame.fit(family, width, height,
+                    metrics.density, maxPixels, new ScheduleWidgetPalette(theme, true)));
+            views.setIcon(R.id.widget_content_image, "setImageIcon",
+                    Icon.createWithBitmap(light), Icon.createWithBitmap(dark));
+        } else {
+            views.setImageViewBitmap(R.id.widget_content_image, painter.paint(
+                    ScheduleWidgetCardRenderer.Frame.fit(family, width, height, metrics.density, maxPixels,
+                            new ScheduleWidgetPalette(theme, isNightMode(context)))));
+        }
+    }
+
+    private static boolean isNightMode(Context context) {
+        int mode = context.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+        return mode == Configuration.UI_MODE_NIGHT_YES;
     }
 
     private static void renderMessage(
@@ -286,8 +506,7 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
         views.setTextViewText(R.id.widget_subtitle, subtitle);
     }
 
-    private static JSONObject resolveDay(JSONObject data, int offset) {
-        String targetDate = deviceDateOffset(offset);
+    private static JSONObject resolveDay(JSONObject data, String targetDate, int offset) {
         JSONObject today = data.optJSONObject("today");
         if (offset == 0 && dateMatches(today, targetDate)) return today;
 
@@ -299,7 +518,7 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
             }
         }
 
-        int targetDay = ((deviceDayOfWeek() - 1 + offset) % 7) + 1;
+        int targetDay = dayOfWeek(targetDate);
         if (data.optBoolean("strictDate", false)) {
             try {
                 return new JSONObject()
@@ -334,7 +553,7 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
                 if (dateMatches(day, targetDate)) return day;
             }
         }
-        return resolveDay(data, fallbackOffset);
+        return resolveDay(data, targetDate, fallbackOffset);
     }
 
     private static String weekForDay(JSONObject data, JSONObject day) {
@@ -351,19 +570,6 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
     private static String dayLabel(int day) {
         String[] labels = {"周一", "周二", "周三", "周四", "周五", "周六", "周日"};
         return day >= 1 && day <= labels.length ? labels[day - 1] : "";
-    }
-
-    private static boolean shouldPreferTomorrow(JSONObject data) {
-        int now = currentMinutes();
-        if (now >= MINUTES_22_00) return true;
-        JSONObject today = resolveDay(data, 0);
-        JSONArray courses = coursesOf(today);
-        if (courses == null || courses.length() == 0) return false;
-        for (int i = 0; i < courses.length(); i++) {
-            JSONObject course = courses.optJSONObject(i);
-            if (courseEndMinutes(course) >= now) return false;
-        }
-        return true;
     }
 
     static List<JSONObject> nextCourses(JSONObject day, int now, int limit) {
@@ -452,11 +658,14 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
         return output.format(calendar.getTime());
     }
 
-    private static int deviceDayOfWeek() {
-        Calendar calendar = Calendar.getInstance();
-        int day = calendar.get(Calendar.DAY_OF_WEEK);
-        if (day == Calendar.SUNDAY) return 7;
-        return day - 1;
+    /** 1 = 周一 … 7 = 周日。 */
+    private static int dayOfWeek(String date) {
+        String label = ChineseCalendarInfo.weekdayLabel(date);
+        String[] labels = {"周一", "周二", "周三", "周四", "周五", "周六", "周日"};
+        for (int index = 0; index < labels.length; index++) {
+            if (labels[index].equals(label)) return index + 1;
+        }
+        return 1;
     }
 
     private static int currentMinutes() {

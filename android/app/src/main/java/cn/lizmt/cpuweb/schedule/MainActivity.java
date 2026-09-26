@@ -93,13 +93,11 @@ public final class MainActivity extends Activity {
         WindowCompat.setDecorFitsSystemWindows(window, false);
         window.setStatusBarColor(Color.rgb(237, 244, 255));
         window.setNavigationBarColor(Color.rgb(248, 250, 252));
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            int flags = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
-            }
-            window.getDecorView().setSystemUiVisibility(flags);
+        int flags = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
         }
+        window.getDecorView().setSystemUiVisibility(flags);
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -129,15 +127,11 @@ public final class MainActivity extends Activity {
         androidBridge = new CpuAndroidBridge(this);
         setAndroidBridgeAttached(true);
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
-        }
+        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
 
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            cookieManager.setAcceptThirdPartyCookies(webView, true);
-        }
+        cookieManager.setAcceptThirdPartyCookies(webView, true);
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
@@ -235,7 +229,7 @@ public final class MainActivity extends Activity {
 
             @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && request.isForMainFrame()) {
+                if (request.isForMainFrame()) {
                     mainFrameLoadFailed = true;
                     showErrorView();
                 }
@@ -478,9 +472,7 @@ public final class MainActivity extends Activity {
         logo.setImageResource(R.mipmap.ic_launcher);
         logo.setAdjustViewBounds(true);
         logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            logo.setElevation(dp(8));
-        }
+        logo.setElevation(dp(8));
         LinearLayout.LayoutParams logoParams = new LinearLayout.LayoutParams(dp(68), dp(68));
         logoParams.setMargins(0, 0, 0, dp(18));
 
