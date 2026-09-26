@@ -882,7 +882,7 @@ private struct LockScreenScheduleView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 
-    /// 今天没有在上的课时，这块写什么：放假道贺 > 明天的课 > 「今天没有课～」。
+    /// 今天没有在上的课时，这块写什么：放假道贺 > 明天的课 > 「今日无课」。
     /// 明天的课一旦顶上来，就不再另起一行说今天，两行都留给真正有用的信息。
     private var emptyLines: (primary: String, secondary: String?) {
         let hadCourses = !day.courseList.isEmpty
@@ -1244,7 +1244,7 @@ private struct DayColumn: View {
     let nowMinutes: Int?
     /// 明天那一列没课就照常说「没有课程」，祝福只属于今天。
     var isToday = false
-    /// 另一列排着课：这半边即使今天空着也不道「周末快乐～」。
+    /// 另一列排着课：这半边即使今天空着也不道「周末快乐」。
     var siblingHasCourses = false
     var tableName: String? = nil
     /// 明天那列也占着课表名那一行但不显示，两列的课才对得齐。
@@ -1258,7 +1258,7 @@ private struct DayColumn: View {
                 // 日期栏和下面的课拉开到 18（加上外面 VStack 的 7），比课与课之间松。
                 .padding(.bottom, 11)
             if day.courseList.isEmpty {
-                // 这一支本来就是「这天没有课」，所以今天那列固定说「今天没有课～」。
+                // 这一支本来就是「这天没有课」，所以今天那列固定说「今日无课」。
                 EmptyCoursesView(
                     message: isToday
                         ? TodayRestMessage.text(hadCourses: false, showsCourses: siblingHasCourses)
@@ -1630,18 +1630,17 @@ private struct HolidayBadge: View {
     }
 }
 
-/// 今天没课时说的那一句。三种情况分开说，都压在八个字以内，小组件里排得下一行：
-/// 放假道贺 →「中秋快乐～」；今天排了课并且上完了 →「今天的课上完啦～」；
-/// 今天本来就没排课 →「今天没有课～」。
+/// 今天没课时说的那一句，压在八个字以内，小组件里排得下一行：放假道贺 →「中秋快乐」；
+/// 其余（今天的课上完了、今天本来就没排课）都说「今日无课」。
 ///
 /// 「距国庆节 12 天」这类假期提示不在这里，由 `AfterClassView.holidayFootnote`
 /// 作为下面一行小字保留。
 private enum TodayRestMessage {
     /// `showsCourses` 是这块界面上还列着课（两日课表的另一列、课后的明天预览）。
-    /// 旁边摆着一排课还说「周末快乐～」就成了反话，此时只报事实；法定假日照旧道贺。
+    /// 旁边摆着一排课还说「周末快乐」就成了反话，此时只报事实；法定假日照旧道贺。
     static func text(hadCourses: Bool, showsCourses: Bool = false, now: Date = .now) -> String {
         if let greeting = greeting(hadCourses: hadCourses, showsCourses: showsCourses, now: now) { return greeting }
-        return hadCourses ? "今天的课上完啦～" : "今天没有课～"
+        return "今日无课"
     }
 
     static func greeting(hadCourses: Bool, showsCourses: Bool = false, now: Date = .now) -> String? {
@@ -1687,15 +1686,15 @@ private struct AfterClassView: View {
         }
     }
 
-    /// 今天排了课才说「上完啦」，本来就空着的一天说「没有课」。
+    /// 今天排了课就不道「周末快乐」，否则同样说「今日无课」。
     private var todayMessage: String {
         TodayRestMessage.text(hadCourses: !payload.currentDay().courseList.isEmpty)
     }
 
     private func tomorrowPreview(_ day: ScheduleDay) -> some View {
         let visible = Array(day.courseList.prefix(max(1, limit)))
-        // 明天的课已经把这块占满了，就不再留一行说「今天没有课～」；
-        // 法定假日那句「中秋快乐～」还是值得一行。
+        // 明天的课已经把这块占满了，就不再留一行说「今日无课」；
+        // 法定假日那句「中秋快乐」还是值得一行。
         let greeting = TodayRestMessage.greeting(
             hadCourses: !payload.currentDay().courseList.isEmpty,
             showsCourses: true
