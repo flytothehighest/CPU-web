@@ -583,11 +583,7 @@ private struct ScheduleWidgetRoot<Content: View>: View {
 
     var body: some View {
         let theme = AppWidgetConfiguration.scheduleTheme
-        var displayOptions = AppWidgetConfiguration.displayOptions
-        // 「今天的课上完后」已经挪进每个小组件自己的「编辑小组件」里。
-        if let afterClass = entry.configuration.afterClass {
-            displayOptions.afterClass = afterClass
-        }
+        let displayOptions = AppWidgetConfiguration.displayOptions
         return Group {
             switch entry.state {
             case .loaded(let payload):
@@ -681,35 +677,32 @@ private struct WidgetMessageView: View {
 private struct UpcomingScheduleView: View {
     let payload: SchedulePayload
     @Environment(\.widgetFamily) private var family
-    @Environment(\.scheduleWidgetDisplayOptions) private var options
     @Environment(\.scheduleWidgetConfiguration) private var configuration
 
     @ViewBuilder
     var body: some View {
-        let selection = payload.upcoming(afterClass: options.afterClass)
-        // 「最近有课的一天」把今天换成了别的日子：标出来，课程压暗。
+        let selection = payload.upcoming(afterClass: configuration.afterClass)
+        // 「接着显示下一次课」把今天换成了别的日子：标出来，课程压暗。
         let otherDayHint = OtherDay.hint(for: selection.0)
         if family.isAccessory {
-            LockScreenScheduleView(payload: payload, day: selection.0, courses: selection.1)
+            LockScreenScheduleView(day: selection.0, courses: selection.1)
         } else {
             VStack(alignment: .leading, spacing: 0) {
                 // 换到别的日子时日期栏照旧是今天，靠「明天的课」说明下面是哪天的课。
                 WidgetDateHeader(
                     day: otherDayHint == nil ? selection.0 : payload.currentDay(),
-                    hidesCountdown: selection.1.isEmpty
-                        && AfterClassView.showsHolidayCard(payload: payload, options: options),
-                    tableName: payload.widgetTableName,
                     dayHint: otherDayHint
                 )
                 Spacer(minLength: 8)
 
                 if selection.1.isEmpty {
-                    AfterClassView(payload: payload, limit: family == .systemMedium ? 2 : 1)
+                    RestStateView()
                 } else if family == .systemMedium {
+                    let labels = Self.columnLabels(first: selection.1[0], otherDay: otherDayHint != nil)
                     HStack(alignment: .top, spacing: 14) {
-                        UpcomingColumn(label: otherDayHint == nil ? "当前" : "第一节", course: selection.1.first)
+                        UpcomingColumn(label: labels.first, course: selection.1.first)
                         Divider()
-                        UpcomingColumn(label: "接下来", course: selection.1.count > 1 ? selection.1[1] : nil)
+                        UpcomingColumn(label: labels.second, course: selection.1.count > 1 ? selection.1[1] : nil)
                     }
                     .dimmedAsOtherDay(otherDayHint != nil)
                 } else if let course = selection.1.first {
@@ -727,10 +720,16 @@ private struct UpcomingScheduleView: View {
             }
         }
     }
+
+    /// 中号两栏的标题。第一节还没开始时叫「当前」就错了：那是下一节。
+    private static func columnLabels(first: ScheduleCourse, otherDay: Bool) -> (first: String, second: String) {
+        if otherDay { return ("第一节", "接下来") }
+        if first.isInProgress(at: SchedulePayload.minutesSinceMidnight(.now)) { return ("当前", "接下来") }
+        return ("下一节", "之后")
+    }
 }
 
 private struct LockScreenScheduleView: View {
-    let payload: SchedulePayload
     let day: ScheduleDay
     let courses: [ScheduleCourse]
     @Environment(\.widgetFamily) private var family
@@ -761,38 +760,9 @@ private struct LockScreenScheduleView: View {
         .lineLimit(1)
     }
 
-    /// 单行锁屏只有一句话的位置：放假先道贺，平时让位给明天 / 假期这类更有用的信息。
-    /// 这一行已经能写出明天的课时，周末问候就让位给课——两句话挤不进一行。
+    /// 单行锁屏只有一句话的位置：祝福 → 假期倒计时 → 「今日无课」。
     private var inlineEmptyText: String {
-        let hadCourses = !day.courseList.isEmpty
-        let showsCourses = tomorrowCourseText != nil
-        if let greeting = TodayRestMessage.greeting(hadCourses: hadCourses, showsCourses: showsCourses) {
-            return greeting
-        }
-        return afterClassText ?? TodayRestMessage.text(hadCourses: hadCourses)
-    }
-
-    /// 今天没课之后，锁屏这一行改成明天第一节课或最近的假期。
-    private var afterClassText: String? {
-        switch options.afterClass {
-        case .none:
-            return nil
-        case .tomorrow:
-            return tomorrowCourseText ?? AfterClassView.holidayLine()
-        case .holiday, .nextCourseDay:
-            // 「最近有课的一天」在选课时就已经换过日子了，走到这里说明三周内都没课。
-            return AfterClassView.holidayLine()
-        }
-    }
-
-    /// 「明天 08:00 高数」；设置不是「明天的课程」或明天空着时为 `nil`。
-    private var tomorrowCourseText: String? {
-        guard options.afterClass == .tomorrow,
-              let tomorrow = payload.tomorrow(),
-              let course = tomorrow.courseList.first else { return nil }
-        return ["明天", options.showTime ? course.startLabel : nil, course.displayName]
-            .compactMap { $0 }
-            .joined(separator: " ")
+        RestState.inlineText(options: options)
     }
 
     private var circularView: some View {
@@ -882,16 +852,9 @@ private struct LockScreenScheduleView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 
-    /// 今天没有在上的课时，这块写什么：放假道贺 > 明天的课 > 「今日无课」。
-    /// 明天的课一旦顶上来，就不再另起一行说今天，两行都留给真正有用的信息。
+    /// 休息状态：上面一句祝福或「今日无课」，下面一行最近的假期。
     private var emptyLines: (primary: String, secondary: String?) {
-        let hadCourses = !day.courseList.isEmpty
-        let tomorrow = tomorrowCourseText
-        if let greeting = TodayRestMessage.greeting(hadCourses: hadCourses, showsCourses: tomorrow != nil) {
-            return (greeting, afterClassText ?? "打开课表查看本周安排")
-        }
-        if let tomorrow { return (tomorrow, AfterClassView.holidayLine()) }
-        return (TodayRestMessage.text(hadCourses: hadCourses), afterClassText ?? "打开课表查看本周安排")
+        (RestState.message(), RestState.footnote(options: options) ?? "打开课表查看本周安排")
     }
 
     private func inlineText(_ course: ScheduleCourse) -> String {
@@ -999,43 +962,29 @@ private struct CompactNextCourse: View {
 private struct TodayScheduleView: View {
     let payload: SchedulePayload
     @Environment(\.widgetFamily) private var family
-    @Environment(\.scheduleWidgetDisplayOptions) private var options
+    @Environment(\.scheduleWidgetConfiguration) private var configuration
 
     var body: some View {
         let now = Date.now
         let today = payload.currentDay(now: now)
-        let nowMinutes = today.date == SchedulePayload.dateString(now)
-            ? SchedulePayload.minutesSinceMidnight(now)
-            : nil
-        // 今天已经没有未结束的课程时，这块位置交给「明天 / 最近节假日」。
-        let finished = nowMinutes.map { minutes in
-            today.courseList.allSatisfy { $0.hasEnded(at: minutes) }
-        } ?? false
-        let showsAfterClass = today.courseList.isEmpty || (finished && options.showsAfterClassPreview)
-        // 「最近有课的一天」：课换成那一天的（日期栏照旧是今天，课程压暗）；三周内都没课才走下面的课后卡片。
-        let rolled = showsAfterClass && options.afterClass == .nextCourseDay
+        let finished = payload.remainingCourses(in: today, now: now).isEmpty
+        // 今天上完了（或本来没课）：「接着显示下一次课」换成那一天的课，日期栏照旧是今天、课程压暗；
+        // 「只看今天」把上完的课灰着留在原处。都没有可列的课才显示休息状态。
+        let next = finished && configuration.afterClass == .nextCourseDay
             ? payload.nextCourseDay(after: now)
             : nil
+        let rests = today.courseList.isEmpty || (finished && configuration.afterClass == .nextCourseDay)
         Group {
-            if let rolled {
-                courseList(day: rolled.day, nowMinutes: nil, otherDay: true, headerDay: today)
-            } else if showsAfterClass {
-                // 课后卡片自己会撑满剩下的高度，不参与下面按行数挑排法。
+            if let next {
+                courseList(day: next.day, nowMinutes: nil, otherDay: true, headerDay: today)
+            } else if rests {
+                // 休息状态自己会撑满剩下的高度，不参与下面按行数挑排法。
                 VStack(alignment: .leading, spacing: spacing) {
-                    WidgetDateHeader(
-                        day: today,
-                        showsCountdown: true,
-                        hidesCountdown: AfterClassView.showsHolidayCard(payload: payload, options: options),
-                        tableName: payload.widgetTableName
-                    )
-                    AfterClassView(
-                        payload: payload,
-                        limit: family == .systemLarge ? 5 : 2,
-                        showsRemainingCount: family != .systemMedium
-                    )
+                    WidgetDateHeader(day: today)
+                    RestStateView()
                 }
             } else {
-                courseList(day: today, nowMinutes: nowMinutes)
+                courseList(day: today, nowMinutes: SchedulePayload.minutesSinceMidnight(now))
             }
         }
         // 大号的课排不满时，系统默认把整块内容竖着居中，日期栏就飘在半空；贴顶放。
@@ -1102,8 +1051,6 @@ private struct TodayScheduleView: View {
             // 中号从日期栏和第一门课之间省出一点，留给两门课之间。
             WidgetDateHeader(
                 day: headerDay ?? today,
-                showsCountdown: true,
-                tableName: payload.widgetTableName,
                 dayHint: otherDay ? OtherDay.hint(for: today) : nil
             )
                 .padding(.bottom, family == .systemLarge ? spacing : 5)
@@ -1218,23 +1165,18 @@ private struct TwoDayScheduleView: View {
         let next = configuration.twoDayStart == .nextCourseDay ? payload.nextCourseDay(after: now) : nil
         let right = next?.day ?? payload.fullDay(for: tomorrowDate, fallbackOffset: 1)
 
+        // 右边不是明天时标上「后天的课」「10/2 的课」。左边占着同样一行但不显示，两列的课才对得齐。
+        let rightHint = (next?.offset ?? 1) > 1 ? OtherDay.hint(for: right) : nil
         HStack(alignment: .top, spacing: 13) {
             DayColumn(
                 day: today,
                 nowMinutes: SchedulePayload.minutesSinceMidnight(now),
                 isToday: true,
-                siblingHasCourses: !right.courseList.isEmpty,
-                tableName: payload.widgetTableName
+                dayHint: rightHint,
+                hidesDayHint: true
             )
             Divider()
-            // 右边不是明天时标上「后天的课」「10/2 的课」。
-            DayColumn(
-                day: right,
-                nowMinutes: nil,
-                tableName: payload.widgetTableName,
-                hidesTableName: true,
-                dayHint: (next?.offset ?? 1) > 1 ? OtherDay.hint(for: right) : nil
-            )
+            DayColumn(day: right, nowMinutes: nil, dayHint: rightHint)
         }
     }
 }
@@ -1244,25 +1186,19 @@ private struct DayColumn: View {
     let nowMinutes: Int?
     /// 明天那一列没课就照常说「没有课程」，祝福只属于今天。
     var isToday = false
-    /// 另一列排着课：这半边即使今天空着也不道「周末快乐」。
-    var siblingHasCourses = false
-    var tableName: String? = nil
-    /// 明天那列也占着课表名那一行但不显示，两列的课才对得齐。
-    var hidesTableName = false
     var dayHint: String? = nil
+    var hidesDayHint = false
 
     var body: some View {
         let window = day.courseWindow(limit: 5, nowMinutes: nowMinutes)
         VStack(alignment: .leading, spacing: 7) {
-            WidgetDateHeader(day: day, compact: true, tableName: tableName, hidesTableName: hidesTableName, dayHint: dayHint)
+            WidgetDateHeader(day: day, compact: true, dayHint: dayHint, hidesDayHint: hidesDayHint)
                 // 日期栏和下面的课拉开到 18（加上外面 VStack 的 7），比课与课之间松。
                 .padding(.bottom, 11)
             if day.courseList.isEmpty {
                 // 这一支本来就是「这天没有课」，所以今天那列固定说「今日无课」。
                 EmptyCoursesView(
-                    message: isToday
-                        ? TodayRestMessage.text(hadCourses: false, showsCourses: siblingHasCourses)
-                        : "没有课程"
+                    message: isToday ? RestState.message() : "没有课程"
                 )
             } else {
                 ForEach(Array(window.courses.enumerated()), id: \.offset) { _, course in
@@ -1281,25 +1217,18 @@ private struct DayColumn: View {
 
 private struct WidgetDateHeader: View {
     let day: ScheduleDay
-    /// 两日课表的列只有半个组件宽：右侧的节日徽标和下面那行假期提示在那里放不下。
+    /// 两日课表的列只有半个组件宽：右侧的节日徽标在那里放不下。
     var compact = false
-    /// 不开「常驻」时，只有今日课表的日期栏会在临近假期时带上倒计时。
-    var showsCountdown = false
-    /// 下面的课后区域已经在大字显示同一段假期时，日期栏这行就别重复了。
-    var hidesCountdown = false
-    /// 当前课表名，放在第二行最左边。两日课表只在今天那一列写一次。
-    var tableName: String? = nil
-    /// 课表名只占位不显示（两日课表明天那一列）。
-    var hidesTableName = false
-    /// 显示的不是今天时（「最近有课的一天」）第二行右边的标注，比假期倒计时优先。
+    /// 显示的不是今天的课时，第二行右边的标注：「明天的课」「10/2 的课」。
     var dayHint: String? = nil
+    /// 标注只占位不显示（两日课表今天那一列，和旁边一列对齐）。
+    var hidesDayHint = false
     @Environment(\.scheduleWidgetTheme) private var theme
     @Environment(\.scheduleWidgetDisplayOptions) private var options
     @Environment(\.widgetFamily) private var family
 
     var body: some View {
-        // 「周五」「初八」各自竖排成一列，日期、星期、农历之间各一条竖线；最近的
-        // 假期不挤在同一行里，单独放到下面一行。
+        // 「周五」「初八」各自竖排成一列，日期、星期、农历之间各一条竖线。
         let isCompact = compact || family == .systemSmall
         // 两行之间几乎不留空：竖线本身比字高，行距再拉开就散了。
         VStack(alignment: .leading, spacing: 0) {
@@ -1311,33 +1240,16 @@ private struct WidgetDateHeader: View {
         }
     }
 
-    /// 第二行：左边课表名、调休，右边假期倒计时。一行挤不下（小号）时倒计时换到
-    /// 下一行；连这样都放不下才按重要程度往下减：先去倒计时，再去课表名，调休留到最后。
+    /// 第二行：左边调休，右边「明天的课」。挤不下时「明天的课」优先，调休交给它自己的缩字。
     @ViewBuilder
     private var secondaryLine: some View {
         let note = day.normalizedNote.flatMap { repeatsBadge($0) ? nil : $0 }
-        let trimmedName = tableName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        // 只占位的课表名碰上调休：这一行已经有调休撑着了，别把它往右推。
-        let name: String? = trimmedName.isEmpty || (hidesTableName && note != nil) ? nil : trimmedName
-        // 调休那天就不报倒计时了，和以前一样；显示的不是今天时，那个位置让给「明天的课」。
-        let countdown = day.normalizedNote == nil && !compact && dayHint == nil ? holidayCountdown : nil
-        if note != nil || name != nil || countdown != nil || dayHint != nil {
+        if note != nil || dayHint != nil {
             ViewThatFits(in: .horizontal) {
-                secondaryRow(name: name, note: note, countdown: countdown)
-                if let countdown {
-                    VStack(alignment: .trailing, spacing: 1) {
-                        secondaryRow(name: name, note: note, countdown: nil)
-                        HolidayCountdownChip(countdown: countdown)
-                            .fixedSize()
-                    }
-                }
-                secondaryRow(name: name, note: note, countdown: nil)
-                secondaryRow(name: nil, note: note, countdown: nil)
-                // 「明天的课」要一直在：挤不下时连调休也让出去。
+                secondaryRow(note: note)
                 if dayHint != nil {
-                    secondaryRow(name: nil, note: nil, countdown: nil)
+                    secondaryRow(note: nil)
                 }
-                // 调休一句话自己都放不下时，交给它自己的缩字。
                 if let note {
                     AdjustmentNoteChip(note: note)
                 }
@@ -1345,20 +1257,8 @@ private struct WidgetDateHeader: View {
         }
     }
 
-    private func secondaryRow(
-        name: String?,
-        note: String?,
-        countdown: ChineseHolidayCountdown?
-    ) -> some View {
+    private func secondaryRow(note: String?) -> some View {
         HStack(spacing: 6) {
-            if let name {
-                Text(name)
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(WidgetPalette.muted)
-                    .lineLimit(1)
-                    .fixedSize()
-                    .opacity(hidesTableName ? 0 : 1)
-            }
             if let note {
                 AdjustmentNoteChip(note: note)
                     .fixedSize()
@@ -1367,9 +1267,7 @@ private struct WidgetDateHeader: View {
             if let dayHint {
                 OtherDayChip(title: dayHint)
                     .fixedSize()
-            } else if let countdown {
-                HolidayCountdownChip(countdown: countdown)
-                    .fixedSize()
+                    .opacity(hidesDayHint ? 0 : 1)
             }
         }
     }
@@ -1490,19 +1388,9 @@ private struct WidgetDateHeader: View {
         return calendarDay?.isStatutoryHoliday == true ? .pink : WidgetPalette.accent(for: theme)
     }
 
-    /// 今天不是节日时提示最近的一段年度假期。开了「常驻」就一直显示（看未来 120 天），
-    /// 否则只有今日课表的日期栏会带上它，并且只看未来一个月。
-    private var holidayCountdown: ChineseHolidayCountdown? {
-        let resident = options.showsResidentHoliday
-        guard !hidesCountdown, resident || showsCountdown else { return nil }
-        guard let date = day.date, let reference = ChineseCalendarInfo.date(fromDate: date),
-              let next = ChineseCalendarInfo.countdown(from: reference, withinDays: resident ? 120 : 30),
-              next.daysAway > 0 else { return nil }
-        return next
-    }
 }
 
-/// 选了「最近有课的一天」、小组件换到别的日子时，日期栏上的标注：「明天的课」「10/2 的课」。
+/// 选了「接着显示下一次课」、小组件换到别的日子时，日期栏上的标注：「明天的课」「10/2 的课」。
 private struct OtherDayChip: View {
     let title: String
     @Environment(\.scheduleWidgetTheme) private var theme
@@ -1578,37 +1466,6 @@ private struct AdjustmentNoteChip: View {
     }
 }
 
-/// 日期栏下面那行假期提示。用一条竖的主题色细条起头，和课程行的色条呼应，
-/// 比再放一个胶囊徽标安静。
-private struct HolidayCountdownChip: View {
-    let countdown: ChineseHolidayCountdown
-    @Environment(\.scheduleWidgetTheme) private var theme
-    @Environment(\.widgetRenderingMode) private var renderingMode
-
-    var body: some View {
-        // 只报还剩几天，右边缘和上一行的「第 N 周」对齐：多一个色块或日期，
-        // 两行的右端就对不上了。
-        countdownText(tint: renderingMode == .fullColor ? WidgetPalette.accent(for: theme) : WidgetPalette.primary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
-    }
-
-    private func countdownText(tint: Color) -> Text {
-        let leading = Text(countdown.leading)
-            .font(.system(size: 10, weight: .semibold))
-            .foregroundColor(WidgetPalette.secondary)
-        guard let amount = countdown.amount else { return leading }
-        return leading
-            + Text(" ")
-            + Text(amount)
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundColor(tint)
-            + Text(" " + countdown.trailing)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(WidgetPalette.secondary)
-    }
-}
-
 /// 节日/法定假期徽标。法定假期用粉色，普通节日和节气跟随主题色。
 private struct HolidayBadge: View {
     let title: String
@@ -1630,21 +1487,35 @@ private struct HolidayBadge: View {
     }
 }
 
-/// 今天没课时说的那一句，压在八个字以内，小组件里排得下一行：放假道贺 →「中秋快乐」；
-/// 其余（今天的课上完了、今天本来就没排课）都说「今日无课」。
-///
-/// 「距国庆节 12 天」这类假期提示不在这里，由 `AfterClassView.holidayFootnote`
-/// 作为下面一行小字保留。
-private enum TodayRestMessage {
-    /// `showsCourses` 是这块界面上还列着课（两日课表的另一列、课后的明天预览）。
-    /// 旁边摆着一排课还说「周末快乐」就成了反话，此时只报事实；法定假日照旧道贺。
-    static func text(hadCourses: Bool, showsCourses: Bool = false, now: Date = .now) -> String {
-        if let greeting = greeting(hadCourses: hadCourses, showsCourses: showsCourses, now: now) { return greeting }
-        return "今日无课"
+/// 休息状态（docs/schedule-widget-rules.md 第 3 节）：今天是法定假日就道贺（「中秋快乐」），
+/// 其余一律「今日无课」；下面一行小字是最近的一段法定假期。
+private enum RestState {
+    static func message(now: Date = .now) -> String {
+        ChineseCalendarInfo.restGreeting(for: now) ?? "今日无课"
     }
 
-    static func greeting(hadCourses: Bool, showsCourses: Bool = false, now: Date = .now) -> String? {
-        ChineseCalendarInfo.restGreeting(for: now, hasCourses: hadCourses || showsCourses)
+    static func countdown(options: ScheduleWidgetDisplayOptions, now: Date = .now) -> ChineseHolidayCountdown? {
+        guard options.showHoliday else { return nil }
+        return ChineseCalendarInfo.countdown(from: now, withinDays: 120)
+    }
+
+    /// 假期小字：还没放假就倒数，已经在假期里就改说这一段连休几天（再说一遍
+    /// 「今天是中秋节」跟上面那句祝福重复了）。
+    static func footnote(options: ScheduleWidgetDisplayOptions, now: Date = .now) -> String? {
+        guard let countdown = countdown(options: options, now: now) else { return nil }
+        guard countdown.daysAway > 0 else {
+            return countdown.window.dayCount > 1 ? "假期 \(countdown.dateLabel)" : nil
+        }
+        return "\(countdown.phrase) · \(countdown.dateLabel)"
+    }
+
+    /// 锁屏单行只放一句：祝福 → 「距国庆节还有 5 天」→「今日无课」。
+    static func inlineText(options: ScheduleWidgetDisplayOptions, now: Date = .now) -> String {
+        if let greeting = ChineseCalendarInfo.restGreeting(for: now) { return greeting }
+        if let countdown = countdown(options: options, now: now), countdown.daysAway > 0 {
+            return countdown.phrase
+        }
+        return "今日无课"
     }
 }
 
@@ -1659,98 +1530,26 @@ private struct EmptyCoursesView: View {
     }
 }
 
-/// 今天的课上完之后显示什么：明天的课程（灰显）或最近的一段年度假期。
-/// 设置见「小组件」页的「今天课程结束后」。
-private struct AfterClassView: View {
-    let payload: SchedulePayload
-    let limit: Int
-    var showsRemainingCount: Bool = true
+/// 今天没有要列的课时的主视图：先说今天的状态，最近的假期作为下面一行小字。
+private struct RestStateView: View {
     @Environment(\.scheduleWidgetDisplayOptions) private var options
     @Environment(\.widgetFamily) private var family
 
-    @ViewBuilder
     var body: some View {
-        switch options.afterClass {
-        case .none:
-            EmptyCoursesView(message: todayMessage)
-        case .tomorrow:
-            if let tomorrow = payload.tomorrow(), !tomorrow.courseList.isEmpty {
-                tomorrowPreview(tomorrow)
-            } else {
-                // 明天也没课：能给出假期就给假期，否则老老实实说没课。
-                holidayCard(message: todayMessage)
-            }
-        case .holiday, .nextCourseDay:
-            // 「最近有课的一天」由外面直接换成那一天；到这里说明三周内都没课，就给假期。
-            holidayCard(message: todayMessage)
-        }
-    }
-
-    /// 今天排了课就不道「周末快乐」，否则同样说「今日无课」。
-    private var todayMessage: String {
-        TodayRestMessage.text(hadCourses: !payload.currentDay().courseList.isEmpty)
-    }
-
-    private func tomorrowPreview(_ day: ScheduleDay) -> some View {
-        let visible = Array(day.courseList.prefix(max(1, limit)))
-        // 明天的课已经把这块占满了，就不再留一行说「今日无课」；
-        // 法定假日那句「中秋快乐」还是值得一行。
-        let greeting = TodayRestMessage.greeting(
-            hadCourses: !payload.currentDay().courseList.isEmpty,
-            showsCourses: true
-        )
-        return VStack(alignment: .leading, spacing: 5) {
-            if let greeting {
-                Text(greeting)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(WidgetPalette.muted)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-            HStack(spacing: 5) {
-                Text("明天")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(WidgetPalette.secondary)
-                Text([day.compactDate, day.displayLabel].filter { !$0.isEmpty }.joined(separator: " "))
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(WidgetPalette.muted)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-            }
-            ForEach(Array(visible.enumerated()), id: \.offset) { _, course in
-                // completed 的灰度处理就是这里要的「标灰」：明天的课不该抢今天的注意力。
-                TodayCourseRow(
-                    course: course,
-                    large: false,
-                    timeOnSeparateLine: false,
-                    completed: true
-                )
-            }
-            if showsRemainingCount && day.courseList.count > visible.count {
-                Text("明天还有 \(day.courseList.count - visible.count) 门课程")
-                    .font(.system(size: 9))
-                    .foregroundStyle(WidgetPalette.muted)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    /// 今天没课时的主视图：先说今天的状态，最近的假期作为下面一行小字保留。
-    private func holidayCard(message: String) -> some View {
-        let countdown = Self.countdown()
-        return VStack(spacing: 3) {
-            if countdown != nil {
+        let footnote = RestState.footnote(options: options)
+        VStack(spacing: 3) {
+            if footnote != nil {
                 Image(systemName: "party.popper")
                     .font(.system(size: family == .systemSmall ? 13 : 15, weight: .semibold))
                     .foregroundStyle(WidgetPalette.muted)
             }
-            Text(message)
+            Text(RestState.message())
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(WidgetPalette.primary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .minimumScaleFactor(0.72)
-            if let footnote = countdown.flatMap({ Self.holidayFootnote($0) }) {
+            if let footnote {
                 Text(footnote)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(WidgetPalette.muted)
@@ -1760,44 +1559,6 @@ private struct AfterClassView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
-
-    /// 假期小字：还没放假就倒数，已经在假期里就改说这一段连休几天（再说一遍
-    /// 「今天是中秋节」跟上面那句祝福重复了）。
-    static func holidayFootnote(_ countdown: ChineseHolidayCountdown) -> String? {
-        guard countdown.daysAway > 0 else {
-            return countdown.window.dayCount > 1 ? "假期 \(countdown.dateLabel)" : nil
-        }
-        return "\(countdown.phrase) · \(countdown.dateLabel)"
-    }
-
-    /// 「距国庆节还有 12 天」「距中秋节还有 1 天」；锁屏那一行也用它。
-    static func holidayLine(now: Date = .now) -> String? {
-        countdown(now: now)?.phrase
-    }
-
-    static func countdown(now: Date = .now) -> ChineseHolidayCountdown? {
-        ChineseCalendarInfo.countdown(from: now, withinDays: 120)
-    }
-
-    /// 课后区域会不会显示假期大字报。日期栏靠它决定要不要让出那一行。
-    static func showsHolidayCard(
-        payload: SchedulePayload,
-        options: ScheduleWidgetDisplayOptions,
-        now: Date = .now
-    ) -> Bool {
-        guard countdown(now: now) != nil else { return false }
-        switch options.afterClass {
-        case .none: return false
-        case .holiday: return true
-        case .tomorrow: return payload.tomorrow(now: now)?.courseList.isEmpty ?? true
-        case .nextCourseDay: return payload.nextCourseDay(after: now) == nil
-        }
-    }
-}
-
-private extension SchedulePayload {
-    /// 药大拾间只有一张课表，接口里的 `title` 固定是「药大课表」，日期栏里不写课表名。
-    var widgetTableName: String? { nil }
 }
 
 private enum WidgetPalette {

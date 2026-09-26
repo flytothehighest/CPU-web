@@ -5,28 +5,30 @@ import WidgetKit
 /// 长按小组件 →「编辑小组件」里的选项。每个小组件各存各的，所以同一种小组件
 /// 放两个也可以一个看明天、一个看假期。
 struct ScheduleWidgetConfiguration: Sendable {
-    /// `nil` 只出现在占位图里，此时沿用 App 里旧的全局设置。
-    var afterClass: ScheduleWidgetAfterClassStyle?
+    var afterClass: ScheduleWidgetAfterClassStyle = .nextCourseDay
     /// 小号「临近课程」显示几节课。默认值和原来的样子一致：当前和下一节。
     var upcomingCourseCount = 2
     var twoDayStart: TwoDayStartOption = .nextCourseDay
 }
 
 enum AfterClassOption: String, AppEnum {
-    case none
-    case tomorrow
-    case holiday
     case nextCourseDay
+    /// rawValue 沿用旧的「今天没有课程」，原来选它的小组件不用重新设置；
+    /// 旧的「明天的课程」「最近的节假日」解不出来，落回默认的下一次课。
+    case todayOnly = "none"
 
     static let typeDisplayRepresentation: TypeDisplayRepresentation = "今天的课上完后"
     static let caseDisplayRepresentations: [Self: DisplayRepresentation] = [
-        .none: "今天没有课程",
-        .tomorrow: "明天的课程",
-        .holiday: "最近的节假日",
-        .nextCourseDay: "最近有课的一天",
+        .nextCourseDay: "接着显示下一次课",
+        .todayOnly: "只看今天",
     ]
 
-    var style: ScheduleWidgetAfterClassStyle { ScheduleWidgetAfterClassStyle(rawValue: rawValue) ?? .tomorrow }
+    var style: ScheduleWidgetAfterClassStyle {
+        switch self {
+        case .nextCourseDay: return .nextCourseDay
+        case .todayOnly: return .todayOnly
+        }
+    }
 }
 
 enum UpcomingCourseCountOption: Int, AppEnum {
@@ -62,7 +64,7 @@ struct TodayScheduleWidgetIntent: ScheduleWidgetIntent {
     static let title: LocalizedStringResource = "今日课表"
     static let description = IntentDescription("选择今天的课上完后小组件显示什么。")
 
-    @Parameter(title: "今天的课上完后", default: .tomorrow)
+    @Parameter(title: "今天的课上完后", default: .nextCourseDay)
     var afterClass: AfterClassOption
 
     var configuration: ScheduleWidgetConfiguration {
@@ -74,7 +76,7 @@ struct UpcomingScheduleWidgetIntent: ScheduleWidgetIntent {
     static let title: LocalizedStringResource = "临近课程"
     static let description = IntentDescription("选择今天的课上完后显示什么，以及小号显示几节课。")
 
-    // 默认值保持原来的行为：今天上完就换到最近有课的一天，小号显示当前和下一节。
+    // 默认：今天上完就换到最近有课的一天，小号显示当前和下一节。
     @Parameter(title: "今天的课上完后", default: .nextCourseDay)
     var afterClass: AfterClassOption
 

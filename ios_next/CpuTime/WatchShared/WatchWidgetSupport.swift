@@ -62,7 +62,18 @@ nonisolated enum WatchScheduleWidgetConfiguration {
             dates.append(transition)
             cursor = transition
         }
-        return dates
+        // The "今天" / "明天" label is relative to the entry date, so each
+        // midnight inside the span needs its own entry; otherwise tomorrow's
+        // course keeps saying "明天" after the day has turned.
+        let calendar = snapshot.calendar
+        var midnight = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))
+        let horizon = dates.last ?? now
+        repeat {
+            guard let value = midnight else { break }
+            dates.append(value.addingTimeInterval(1))
+            midnight = calendar.date(byAdding: .day, value: 1, to: value)
+        } while (midnight ?? .distantFuture) < horizon
+        return Array(Set(dates).sorted().prefix(limit))
     }
 }
 

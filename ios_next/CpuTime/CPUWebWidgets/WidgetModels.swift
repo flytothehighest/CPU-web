@@ -51,13 +51,8 @@ struct ScheduleWidgetDisplayOptions: Codable, Equatable {
     var showTime: Bool
     /// 日期栏里的农历日期。
     var showLunarDate: Bool
-    /// 节日与法定假期提示。
+    /// 节日徽标与休息时的假期倒计时。
     var showHoliday: Bool
-    /// 最近的节假日常驻在日期栏右侧，而不是只在今天课上完之后才出现。
-    var holidayAlwaysVisible: Bool
-    /// 今天的课上完之后显示什么。不在 App 里存，每个小组件在「编辑小组件」里各选各的，
-    /// 渲染时由 `ScheduleWidgetRoot` 填进来。
-    var afterClass: ScheduleWidgetAfterClassStyle
 
     static let `default` = ScheduleWidgetDisplayOptions(
         showCourseName: true,
@@ -72,9 +67,7 @@ struct ScheduleWidgetDisplayOptions: Codable, Equatable {
         showTeacher: Bool,
         showTime: Bool,
         showLunarDate: Bool = true,
-        showHoliday: Bool = true,
-        holidayAlwaysVisible: Bool = true,
-        afterClass: ScheduleWidgetAfterClassStyle = .tomorrow
+        showHoliday: Bool = true
     ) {
         self.showCourseName = showCourseName
         self.showRoom = showRoom
@@ -82,8 +75,6 @@ struct ScheduleWidgetDisplayOptions: Codable, Equatable {
         self.showTime = showTime
         self.showLunarDate = showLunarDate
         self.showHoliday = showHoliday
-        self.holidayAlwaysVisible = holidayAlwaysVisible
-        self.afterClass = afterClass
     }
 
     /// 旧版本写进 App Group 的 JSON 没有农历和节假日字段。缺字段时按默认值补齐，
@@ -96,16 +87,9 @@ struct ScheduleWidgetDisplayOptions: Codable, Equatable {
             showTeacher: try values.decodeIfPresent(Bool.self, forKey: .showTeacher) ?? true,
             showTime: try values.decodeIfPresent(Bool.self, forKey: .showTime) ?? true,
             showLunarDate: try values.decodeIfPresent(Bool.self, forKey: .showLunarDate) ?? true,
-            showHoliday: try values.decodeIfPresent(Bool.self, forKey: .showHoliday) ?? true,
-            holidayAlwaysVisible: try values.decodeIfPresent(Bool.self, forKey: .holidayAlwaysVisible) ?? true
+            showHoliday: try values.decodeIfPresent(Bool.self, forKey: .showHoliday) ?? true
         )
     }
-
-    /// 今天没有未结束的课程时，`.none` 之外的选项会接管那块空间。
-    var showsAfterClassPreview: Bool { afterClass != .none }
-
-    /// 日期栏右侧是否常驻显示最近的节假日。关掉节假日提示时一并关掉。
-    var showsResidentHoliday: Bool { showHoliday && holidayAlwaysVisible }
 
     static func load(defaults: UserDefaults?) -> Self {
         guard let data = defaults?.data(forKey: AppWidgetConfiguration.displayOptionsKey),
@@ -132,16 +116,13 @@ struct ScheduleWidgetDisplayOptions: Codable, Equatable {
 }
 
 /// 今天的课上完之后小组件显示什么。在每个小组件的「编辑小组件」里单独选；
-/// 两日课表本来就带明天，不受这个设置影响。
+/// 两日课表本来就带明天，不受这个设置影响。规则见 docs/schedule-widget-rules.md。
 enum ScheduleWidgetAfterClassStyle: String, Codable, CaseIterable, Sendable {
-    /// 保持原来的「今天没有课程」。
-    case none
-    /// 明天的课程，灰色显示；明天也没课时退回最近的节假日。
-    case tomorrow
-    /// 最近的一段法定假期。
-    case holiday
-    /// 换成最近一个有课的日期（三周之内）的课：日期栏照旧是今天，标上「明天的课」「10/2 的课」，课程压暗；三周内都没课时退回最近的节假日。
+    /// 换成最近一个有课的日期（三周之内）的课：日期栏照旧是今天，标上「明天的课」「10/2 的课」，
+    /// 课程压暗；三周内都没课时显示休息状态。
     case nextCourseDay
+    /// 停在今天：今日课表把上完的课灰着留在原处，其余显示休息状态。
+    case todayOnly
 }
 
 enum ScheduleWidgetTheme: String {
@@ -195,7 +176,13 @@ struct ScheduleCourse: Decodable, Identifiable {
         return 0
     }
 
-    var hasUsableStartTime: Bool { Self.minutes(startTime) != nil }
+    var startMinutes: Int? { Self.minutes(startTime) }
+    var hasUsableStartTime: Bool { startMinutes != nil }
+
+    func isInProgress(at minutes: Int) -> Bool {
+        guard let start = startMinutes else { return false }
+        return start <= minutes && !hasEnded(at: minutes)
+    }
 
     func hasEnded(at minutes: Int) -> Bool {
         endMinutes > 0 && endMinutes < minutes
@@ -324,12 +311,6 @@ struct SchedulePayload: Decodable {
         (localDays ?? []).first(where: { $0.date == date })
     }
 
-    /// 明天那一天；本地课表里没有就返回 `nil`。
-    func tomorrow(now: Date = .now) -> ScheduleDay? {
-        guard let date = Calendar.current.date(byAdding: .day, value: 1, to: now) else { return nil }
-        return knownDay(for: Self.dateString(date))
-    }
-
     /// 今天这一天（完整的一天，包括已经下课的课）。
     func currentDay(now: Date = .now) -> ScheduleDay {
         fullDay(for: Self.dateString(now), fallbackOffset: 0)
@@ -353,52 +334,19 @@ struct SchedulePayload: Decodable {
         return nil
     }
 
-    /// Mirrors the Web/Scriptable widget rule: keep today's remaining classes,
-    /// otherwise show the next day within the published window that has a
-    /// course. The offset is retained so the caller can choose whether to
-    /// dim completed courses and how to find the following day.
-    func preferredCourseDay(now: Date = .now) -> (day: ScheduleDay, offset: Int) {
-        let minutes = Self.minutesSinceMidnight(now)
-        let todayDate = Self.dateString(now)
-        let today = fullDay(for: todayDate, fallbackOffset: 0)
-        let hasRemaining = today.courseList.contains { course in
-            course.endMinutes >= minutes || (!course.hasUsableStartTime && course.endMinutes <= 0)
-        }
-        if hasRemaining { return (today, 0) }
-
-        for offset in 1...Self.lookaheadDays {
-            let date = Calendar.current.date(byAdding: .day, value: offset, to: now) ?? now
-            let candidate = fullDay(for: Self.dateString(date), fallbackOffset: offset)
-            if !candidate.courseList.isEmpty { return (candidate, offset) }
-        }
-
-        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: now) ?? now
-        return (fullDay(for: Self.dateString(tomorrow), fallbackOffset: 1), 1)
-    }
-
-    /// `.nextCourseDay` 是原来的行为：今天上完就往后找最近有课的一天。
-    /// 其他选项停在今天，空出来的位置交给课后区域。
+    /// 临近课程显示哪天的哪几节：今天还有课就是今天剩下的；上完了且选了「接着显示下一次课」，
+    /// 换成最近有课的那一天。都没有时是今天加一个空列表，交给休息状态。
     func upcoming(
         now: Date = .now,
         afterClass: ScheduleWidgetAfterClassStyle = .nextCourseDay
     ) -> (ScheduleDay, [ScheduleCourse]) {
-        guard afterClass == .nextCourseDay else {
-            let today = currentDay(now: now)
-            return (today, Array(remainingCourses(in: today, now: now).prefix(2)))
+        let today = currentDay(now: now)
+        let remaining = remainingCourses(in: today, now: now)
+        if !remaining.isEmpty || afterClass == .todayOnly {
+            return (today, Array(remaining.prefix(2)))
         }
-        let selected = preferredCourseDay(now: now)
-        let courses: [ScheduleCourse]
-        if selected.offset == 0 {
-            let minutes = Self.minutesSinceMidnight(now)
-            courses = selected.day.courseList.filter {
-                $0.endMinutes >= minutes || (!$0.hasUsableStartTime && $0.endMinutes <= 0)
-            }
-        } else {
-            courses = selected.day.courseList
-        }
-        // 三周内都没课：别停在明天的日期上说今天的事，退回今天，交给课后区域。
-        guard !courses.isEmpty else { return (currentDay(now: now), []) }
-        return (selected.day, Array(courses.prefix(2)))
+        guard let next = nextCourseDay(after: now) else { return (today, []) }
+        return (next.day, Array(next.day.courseList.prefix(2)))
     }
 
     static func dateString(_ date: Date) -> String {
@@ -574,25 +522,19 @@ enum ScheduleTimeline {
         return Timeline(entries: [entry], policy: .after(refresh))
     }
 
-    /// 今天剩下的课程边界里最近的一个（开始或结束），没有就返回 nil。
+    /// 今天剩下的课程边界里最近的一个（开始或结束）；都过了就是午夜换日那一刻。
     private static func nextBoundary(in payload: SchedulePayload, now: Date) -> Date? {
         let today = payload.currentDay(now: now)
         let nowMinutes = SchedulePayload.minutesSinceMidnight(now)
         let startOfDay = Calendar.current.startOfDay(for: now)
         let minutes = today.courseList
-            .flatMap { [Self.minutes($0.startTime), $0.endMinutes > 0 ? $0.endMinutes : nil] }
+            .flatMap { [$0.startMinutes, $0.endMinutes > 0 ? $0.endMinutes : nil] }
             .compactMap { $0 }
             .filter { $0 > nowMinutes }
             .min()
-        guard let minutes else { return nil }
+        // 过了零点日期栏和课都要换成新的一天，不能等兜底的半小时。
+        guard let minutes else { return startOfDay.addingTimeInterval(TimeInterval((24 * 60 + 1) * 60)) }
         // 边界后一分钟再刷新，免得刚好卡在同一分钟上还算成「没结束」。
         return startOfDay.addingTimeInterval(TimeInterval((minutes + 1) * 60))
-    }
-
-    private static func minutes(_ value: String?) -> Int? {
-        guard let value, value.count >= 5 else { return nil }
-        let pieces = value.prefix(5).split(separator: ":")
-        guard pieces.count == 2, let hour = Int(pieces[0]), let minute = Int(pieces[1]) else { return nil }
-        return hour * 60 + minute
     }
 }

@@ -208,22 +208,14 @@ nonisolated enum ChineseCalendarInfo {
         return ChineseHolidayCountdown(window: next.window, daysAway: next.daysAway)
     }
 
-    /// 今天不上课时那句问候：法定假日说「中秋快乐」，周末说「周末快乐」。
-    /// 普通工作日返回 `nil`，调用方改说「今日无课」。
-    ///
-    /// `hasCourses` 是今天排没排课。调休把周六当工作日用的时候照样道「周末快乐」
-    /// 就成了反话，所以周六日一旦排了课就不道贺，交给调用方说「今日无课」。
-    static func restGreeting(for date: Date = .now, hasCourses: Bool = false) -> String? {
-        restGreeting(forDate: dateString(date), hasCourses: hasCourses)
+    /// 今天不上课时那句问候：法定假日说「中秋快乐」，其余返回 `nil`，调用方改说「今日无课」。
+    static func restGreeting(for date: Date = .now) -> String? {
+        restGreeting(forDate: dateString(date))
     }
 
-    static func restGreeting(forDate date: String, hasCourses: Bool = false) -> String? {
-        if let holiday = info(forDate: date)?.holiday {
-            return holidayGreetings[holiday] ?? "\(holiday)快乐"
-        }
-        guard !hasCourses, let value = self.date(fromDate: date) else { return nil }
-        let weekday = gregorian.component(.weekday, from: value)
-        return weekday == 1 || weekday == 7 ? "周末快乐" : nil
+    static func restGreeting(forDate date: String) -> String? {
+        guard let holiday = info(forDate: date)?.holiday else { return nil }
+        return holidayGreetings[holiday] ?? "\(holiday)快乐"
     }
 
     /// 逐个写出来而不是机械地去掉「节」字：「劳动快乐」不成话；清明、端午按习惯

@@ -30,10 +30,8 @@ struct WidgetDisplayOptions: Codable, Equatable {
     var showTime: Bool
     /// 日期栏里的农历日期。只有 iPhone 小组件用，手表读这份 JSON 时会忽略。
     var showLunarDate: Bool
-    /// 节日与法定假期提示。
+    /// 节日徽标与休息时的假期倒计时。
     var showHoliday: Bool
-    /// 最近的节假日常驻在日期栏右侧，而不是只在今天课上完之后才出现。
-    var holidayAlwaysVisible: Bool
 
     static let `default` = WidgetDisplayOptions(
         showCourseName: true,
@@ -48,8 +46,7 @@ struct WidgetDisplayOptions: Codable, Equatable {
         showTeacher: Bool,
         showTime: Bool,
         showLunarDate: Bool = true,
-        showHoliday: Bool = true,
-        holidayAlwaysVisible: Bool = true
+        showHoliday: Bool = true
     ) {
         self.showCourseName = showCourseName
         self.showRoom = showRoom
@@ -57,7 +54,6 @@ struct WidgetDisplayOptions: Codable, Equatable {
         self.showTime = showTime
         self.showLunarDate = showLunarDate
         self.showHoliday = showHoliday
-        self.holidayAlwaysVisible = holidayAlwaysVisible
     }
 
     /// 旧版本存的 JSON 没有农历和节假日字段。缺字段时按默认值补齐，否则整份设置
@@ -70,8 +66,7 @@ struct WidgetDisplayOptions: Codable, Equatable {
             showTeacher: try values.decodeIfPresent(Bool.self, forKey: .showTeacher) ?? true,
             showTime: try values.decodeIfPresent(Bool.self, forKey: .showTime) ?? true,
             showLunarDate: try values.decodeIfPresent(Bool.self, forKey: .showLunarDate) ?? true,
-            showHoliday: try values.decodeIfPresent(Bool.self, forKey: .showHoliday) ?? true,
-            holidayAlwaysVisible: try values.decodeIfPresent(Bool.self, forKey: .holidayAlwaysVisible) ?? true
+            showHoliday: try values.decodeIfPresent(Bool.self, forKey: .showHoliday) ?? true
         )
     }
 
