@@ -28,11 +28,11 @@ import {
 import { restoreNativeScheduleCache } from '../schedule/NativeScheduleCache';
 import { NativeWebHeader, NativeWebHeaderState } from '../common/NativeWebHeader';
 import { NativeSchedulePage } from '../schedule/NativeSchedulePage';
-import { NativeCourseBlock, NativeScheduleRequest, NativeScheduleStore } from '../schedule/NativeScheduleStore';
+import { NativeCourseBlock, NativeScheduleCell, NativeScheduleRequest, NativeScheduleSnapshot, NativeScheduleStore } from '../schedule/NativeScheduleStore';
 import { CourseEditorRequest, NativeCourseEditor, NativeCourseEditorModel } from '../schedule/NativeCourseEditor';
 import { setNativeScheduleHostCallbacks, clearNativeScheduleHostCallbacks } from '../schedule/NativeScheduleHost';
 import { ScheduleCardView } from '../schedulewidget/ScheduleCardView';
-import { ScheduleWidgetBinding, initialScheduleWidgetBinding, readScheduleWidgetPreview, saveScheduleWidgetTheme, refreshAllScheduleForms, clearScheduleWidgetAccount, readScheduleWidgetSettings } from '../common/ScheduleWidgetService';
+import { ScheduleWidgetBinding, initialScheduleWidgetBinding, readScheduleWidgetPreview, saveScheduleWidgetTheme, refreshAllScheduleForms, clearScheduleWidgetAccount, readScheduleWidgetSettings, saveLocalScheduleSnapshot } from '../common/ScheduleWidgetService';
 
 @Entry
 @Component
@@ -141,7 +141,15 @@ struct Index {
         }
       }
     );
-    if (context) restoreNativeScheduleCache(context, this.scheduleStore);
+    if (context) {
+      // 卡片只读 App 写在本地的课表：每拿到一份快照就按日期展开写下，退出登录时删掉。
+      this.scheduleStore.attachSnapshotListener((snapshot?: NativeScheduleSnapshot) => {
+        void saveLocalScheduleSnapshot(context, snapshot, (cells: NativeScheduleCell[], day: number, week: number) => {
+          return this.scheduleStore.blocksInWeek(cells, day, week);
+        }).catch(() => undefined);
+      });
+      restoreNativeScheduleCache(context, this.scheduleStore);
+    }
     this.editorModel.attach((id: string, payload: CourseEditorRequest) => {
       const requestId = JSON.stringify(id);
       const request = JSON.stringify(payload);
@@ -1259,8 +1267,19 @@ struct Index {
             semester: this.widgetPreview.semester, currentWeek: this.widgetPreview.currentWeek,
             primaryWeek: this.widgetPreview.primaryWeek, secondaryWeek: this.widgetPreview.secondaryWeek,
             primaryRemaining: this.widgetPreview.primaryRemaining, secondaryRemaining: this.widgetPreview.secondaryRemaining,
-            dimension: this.widgetDimension, variant: this.widgetPreview.variant, layout: this.widgetPreview.layout
-          }).width(this.widgetDimension === 2 ? 150 : '100%').height(this.widgetDimension === 4 ? 348 : 150)
+            dimension: this.widgetDimension, variant: this.widgetPreview.variant, layout: this.widgetPreview.layout,
+            mode: this.widgetPreview.mode, dayNote: this.widgetPreview.dayNote, badge: this.widgetPreview.badge,
+            restTitle: this.widgetPreview.restTitle, restDetail: this.widgetPreview.restDetail,
+            lockLine: this.widgetPreview.lockLine, leadLabel: this.widgetPreview.leadLabel,
+            trailLabel: this.widgetPreview.trailLabel, rightNote: this.widgetPreview.rightNote,
+            lunar: this.widgetPreview.lunar, badgeStatutory: this.widgetPreview.badgeStatutory,
+            rightLunar: this.widgetPreview.rightLunar, rightBadge: this.widgetPreview.rightBadge,
+            rightBadgeStatutory: this.widgetPreview.rightBadgeStatutory
+          })
+            // 按 iOS 小号 170×170、中号 364×170、大号 364×382 的比例预览。
+            .width(this.widgetDimension === 2 ? 170 : '100%')
+            .constraintSize({ maxWidth: 364 })
+            .aspectRatio(this.widgetDimension === 2 ? 1 : this.widgetDimension === 3 ? 364 / 170 : 364 / 382)
             .clip(true).borderRadius(22).border({ width: 0.5, color: $r('app.color.app_divider') })
         }.width('100%').justifyContent(FlexAlign.Center)
         Column({ space: 8 }) {
@@ -1295,6 +1314,9 @@ struct Index {
     ScheduleCardView({ state: this.lockPreview.state, subtitle: this.lockPreview.subtitle,
       leftTitle: this.lockPreview.leftTitle, primaryCourses: this.lockPreview.primaryCourses,
       primaryWeek: this.lockPreview.primaryWeek, footer: this.lockPreview.footer,
+      dayNote: this.lockPreview.dayNote, restTitle: this.lockPreview.restTitle, restDetail: this.lockPreview.restDetail,
+      lockLine: this.lockPreview.lockLine, trailLabel: this.lockPreview.trailLabel,
+      lockTitle: this.lockPreview.lockTitle, lockDay: this.lockPreview.lockDay,
       variant, dimension: 2, layout: 'upcoming' })
   }
 

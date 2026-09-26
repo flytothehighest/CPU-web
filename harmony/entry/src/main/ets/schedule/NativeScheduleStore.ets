@@ -24,6 +24,8 @@ export interface NativeScheduleCourse {
   customId?: string;
   custom?: boolean;
   orphaned?: boolean;
+  customStartTime?: string;
+  customEndTime?: string;
 }
 
 export interface NativeScheduleCell {
@@ -39,6 +41,21 @@ export interface NativeCalendarWeek {
   sunday: string;
 }
 
+// 学期配置的调休：off 放假，swap 这天上 source 那天的课。
+export interface NativeScheduleAdjustment {
+  date: string;
+  kind: string;
+  source?: string;
+  note?: string;
+}
+
+// 桥接层规整过的节次时间（snapshot.periods）。
+export interface NativeSchedulePeriod {
+  number: number;
+  startTime: string;
+  endTime: string;
+}
+
 export interface NativeScheduleCalendar {
   source?: string;
   semesters?: NativeScheduleSemester[];
@@ -47,6 +64,7 @@ export interface NativeScheduleCalendar {
   semesterStart: string;
   semesterEnd: string;
   weeks: NativeCalendarWeek[];
+  adjustments?: NativeScheduleAdjustment[];
 }
 
 export interface NativeScheduleResult {
@@ -68,6 +86,7 @@ export interface NativeScheduleSnapshot {
   completeSemester?: boolean;
   source?: string;
   fetchedAt?: number | string;
+  periods?: NativeSchedulePeriod[];
   data?: NativeScheduleResult;
   calendar?: NativeScheduleCalendar;
   auth: NativeScheduleAuth;
@@ -107,6 +126,8 @@ interface PersistedScheduleCache {
 export type NativeScheduleStatus = 'idle' | 'loading' | 'loaded' | 'unauthorized' | 'failed';
 export type NativeScheduleRequester = (request: NativeScheduleRequest) => void;
 export type NativeScheduleChangeListener = () => void;
+// 拿到登录后的课表快照（整学期或单周）时收到快照；退出登录、换账号时收到 undefined。
+export type NativeScheduleSnapshotListener = (snapshot?: NativeScheduleSnapshot) => void;
 
 const CACHE_LIFETIME_MS: number = 30 * 24 * 60 * 60 * 1000;
 const MAX_SEMESTERS: number = 4;
@@ -144,8 +165,11 @@ export class NativeScheduleStore {
   private requestTimer: number = -1;
   private accountScope: string = '';
   private persistence?: (raw: string) => void;
+  private snapshotListener?: NativeScheduleSnapshotListener;
 
   attachPersistence(writer: (raw: string) => void): void { this.persistence = writer; }
+
+  attachSnapshotListener(listener: NativeScheduleSnapshotListener): void { this.snapshotListener = listener; }
 
   restoreCache(raw: string): void {
     if (this.result || this.accountScope || !raw) return;
@@ -166,6 +190,7 @@ export class NativeScheduleStore {
       this.selectedDay = saved.day >= 1 && saved.day <= 7 ? saved.day : (new Date().getDay() || 7);
       this.viewMode = saved.viewMode === 'day' ? 'day' : 'week';
       this.applySnapshot(entry.snapshot, true);
+      this.snapshotListener?.(entry.snapshot);
     } catch (_) { this.cache.clear(); }
   }
 
@@ -318,6 +343,7 @@ export class NativeScheduleStore {
       this.result = undefined;
       this.calendar = undefined;
       this.notify();
+      this.snapshotListener?.(undefined);
       return;
     }
     if (snapshot.error) {
@@ -341,6 +367,7 @@ export class NativeScheduleStore {
     }
     this.remember(snapshot);
     this.applySnapshot(snapshot, false);
+    this.snapshotListener?.(snapshot);
   }
 
   acceptPrefetched(raw: string): void {
@@ -363,6 +390,7 @@ export class NativeScheduleStore {
     });
     if (!known || newer) return;
     this.remember(snapshot);
+    this.snapshotListener?.(snapshot);
     if (snapshot.completeSemester && !this.activeRequestId && snapshot.data.currentSemester === this.selectedSemester) {
       this.applySnapshot(snapshot, false);
     }
@@ -386,6 +414,7 @@ export class NativeScheduleStore {
     this.lastUpdatedAt = 0;
     this.status = 'idle';
     this.persistCache();
+    this.snapshotListener?.(undefined);
     if (this.bridgeReady && this.requester) {
       this.load(false);
       return true;
@@ -408,8 +437,24 @@ export class NativeScheduleStore {
   }
 
   blocksForDay(day: number): NativeCourseBlock[] {
+    return this.mergedBlocks(this.visibleCells(), day);
+  }
+
+  // 任意一周某天的课块，合并规则与课表页一致；小组件按日期展开整学期时用。
+  blocksInWeek(cells: NativeScheduleCell[], day: number, week: number): NativeCourseBlock[] {
+    const visible: NativeScheduleCell[] = [];
+    cells.forEach((cell: NativeScheduleCell) => {
+      const courses = cell.courses.filter((course: NativeScheduleCourse) => {
+        return !course.weekList?.length || course.weekList.includes(week);
+      });
+      if (courses.length > 0) visible.push({ day: cell.day, bigSlot: cell.bigSlot, courses });
+    });
+    return this.mergedBlocks(visible, day);
+  }
+
+  private mergedBlocks(cells: NativeScheduleCell[], day: number): NativeCourseBlock[] {
     const blocks: NativeCourseBlock[] = [];
-    this.visibleCells().filter((cell: NativeScheduleCell) => cell.day === day).forEach((cell: NativeScheduleCell) => {
+    cells.filter((cell: NativeScheduleCell) => cell.day === day).forEach((cell: NativeScheduleCell) => {
       cell.courses.forEach((course: NativeScheduleCourse) => {
         const fallbackStart = Math.max(1, Math.min(11, cell.bigSlot * 2 - 1));
         const fallbackEnd = Math.max(fallbackStart, Math.min(11, cell.bigSlot * 2));
@@ -496,7 +541,8 @@ export class NativeScheduleStore {
     const weekList = [...new Set([...(course.weekList ?? []), ...(next?.weekList ?? [])])].sort((a: number, b: number) => a - b);
     return { name: course.name, nativeId: course.nativeId ?? next?.nativeId, teacher: course.teacher ?? next?.teacher, weeks: weekList.length ? this.weekText(weekList) : (course.weeks || next?.weeks || ''), weekList,
       location: course.location ?? next?.location, slotNote: this.slotLabel(startSlot, endSlot), startSlot, endSlot,
-      sourceKey: course.sourceKey, customId: course.customId, custom: course.custom, orphaned: course.orphaned };
+      sourceKey: course.sourceKey, customId: course.customId, custom: course.custom, orphaned: course.orphaned,
+      customStartTime: course.customStartTime ?? next?.customStartTime, customEndTime: course.customEndTime ?? next?.customEndTime };
   }
 
   private weekText(values: number[]): string {

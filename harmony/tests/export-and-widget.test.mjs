@@ -8,8 +8,40 @@ const { transformSync } = require('esbuild');
 function compile(path, globals = {}) {
   const source = readFileSync(new URL(path, import.meta.url), 'utf8');
   const context = vm.createContext({ module: { exports: {} }, ...globals });
-  vm.runInContext(transformSync(source, { loader: 'ts', format: 'cjs' }).code, context);
+  vm.runInContext(transformSync(source.replace('@Observed', ''), { loader: 'ts', format: 'cjs' }).code, context);
   return context.module.exports;
+}
+// 编译一个 .ets 模块，相对路径的 import 也按真实源码编译，系统模块从 mocks 取。
+function compileTree(path, mocks, globals = {}, cache = new Map()) {
+  const url = new URL(path, import.meta.url);
+  if (cache.has(url.href)) return cache.get(url.href);
+  const exports = compile(url.href, { ...globals, require: id => {
+    if (id in mocks) return mocks[id];
+    if (id.startsWith('.')) return compileTree(new URL(`${id}.ets`, url).href, mocks, globals, cache);
+    throw Error('unexpected import ' + id);
+  } });
+  cache.set(url.href, exports);
+  return exports;
+}
+// 测试里用 Node 自带的 ICU 农历代替 @ohos.i18n。
+const lunarFormat = new Intl.DateTimeFormat('en-u-ca-chinese', { timeZone: 'Asia/Shanghai', year: 'numeric', month: 'numeric', day: 'numeric' });
+function intlLunar(date) {
+  const [year, month, day] = date.split('-').map(Number);
+  const parts = lunarFormat.formatToParts(new Date(Date.UTC(year, month - 1, day, 4)));
+  const part = type => parts.find(item => item.type === type).value;
+  const related = Number(part('relatedYear'));
+  return { month: parseInt(part('month'), 10), day: Number(part('day')), isLeapMonth: /bis/.test(part('month')),
+    cyclicalYear: ((related - 4) % 60 + 60) % 60 + 1 };
+}
+function memoryFs() {
+  const files = new Map();
+  const missing = path => { if (!files.has(path)) throw Error('ENOENT ' + path); };
+  return { files, OpenMode: { CREATE: 1, READ_WRITE: 2, TRUNC: 4 },
+    statSync: path => { missing(path); return { size: Buffer.byteLength(files.get(path)) }; },
+    readTextSync: path => { missing(path); return files.get(path); },
+    openSync: path => ({ fd: path }), writeSync: (fd, raw) => files.set(fd, raw), closeSync: () => {},
+    renameSync: (from, to) => { missing(from); files.set(to, files.get(from)); files.delete(from); },
+    unlinkSync: path => { missing(path); files.delete(path); } };
 }
 
 const exporter = compile('../entry/src/main/ets/schedule/ScheduleExport.ets');
@@ -38,22 +70,25 @@ test('text share is the selected week and contains no subscription or login secr
 });
 
 function widgetHarness() {
-  const values = new Map(); const updates = [];
+  const values = new Map(); const updates = []; const refreshes = [];
   let now = Date.now(); let fetcher;
   class Clock extends Date { static now() { return now; } }
   const prefs = { get: async (key,fallback) => values.has(key) ? values.get(key) : fallback,
     put: async (key,value) => { values.set(key,value); }, delete: async key => { values.delete(key); }, flush: async () => {} };
+  const fs = memoryFs();
   const mocks = {
     '@ohos.data.preferences': { getPreferences: async () => prefs },
+    '@ohos.file.fs': fs,
+    '@ohos.i18n': { getCalendar: () => { throw Error('widget tests stub the lunar resolver'); } },
+    './SystemLunarCalendar': { systemLunarDate: intlLunar },
     '@ohos.net.http': { RequestMethod:{GET:0}, HttpDataType:{STRING:0}, createHttp: () => ({request: (...args) => fetcher(...args), destroy() {} }) },
-    '@kit.FormKit': { formBindingData:{createFormBindingData: x => x}, formProvider:{updateForm: async (id,binding) => updates.push(binding)} },
+    '@kit.FormKit': { formBindingData:{createFormBindingData: x => x}, formProvider:{updateForm: async (id,binding) => updates.push(binding),
+      setFormNextRefreshTime: async (id,minutes) => refreshes.push(minutes)} },
   };
-  const service = compile('../entry/src/main/ets/common/ScheduleWidgetService.ets', { Date:Clock, require: id => {
-    if (!(id in mocks)) throw Error('unexpected import '+id); return mocks[id];
-  } });
+  const service = compileTree('../entry/src/main/ets/common/ScheduleWidgetService.ets', mocks, { Date:Clock });
   const payload = { title:'我的课表', currentWeek:2, today:{label:'今天',date:'2026-09-08',courses:[{name:'账号甲课程',startTime:'08:00',endTime:'09:40',location:'A101'}]} };
   fetcher = async () => ({ responseCode:200, result:JSON.stringify({code:0,data:payload}) });
-  return { service, values, updates, setFetch: fn => fetcher=fn, advance: ms => now+=ms, setNow: value => now=value, payload };
+  return { service, values, updates, refreshes, fs, setFetch: fn => fetcher=fn, advance: ms => now+=ms, setNow: value => now=value, payload };
 }
 const endpoint = account => `https://cputime.cn/api/jwxt/schedule-widget/${account}`;
 
@@ -125,12 +160,92 @@ async function calendarHarness() {
   await h.service.saveScheduleWidgetConfiguration({},JSON.stringify({endpoint:endpoint('A')}));
   return h;
 }
-test('tomorrow upcoming cards never mark morning courses completed tonight',async()=>{
+test('after the last class the header stays on today and the next course day is labelled and dimmed',async()=>{
   const h=await calendarHarness();
   await h.service.refreshScheduleForm({},'card',3,'schedule_upcoming');
   const value=h.updates.at(-1);
-  assert.equal(value.layout,'upcoming'); assert.match(value.leftTitle,/9\.9/);
+  assert.equal(value.layout,'upcoming'); assert.match(value.leftTitle,/9\.8/);
+  assert.equal(value.mode,'ahead'); assert.equal(value.dayNote,'明天的课');
+  assert.deepEqual([value.leadLabel,value.trailLabel],['第一节','接下来']);
   assert.ok(JSON.parse(value.primaryCourses).every(course=>course.ended===false));
+  await h.service.refreshScheduleForm({},'card',4,'schedule_today');
+  assert.equal(h.updates.at(-1).mode,'ahead'); assert.equal(JSON.parse(h.updates.at(-1).primaryCourses).length,2);
+});
+test('upcoming labels follow whether a class is in progress',async()=>{
+  const h=await calendarHarness();
+  for(const [hour,minute,labels] of [[7,30,['下一节','之后']],[8,30,['当前','接下来']],[9,0,['当前','接下来']],[9,30,['当前','接下来']]]){
+    h.setNow(new Date(2026,8,8,hour,minute).getTime());
+    await h.service.refreshScheduleForm({},'card',3,'schedule_upcoming');
+    const value=h.updates.at(-1);
+    assert.equal(value.mode,'today'); assert.equal(value.dayNote,'');
+    assert.deepEqual([value.leadLabel,value.trailLabel],labels);
+  }
+});
+test('today card greys finished classes while later classes remain',async()=>{
+  const h=await calendarHarness(); h.setNow(new Date(2026,8,8,10,30).getTime());
+  await h.service.refreshScheduleForm({},'card',4,'schedule_today');
+  const rows=JSON.parse(h.updates.at(-1).primaryCourses);
+  assert.equal(h.updates.at(-1).mode,'today');
+  // 八节课放七行：先省掉最早下课的一节，另一节已下课的灰显留着。
+  assert.deepEqual(rows.map(row=>row.ended),[true,false,false,false,false,false,false]);
+  assert.equal(rows[0].start,'09:00');
+  h.payload.today.courses=h.payload.today.courses.slice(0,3);
+  await h.service.refreshScheduleForm({},'card',4,'schedule_today');
+  assert.deepEqual(JSON.parse(h.updates.at(-1).primaryCourses).map(row=>row.ended),[true,true,false]);
+});
+
+function sparseHarness(courseDate) {
+  const h = widgetHarness(); h.setNow(new Date(2026,8,26,20).getTime());
+  const days = Array.from({length:22},(_,offset)=>{
+    const date = new Date(2026,8,26+offset); const key = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+    return { date:key, label:'周', courses: key===courseDate ? [{name:'药理学',startTime:'08:00',endTime:'09:40'}] : [] };
+  });
+  h.payload.strictDate=true; h.payload.today=days[0]; h.payload.days=days; h.payload.weekDays=days.slice(0,7);
+  return h;
+}
+test('the next course day is searched 21 days ahead and falls back to the rest state',async()=>{
+  const h=sparseHarness('2026-10-08');
+  await h.service.saveScheduleWidgetConfiguration({},JSON.stringify({endpoint:endpoint('A')}));
+  await h.service.refreshScheduleForm({},'card',3,'schedule_upcoming');
+  assert.equal(h.updates.at(-1).dayNote,'10/8 的课'); assert.match(h.updates.at(-1).leftTitle,/9\.26/);
+  await h.service.refreshScheduleForm({},'card',4,'schedule_two_day');
+  assert.equal(h.updates.at(-1).rightNote,'10/8 的课'); assert.match(h.updates.at(-1).rightTitle,/10\.8/);
+  assert.equal(h.updates.at(-1).restTitle,'今日无课');
+  const none=sparseHarness('2026-10-18');
+  await none.service.saveScheduleWidgetConfiguration({},JSON.stringify({endpoint:endpoint('A')}));
+  await none.service.refreshScheduleForm({},'card',3,'schedule_upcoming');
+  const rest=none.updates.at(-1);
+  assert.equal(rest.mode,'rest'); assert.equal(rest.primaryCourses,'[]');
+  // 没有发布的放假安排时按节日离线推算：国庆 10.1 - 10.3。
+  assert.equal(rest.restTitle,'今日无课'); assert.equal(rest.lockLine,'距国庆节还有 5 天'); assert.equal(rest.badge,'');
+  assert.equal(rest.restDetail,'距国庆节还有 5 天 · 10.1 - 10.3 · 休 3 天'); assert.equal(rest.lunar,'十六');
+  await none.service.refreshScheduleForm({},'card',4,'schedule_two_day');
+  assert.match(none.updates.at(-1).rightTitle,/9\.27/); assert.equal(none.updates.at(-1).rightNote,'');
+});
+test('published holidays drive the header badge, greeting and countdown',async()=>{
+  const h=sparseHarness('');
+  h.payload.holidays=[...Array.from({length:7},(_,i)=>({date:`2026-10-0${i+1}`,name:'国庆节'})),{date:'2027-01-01',name:'元旦'}];
+  await h.service.saveScheduleWidgetConfiguration({},JSON.stringify({endpoint:endpoint('A')}));
+  await h.service.refreshScheduleForm({},'card',3,'schedule_upcoming');
+  let value=h.updates.at(-1);
+  assert.equal(value.badge,''); assert.equal(value.restTitle,'今日无课');
+  assert.equal(value.restDetail,'距国庆节还有 5 天 · 10.1 - 10.7 · 休 7 天'); assert.equal(value.lockLine,'距国庆节还有 5 天');
+  h.setNow(new Date(2026,9,2,9).getTime());
+  await h.service.refreshScheduleForm({},'card',3,'schedule_upcoming'); value=h.updates.at(-1);
+  assert.equal(value.badge,'国庆节'); assert.equal(value.restTitle,'国庆快乐');
+  assert.equal(value.restDetail,'假期 10.1 - 10.7 · 休 7 天'); assert.equal(value.lockLine,'国庆快乐');
+  h.setNow(new Date(2027,0,1,9).getTime());
+  await h.service.refreshScheduleForm({},'card',3,'schedule_upcoming'); value=h.updates.at(-1);
+  assert.equal(value.restTitle,'元旦快乐'); assert.equal(value.restDetail,'');
+  assert.doesNotMatch(JSON.stringify(h.updates),/周末快乐/);
+});
+test('cards schedule the next refresh at class boundaries, midnight or 30 minutes',async()=>{
+  const h=await calendarHarness();
+  for(const [hour,minute,expected] of [[7,0,30],[7,58,5],[8,50,11],[23,50,11]]){
+    h.setNow(new Date(2026,8,8,hour,minute).getTime());
+    await h.service.refreshScheduleForm({},'card',2,'schedule_upcoming');
+    assert.equal(h.refreshes.at(-1),expected);
+  }
 });
 test('today large card displays seven rows while medium displays two and legacy large stays two-day',async()=>{
   const h=await calendarHarness(); h.setNow(new Date(2026,8,8,7).getTime());
@@ -155,13 +270,28 @@ test('form declarations expose all iOS desktop layout and size combinations',()=
   }
 });
 
-test('multicolor distinguishes the lecture and lab while repeated courses retain their color', async () => {
+test('multicolor picks the same course colours as the iOS widget and repeated courses keep theirs', async () => {
   const h = await calendarHarness(); h.setNow(new Date(2026,8,8,7).getTime());
-  h.payload.today.courses = ['天然药物化学实验', '天然药物化学', '天然药物化学实验']
-    .map((name, index) => ({name, startTime:`${8 + index}:00`, endTime:`${9 + index}:00`}));
+  // 与 iOS 渲染图一致：药剂学蓝、药物分析金、免疫学红、人工智能药学青、药理学粉。
+  const names = ['药剂学', '药物分析', '免疫学', '人工智能药学', '药理学', '药剂学'];
+  h.payload.today.courses = names.map((name, index) => ({name, startTime:`${8 + index}:00`, endTime:`${9 + index}:00`}));
   await h.service.refreshScheduleForm({}, 'card', 4, 'schedule_today');
   const rows = JSON.parse(h.updates.at(-1).primaryCourses);
-  assert.notEqual(rows[0].accent, rows[1].accent);
-  assert.equal(rows[0].accent, rows[2].accent);
-  assert.notEqual(rows[0].tint, rows[1].tint);
+  assert.deepEqual(rows.map(row => row.colorIndex), [1, 4, 0, 3, 5, 1]);
+  assert.deepEqual(rows.map(row => row.accent), ['#4A78F2', '#E0A224', '#E85B4B', '#17A69A', '#EC70A1', '#4A78F2']);
+  assert.equal(rows[0].tint, '#EAF0FF');
+  assert.equal(h.updates.at(-1).accent, '#0F8F7F');
+});
+test('two-day right column carries its own lunar date and the lock cards name the shown day', async () => {
+  const h = await calendarHarness();
+  await h.service.refreshScheduleForm({}, 'card', 4, 'schedule_two_day');
+  let value = h.updates.at(-1);
+  assert.equal(value.lunar, '廿七'); assert.equal(value.rightLunar, '廿八'); assert.equal(value.rightBadge, '');
+  await h.service.refreshScheduleForm({}, 'card', 1, 'schedule_lock_rectangular');
+  value = h.updates.at(-1);
+  assert.equal(value.lockTitle, '明天 9.9 周三'); assert.equal(value.lockDay, '明天');
+  h.setNow(new Date(2026,8,8,7).getTime());
+  await h.service.refreshScheduleForm({}, 'card', 1, 'schedule_lock_inline');
+  value = h.updates.at(-1);
+  assert.equal(value.lockTitle, '9.8 周二'); assert.equal(value.lockDay, '周二');
 });
