@@ -455,6 +455,12 @@ installNativeAppearanceBridge(appearanceStore);
 useAuthStore().hydrate();
 installIosNextScheduleBridge(router);
 installJwxtDataPrewarmTriggers();
+// 安卓小组件读 App 写的本地课表：退出登录、换账号时要删掉。只在支持的安卓壳里按需加载。
+if (typeof (window as any).CPUAndroid?.saveScheduleWidgetLocalDays === "function") {
+  void import("./views/schedule/widgetLocalDays")
+    .then(({ installAndroidScheduleWidgetOwnerWatch }) => installAndroidScheduleWidgetOwnerWatch(useAuthStore()))
+    .catch(() => undefined);
+}
 // 站点功能开关：尽早拉一次，不阻塞挂载（导航默认乐观显示，拿到结果后自动收敛）
 useSiteStore().fetch();
 app.use(router);

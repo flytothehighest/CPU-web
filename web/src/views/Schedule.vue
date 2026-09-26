@@ -883,6 +883,11 @@ import {
 import { createSemesterScheduleLoader, type ScheduleResponse } from "@/views/schedule/semesterLoader";
 import { useScheduleBackground } from "@/views/schedule/useScheduleBackground";
 import { createScheduleViewModelHelpers } from "@/views/schedule/viewModels";
+import {
+  buildScheduleWidgetLocalRecord,
+  saveAndroidScheduleWidgetLocalDays,
+  supportsAndroidScheduleWidgetLocalDays,
+} from "@/views/schedule/widgetLocalDays";
 import { DEFAULT_SCHEDULE_VIEW_MODE, resolveScheduleViewMode } from "@/views/schedule/types";
 import type {
   CalendarResult,
@@ -1111,6 +1116,44 @@ const {
   scheduleForWeek,
   allKnownScheduleSources,
 });
+
+// 安卓小组件只读 App 写在本地的课表（docs/schedule-widget-rules.md 第 7 节）：
+// 课表、校历、自定义课程有变化就按日期展开交给原生端。
+let androidWidgetSyncTimer = 0;
+function syncAndroidWidgetLocalDays() {
+  androidWidgetSyncTimer = 0;
+  if (disposed || !auth.isLoggedIn || !supportsAndroidScheduleWidgetLocalDays()) return;
+  if (scheduleSource.value === "graduate-debug") return;
+  const data = parsed.value;
+  const source = calendar.value;
+  if (!data?.currentSemester || !source?.weeks?.length) return;
+  if (source.currentSemester && source.currentSemester !== data.currentSemester) return;
+  // 小组件永远看当前学期；翻看往年学期时别把它换掉。
+  const currentSemester = data.semesters?.find((item) => item.current)?.value;
+  if (currentSemester && currentSemester !== data.currentSemester) return;
+  const complete = data.scope === "semester" || scheduleStorageScope() === "graduate";
+  const weeks = complete
+    ? []
+    : source.weeks.map((item) => Number(item.week)).filter((value) => Boolean(scheduleForWeek(value)));
+  saveAndroidScheduleWidgetLocalDays(buildScheduleWidgetLocalRecord({
+    semester: data.currentSemester,
+    calendar: source,
+    complete,
+    weeks,
+    blocksForWeek: (value) => weekCourseBlocksFor(value, complete ? data : scheduleForWeek(value)),
+  }));
+}
+function queueAndroidWidgetLocalDaysSync() {
+  if (!supportsAndroidScheduleWidgetLocalDays()) return;
+  if (androidWidgetSyncTimer) window.clearTimeout(androidWidgetSyncTimer);
+  androidWidgetSyncTimer = window.setTimeout(syncAndroidWidgetLocalDays, 400);
+}
+watch(
+  () => [parsed.value, calendar.value, scheduleCacheStore.size, scheduleSource.value, auth.isLoggedIn],
+  queueAndroidWidgetLocalDaysSync,
+);
+watch(scheduleEdits, queueAndroidWidgetLocalDaysSync, { deep: true });
+
 const scriptableWidgetScript = ref("");
 const widgetCopyMessage = ref("");
 const SCRIPTABLE_ADD_URL = "https://open.scriptable.app/add";
@@ -1129,6 +1172,7 @@ interface AndroidWidgetBridge {
   copyText?: (text: string) => boolean;
   supportsScheduleWidget?: () => boolean;
   installScheduleWidget?: (payload: string) => void;
+  setScheduleWidgetTheme?: (theme: string) => void;
   openExternalUrl?: (url: string) => void;
   supportsInAppApkDownload?: () => boolean;
   downloadAndInstallApk?: (url: string, fileName: string) => boolean;
@@ -1182,6 +1226,8 @@ function syncNativeWidgetTheme(value = scheduleTheme.value) {
   const theme = normalizeScheduleTheme(value);
   if (isIosNativeApp()) getIOSWidgetBridge()?.setScheduleWidgetTheme?.(theme);
   if (isHarmonyNativeApp()) getHarmonyWidgetBridge()?.setScheduleWidgetTheme?.(theme);
+  // 旧版安卓壳没有这个方法，按有没有来调用。
+  if (isAndroidNativeApp()) getAndroidWidgetBridge()?.setScheduleWidgetTheme?.(theme);
 }
 
 async function copyGradDebugGuide() {
@@ -1660,6 +1706,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   disposed = true;
+  if (androidWidgetSyncTimer) window.clearTimeout(androidWidgetSyncTimer);
+  androidWidgetSyncTimer = 0;
   semesterLoader.clear();
   scheduleMounted = false;
   scheduleRequestSeq += 1;
