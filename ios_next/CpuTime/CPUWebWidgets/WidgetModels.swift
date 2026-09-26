@@ -456,11 +456,18 @@ private enum ScheduleLocalDays {
     private struct Record: Decodable {
         let semester: String?
         let days: [ScheduleDay]
+        /// App 从调休表里挑出的法定放假日；旧版本 App 写的文件没有。
+        let holidays: [PublishedHoliday]?
     }
 
     /// 拼出小组件用的课表。今天不在学期里（假期）时给一个空的今天，照样显示「今天没有课」和节假日。
     static func payload(now: Date) -> SchedulePayload? {
-        guard let record = record() else { return nil }
+        guard let record = record() else {
+            ChineseCalendarInfo.usePublishedHolidays([])
+            return nil
+        }
+        // 小组件是单独的进程，得在这里把 App 带过来的放假安排换上，节日和倒计时才对。
+        ChineseCalendarInfo.usePublishedHolidays(record.holidays ?? [])
         let todayDate = SchedulePayload.dateString(now)
         let today = record.days.first(where: { $0.date == todayDate }) ?? .empty(date: todayDate, offset: 0)
         let week = today.week
