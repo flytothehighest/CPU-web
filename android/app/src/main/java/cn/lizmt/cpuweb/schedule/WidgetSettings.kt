@@ -1,5 +1,6 @@
 package cn.lizmt.cpuweb.schedule
 
+import androidx.compose.ui.draw.shadow
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import androidx.compose.ui.res.painterResource
@@ -219,8 +220,12 @@ fun WidgetSettingsSheet(activity: MainActivity, onDismiss: () -> Unit) {
         Spacer(Modifier.height(14.dp))
         val own = remember(selected, widgets.theme, widgets.revision, colors.dark) { widgets.preview(selected, colors.dark) }
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            // The widget layout paints the card behind the bitmap (res/drawable/widget_background).
+            val card = if (colors.dark) androidx.compose.ui.graphics.Color(0xFF0E1420) else androidx.compose.ui.graphics.Color(0xFFF8FBFF)
             val modifier = Modifier.width(if (selected.ratio > 1.2f) 320.dp else 180.dp).aspectRatio(selected.ratio)
-                .clip(RoundedCornerShape(20.dp)).semantics { contentDescription = "${selected.title}小组件预览" }
+                .shadow(6.dp, RoundedCornerShape(22.dp)).clip(RoundedCornerShape(22.dp))
+                .background(if (own != null) card else androidx.compose.ui.graphics.Color.Transparent)
+                .semantics { contentDescription = "${selected.title}小组件预览" }
             if (own != null) Image(own.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Fit, modifier = modifier)
             else Image(painterResource(selected.sample), contentDescription = null, contentScale = ContentScale.Fit, modifier = modifier)
         }

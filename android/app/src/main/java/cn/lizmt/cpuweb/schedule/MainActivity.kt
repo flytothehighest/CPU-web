@@ -1,5 +1,8 @@
 package cn.lizmt.cpuweb.schedule
 
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import androidx.compose.runtime.snapshotFlow
 import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.ClipData
@@ -101,7 +104,15 @@ class MainActivity : ComponentActivity(), WebSessionHost {
         schedule = ScheduleStore(lifecycleScope, ScheduleArchive.create(this))
         shell = ShellCoordinator(lifecycleScope, web, schedule)
         shell.onAccountChanged = { account -> widgets.handleAccountChanged(account) }
-        schedule.onLoaded = { widgets.syncLocalDays(schedule, web) }
+        // Widgets read the timetable the app writes locally: follow every change of
+        // the data shown (network, archive, prefetched weeks, edits) and of sign-in.
+        lifecycleScope.launch {
+            snapshotFlow { listOf(schedule.result, schedule.calendar, schedule.dataRevision, web.authState.authenticated) }
+                .collectLatest {
+                    delay(400)
+                    widgets.syncLocalDays(schedule, web)
+                }
+        }
         if (BuildConfig.DEBUG && intent.getBooleanExtra(DebugScheduleFixture.EXTRA, false)) {
             welcomeSeen = true
             shell.connectDebugFixture()
