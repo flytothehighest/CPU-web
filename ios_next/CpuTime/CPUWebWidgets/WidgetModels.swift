@@ -455,6 +455,11 @@ struct ScheduleEntry: TimelineEntry {
     let date: Date
     let state: ScheduleEntryState
     var configuration = ScheduleWidgetConfiguration()
+    /// 刚按了放假祝福上的彩炮：这一条放烟花。
+    var celebrating = false
+    /// 烟花层的身份，每按一次彩炮换一个。放烟花那一条沿用按之前的，碎片才会从平时的样子动起来；
+    /// 收起的那一条换成新的，整层按平时的样子重新放进来，不会倒着把烟花再放一遍。
+    var fireworksRound: Double = 0
 
     var appURL: URL {
         guard case .loaded(let payload) = state else { return AppWidgetConfiguration.appURL }
@@ -519,7 +524,19 @@ enum ScheduleTimeline {
         // 上课、下课那一刻就该换内容（划掉已结束的课、放学后切到明天），别等下一个半小时。
         // 这几次刷新只是重新读一遍本地课表。
         let refresh = payload.flatMap { nextBoundary(in: $0, now: now) }.map { min($0, periodic) } ?? periodic
-        return Timeline(entries: [entry], policy: .after(refresh))
+        // 刚按了彩炮：这一条放烟花，散完后再来一条把彩炮放回去。
+        let rounds = CelebrateHolidayIntent.rounds()
+        var calm = entry
+        calm.fireworksRound = rounds.latest
+        guard CelebrateHolidayIntent.justFired(now: now) else {
+            return Timeline(entries: [calm], policy: .after(refresh))
+        }
+        var celebrating = entry
+        celebrating.celebrating = true
+        celebrating.fireworksRound = rounds.previous
+        // 烟花在上面那一条里就放完、散没了；这一条只是把彩炮放回去、换掉看不见的碎片，来晚了也不碍事。
+        calm = ScheduleEntry(date: now.addingTimeInterval(FireworksTiming.total + 0.3), state: entry.state, fireworksRound: rounds.latest)
+        return Timeline(entries: [celebrating, calm], policy: .after(refresh))
     }
 
     /// 今天剩下的课程边界里最近的一个（开始或结束）；都过了就是午夜换日那一刻。
