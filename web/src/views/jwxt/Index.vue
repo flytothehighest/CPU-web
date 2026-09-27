@@ -205,10 +205,12 @@
           <template #label><AppIcon v-if="!isMobileViewport" name="chart" /> 成绩</template>
           <GradesPane :data="grades" :loading="tabLoading" />
         </el-tab-pane>
+        <!-- 期中功能暂时停用，保留组件和接入代码，恢复时同步启用 jwxtPrewarm.ts 中的预加载。
         <el-tab-pane v-if="!isGraduateIdentity" name="midterm" lazy>
           <template #label><AppIcon v-if="!isMobileViewport" name="document" /> {{ isMobileViewport ? "期中" : "期中成绩" }}</template>
           <MidtermGradesPane :data="midtermGrades" :loading="tabLoading" />
         </el-tab-pane>
+        -->
         <el-tab-pane v-if="!isGraduateIdentity" name="progress" lazy>
           <template #label><AppIcon v-if="!isMobileViewport" name="school" /> {{ isMobileViewport ? "学业" : "学业完成情况" }}</template>
           <ProgressPane :data="progress" :loading="tabLoading" />
@@ -268,7 +270,7 @@ import {
 import PrivacyConsent from "@/components/common/PrivacyConsent.vue";
 const SchedulePane = defineAsyncComponent(() => import("@/components/jwxt/SchedulePane.vue"));
 const GradesPane = defineAsyncComponent(() => import("@/components/jwxt/GradesPane.vue"));
-const MidtermGradesPane = defineAsyncComponent(() => import("@/components/jwxt/MidtermGradesPane.vue"));
+// const MidtermGradesPane = defineAsyncComponent(() => import("@/components/jwxt/MidtermGradesPane.vue"));
 const ProgressPane = defineAsyncComponent(() => import("@/components/jwxt/ProgressPane.vue"));
 const PyfaPane = defineAsyncComponent(() => import("@/components/jwxt/PyfaPane.vue"));
 
@@ -285,13 +287,13 @@ const rules: FormRules = {
   password: [{ required: true, message: "请输入密码" }],
 };
 const isGraduateIdentity = computed(() => auth.academicIdentity === "graduate");
-type DataTab = JwxtDataTab;
+type DataTab = Exclude<JwxtDataTab, "midterm">; // 期中暂时停用；恢复时移除 Exclude。
 type JwxtTab = DataTab | "debug";
 const isMobileViewport = ref(typeof window !== "undefined" ? window.matchMedia("(max-width: 768px)").matches : false);
 const tab = ref<JwxtTab>(isMobileViewport.value ? "grades" : "schedule");
 const schedule = ref<any>(null);
 const grades = ref<any>(null);
-const midtermGrades = ref<any>(null);
+// const midtermGrades = ref<any>(null);
 const progress = ref<any>(null);
 const pyfa = ref<any>(null);
 const tabLoading = ref(false);
@@ -321,8 +323,8 @@ const availableDataTabs = computed<DataTab[]>(() => {
     return showScheduleTab.value ? ["schedule"] : [];
   }
   return showScheduleTab.value
-    ? ["schedule", "grades", "midterm", "progress", "pyfa"]
-    : ["grades", "midterm", "progress", "pyfa"];
+    ? ["schedule", "grades", /* "midterm", */ "progress", "pyfa"]
+    : ["grades", /* "midterm", */ "progress", "pyfa"];
 });
 const hasJwxtTabs = computed(() => availableDataTabs.value.length > 0 || isDev.value);
 const hasCachedData = computed(() => availableDataTabs.value.some((item) => Boolean(getTabData(item))));
@@ -498,7 +500,7 @@ function ensureVisibleTab() {
 function getTabData(t: DataTab) {
   if (t === "schedule") return schedule.value;
   if (t === "grades") return grades.value;
-  if (t === "midterm") return midtermGrades.value;
+  // if (t === "midterm") return midtermGrades.value;
   if (t === "progress") return progress.value;
   return pyfa.value;
 }
@@ -507,7 +509,7 @@ function setTabData(t: DataTab, data: any) {
   const normalized = normalizeJwxtTabData(t, data);
   if (t === "schedule") schedule.value = normalized;
   else if (t === "grades") grades.value = normalized;
-  else if (t === "midterm") midtermGrades.value = normalized;
+  // else if (t === "midterm") midtermGrades.value = normalized;
   else if (t === "progress") progress.value = normalized;
   else pyfa.value = normalized;
 }
@@ -563,7 +565,7 @@ function restoreAllTabCaches() {
 function resetTabData() {
   schedule.value = null;
   grades.value = null;
-  midtermGrades.value = null;
+  // midtermGrades.value = null;
   progress.value = null;
   pyfa.value = null;
 }
@@ -579,7 +581,7 @@ function fetchTab(t: DataTab, identity: string = auth.academicIdentity, options?
     }
     if (t === "schedule") return jwxtApi.schedule(undefined, silentOptions);
     if (t === "grades") return jwxtApi.grades(undefined, silentOptions);
-    if (t === "midterm") return jwxtApi.midtermGrades(undefined, silentOptions);
+    // if (t === "midterm") return jwxtApi.midtermGrades(undefined, silentOptions);
     if (t === "progress") return jwxtApi.progress(silentOptions);
     return jwxtApi.pyfa(silentOptions);
   });
