@@ -177,7 +177,8 @@ public class ScheduleWidgetCardRendererTest {
     }
 
     private static void save(Bitmap bitmap, String name) throws Exception {
-        File preview = new File("build/reports/widget-previews/ios-compare/" + name);
+        // Normalised: on Linux "ios-compare/../picker" only resolves once ios-compare exists.
+        File preview = new File("build/reports/widget-previews/ios-compare/" + name).toPath().normalize().toFile();
         assertTrue(preview.getParentFile().exists() || preview.getParentFile().mkdirs());
         try (FileOutputStream stream = new FileOutputStream(preview)) {
             assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream));
