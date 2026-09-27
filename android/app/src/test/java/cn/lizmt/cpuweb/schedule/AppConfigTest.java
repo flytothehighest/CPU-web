@@ -6,7 +6,7 @@ import org.junit.Test;
 
 public final class AppConfigTest {
     @Test
-    public void defaultAppUrlOpensSchedule() {
-        assertEquals("https://cputime.cn/schedule", BuildConfig.APP_URL);
+    public void defaultAppUrlOpensTheWebHome() {
+        assertEquals("https://cputime.cn/home", BuildConfig.APP_URL);
     }
 }

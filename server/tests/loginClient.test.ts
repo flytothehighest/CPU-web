@@ -23,6 +23,14 @@ test("Harmony's shared native shell is not counted as iOS", () => {
   assert.equal(detect("CPUWebHarmonyApp/3 CPUTimeNative/1", "ios").client, "harmony");
 });
 
+test("the Android native shell shares CPUTimeNative but stays an Android client", () => {
+  const ua = "Mozilla/5.0 (Linux; Android 15) CPUWebScheduleApp/39 CPUWebScheduleAppVersion/4.0.0 CPUTimeNative/1";
+  assert.equal(detect(ua).client, "android");
+  assert.equal(detect(ua, "ios").client, "android");
+  assert.equal(loginClientUsage(detect(ua)).usedAndroidClient, true);
+  assert.equal(loginClientUsage(detect(ua)).usedIosNativeClient, undefined);
+});
+
 test("Safari standalone telemetry keeps iOS announcement targeting", () => {
   const info = detect("Mozilla/5.0 (iPhone) AppleWebKit/605.1.15", "ios-pwa");
   assert.equal(info.client, "ios");
@@ -68,5 +76,6 @@ test("detailed telemetry preserves existing iOS commerce restrictions", () => {
   }
   assert.equal(isIosCommerceRequest({ headers: { "user-agent": "CPUTimeNative/1" } }), true);
   assert.equal(isIosCommerceRequest({ headers: { "user-agent": "CPUWebHarmonyApp/3 CPUTimeNative/1" } }), false);
+  assert.equal(isIosCommerceRequest({ headers: { "user-agent": "CPUWebScheduleApp/39 CPUTimeNative/1" } }), false);
   assert.equal(isIosCommerceRequest({ headers: { "x-cpu-client": "web" } }), false);
 });

@@ -87,7 +87,9 @@ export function openImageGallery(
     .filter((item) => item.src);
   if (!normalized.length) return false;
 
-  const harmony = (window as any).CPUHarmony;
+  const android = (window as any).CPUAndroid;
+  const harmony = (window as any).CPUHarmony
+    ?? (android?.supportsNativeImagePreview?.() === true ? android : undefined);
   if (typeof harmony?.previewImages === 'function' && !options.onDownload && !options.onHidden && !options.onViewed) {
     try {
       const images = normalized.map(item => ({

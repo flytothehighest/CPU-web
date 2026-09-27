@@ -7,6 +7,10 @@
 - 用户上传的图片、视频和附件保留 `/uploads/` 入口，由服务器按实际存储配置处理。缩略图参数由服务器翻译为对应服务的格式。
 - 网页编译资源按站点静态资源配置分发，APK 不加入静态资源同步。
 
+## V39（4.0.0）原生外壳的前置条件
+
+4.0.0 起 UA 同时带 `CPUWebScheduleApp` 与 `CPUTimeNative/1`。旧版服务端和网页会把任何 `CPUTimeNative/` 当作 iOS（屏蔽赞助与会员入口、登录统计记为 iOS、`clientInfo` 判为 iOS）。因此必须先部署包含 `server/src/utils/loginClient.ts`、`server/src/middleware/iosCommerce.ts` 与 `web/src/utils/clientInfo.ts` 修正的精确提交，再把 V39 写入发布清单。随包的桥接脚本不依赖网页部署，原生课表在旧网页上也能读取。
+
 ## 发布步骤
 
 1. 修改 `android/app/build.gradle` 的候选版本，暂时保留 `server/src/releases/android.json` 的已发布版本。推送后等待精确提交的 Android 和 Linux 工作流成功。

@@ -7,6 +7,7 @@ final class ScheduleWidgetPrefs {
     private static final String PREFS = "schedule_widget";
     private static final String KEY_ENDPOINT = "endpoint";
     private static final String KEY_THEME = "theme";
+    private static final String KEY_ACCOUNT = "account_fingerprint";
 
     private ScheduleWidgetPrefs() {
     }
@@ -35,6 +36,20 @@ final class ScheduleWidgetPrefs {
 
     static String theme(Context context) {
         return ScheduleWidgetPalette.normalizeTheme(prefs(context).getString(KEY_THEME, ScheduleWidgetPalette.DEFAULT_THEME));
+    }
+
+    /** SHA-256 of the account the widget data belongs to; never the account itself. */
+    static String accountFingerprint(Context context) {
+        return prefs(context).getString(KEY_ACCOUNT, "");
+    }
+
+    static void saveAccountFingerprint(Context context, String fingerprint) {
+        prefs(context).edit().putString(KEY_ACCOUNT, fingerprint == null ? "" : fingerprint).apply();
+    }
+
+    /** Sign-out or a different account: drop the subscription and its owner. */
+    static void clearAccount(Context context) {
+        prefs(context).edit().remove(KEY_ENDPOINT).remove(KEY_ACCOUNT).apply();
     }
 
     private static SharedPreferences prefs(Context context) {

@@ -48,7 +48,7 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
     static final int LOOKAHEAD_DAYS = 21;
     private static final long FALLBACK_REFRESH_MILLIS = 30L * 60L * 1000L;
 
-    enum WidgetMode {
+    public enum WidgetMode {
         COMPACT,
         WIDE,
         TODAY_WIDE,
@@ -179,8 +179,10 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
             layout = R.layout.widget_schedule_upcoming_compact;
         }
         RemoteViews views = new RemoteViews(context.getPackageName(), layout);
-        Intent intent = new Intent(context, MainActivity.class);
-        intent.setData(Uri.parse(BuildConfig.APP_URL));
+        // The native shell opens straight on its timetable tab.
+        Intent intent = new Intent(context, MainActivity.class)
+                .putExtra(MainActivity.EXTRA_OPEN_SCHEDULE, true)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         int flags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
         PendingIntent pendingIntent = PendingIntent.getActivity(context, 0, intent, flags);
         views.setOnClickPendingIntent(R.id.widget_root, pendingIntent);
@@ -289,6 +291,24 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
     }
 
     /** 按当前时刻画一张课表图：先决定显示哪天的哪些课，再交给渲染器按给定的尺寸和配色画。 */
+    /**
+     * The in-app preview in the native widget settings: the local record drawn
+     * at the family's nominal size. Null when there is no local record yet.
+     */
+    static Bitmap preview(Context context, WidgetMode mode, boolean dark) {
+        JSONObject record = ScheduleWidgetLocalDays.read(context);
+        if (record == null) return null;
+        String today = deviceDateOffset(0);
+        JSONObject data = ScheduleWidgetLocalDays.payload(record, today);
+        if (data == null) return null;
+        ChineseCalendarInfo.usePublishedHolidays(ScheduleWidgetLocalDays.holidays(record));
+        DisplayMetrics metrics = context.getResources().getDisplayMetrics();
+        ScheduleWidgetCardRenderer.Family family = family(mode);
+        return painter(data, mode, today, currentMinutes()).paint(ScheduleWidgetCardRenderer.Frame.fit(
+                family, family.width, family.height, metrics.density, 1_200_000,
+                new ScheduleWidgetPalette(ScheduleWidgetPrefs.theme(context), dark)));
+    }
+
     interface Painter {
         Bitmap paint(ScheduleWidgetCardRenderer.Frame frame);
     }

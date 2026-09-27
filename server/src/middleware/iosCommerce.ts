@@ -6,7 +6,7 @@ export function isIosCommerceRequest(req: Pick<Request, "headers">) {
   const ua = String(req.headers["user-agent"] || "");
   const client = String(req.headers["x-cpu-client"] || "").trim().toLowerCase();
   return /CPUWebIOSApp/i.test(ua)
-    || (/CPUTimeNative\//i.test(ua) && !/CPUWebHarmonyApp/i.test(ua))
+    || (/CPUTimeNative\//i.test(ua) && !/CPUWebHarmonyApp|CPUWebScheduleApp/i.test(ua))
     || (IOS_ANALYTICS_CLIENTS as readonly string[]).includes(client);
 }
 
