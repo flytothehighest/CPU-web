@@ -98,7 +98,7 @@ export default defineEventHandler(async (event) => {
       grade: grade || '',
       scope: scope || '',
       userId: scope === 'mine' && hasValidUserId ? userId : undefined, // 如果 scope 为 mine，则将 userId 包含在缓存键中
-      displayNameSchemaVersion: 3,
+      displayNameSchemaVersion: 4,
       sortBy,
       sortOrder
     }

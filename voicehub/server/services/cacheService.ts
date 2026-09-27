@@ -243,7 +243,7 @@ class CacheService {
   async getSchedulesList(startDate?: Date, endDate?: Date): Promise<any[] | null> {
     const key = this.generateKey(
       CACHE_PREFIXES.SCHEDULES,
-      'list',
+      'list-v2',
       startDate?.toISOString().split('T')[0] || 'all',
       endDate?.toISOString().split('T')[0] || 'all'
     )
@@ -265,7 +265,7 @@ class CacheService {
   async setSchedulesList(schedules: any[], startDate?: Date, endDate?: Date): Promise<void> {
     const key = this.generateKey(
       CACHE_PREFIXES.SCHEDULES,
-      'list',
+      'list-v2',
       startDate?.toISOString().split('T')[0] || 'all',
       endDate?.toISOString().split('T')[0] || 'all'
     )

@@ -47,7 +47,7 @@ export default defineEventHandler(async (event) => {
       .limit(1)
       .then((result) => result[0])
     const shouldHideStudentInfo = systemSettingsData?.hideStudentInfo ?? true
-    const CACHE_SCHEMA_VERSION = 'v3'
+    const CACHE_SCHEMA_VERSION = 'v4'
 
     const hasAnonymousName = (schedulesList: any[]) =>
       schedulesList.some((item: any) => {

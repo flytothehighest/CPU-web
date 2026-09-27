@@ -1,5 +1,6 @@
 import {bigint, boolean, index, integer, pgEnum, pgTable, serial, text, timestamp, uuid, varchar, unique, uniqueIndex} from 'drizzle-orm/pg-core';
-import {relations} from 'drizzle-orm';
+import {relations, sql} from 'drizzle-orm';
+import { beijingTimestamp } from './beijingTimestamp';
 
 // 枚举定义
 export const blacklistTypeEnum = pgEnum('BlacklistType', ['SONG', 'KEYWORD']);
@@ -49,7 +50,7 @@ export const playTimes = pgTable('PlayTime', {
 // 歌曲表
 export const songs = pgTable('Song', {
   id: serial('id').primaryKey(),
-  createdAt: timestamp('createdAt').defaultNow().notNull(),
+  createdAt: beijingTimestamp('createdAt').default(sql`now()`).$defaultFn(() => new Date()).notNull(),
   updatedAt: timestamp('updatedAt').defaultNow().notNull(),
   title: text('title').notNull(),
   artist: text('artist').notNull(),
