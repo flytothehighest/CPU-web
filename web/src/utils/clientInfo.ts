@@ -105,8 +105,9 @@ export function isAndroidNativeApp(ua = navigator.userAgent) {
 export function isIosNativeApp(ua = navigator.userAgent) {
   const source = (ua || "").toLowerCase();
   const bridge = typeof window === "undefined" ? null : (window as any).CPUIOS;
+  // Harmony and the Android native shell share the CPUTimeNative bridge token.
   return source.includes("cpuwebiosapp")
-    || (source.includes("cputimenative/") && !source.includes("cpuwebharmonyapp"))
+    || (source.includes("cputimenative/") && !source.includes("cpuwebharmonyapp") && !source.includes("cpuwebscheduleapp"))
     || (typeof bridge?.supportsScheduleWidget === "function" && bridge.supportsScheduleWidget() === true);
 }
 

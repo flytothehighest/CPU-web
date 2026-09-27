@@ -74,6 +74,17 @@ jobs:
           fi
           node --test harmony/tests/*.test.mjs ios_next/tests/web-schedule-bridge.test.mjs
 
+      - name: Verify Android native shell bridges and shared visual tokens
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run android:generate
+          if ! git diff --stat --exit-code -- android/app/src/main/assets/NativeWebCompatibility.js android/app/src/main/java/cn/lizmt/cpuweb/schedule/SchedulePalettes.kt; then
+            echo "::error title=Stale Android generated files::Run 'npm run android:generate' at the repository root and commit NativeWebCompatibility.js and SchedulePalettes.kt."
+            exit 1
+          fi
+          node --test android/tests/*.test.mjs
+
       - name: Test deployment scripts and Agent artifact installation
         shell: bash
         run: |

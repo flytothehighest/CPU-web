@@ -18,12 +18,11 @@ import android.util.Base64;
 import android.webkit.JavascriptInterface;
 import android.widget.Toast;
 
-import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.OutputStream;
 
-final class CpuAndroidBridge {
+public final class CpuAndroidBridge {
     private final MainActivity activity;
     private final ApkUpdateController updates;
 
@@ -66,7 +65,8 @@ final class CpuAndroidBridge {
     /** 网页端切换课表主题时同步给小组件，有变化才重画。 */
     @JavascriptInterface
     public void setScheduleWidgetTheme(String theme) {
-        if (ScheduleWidgetPrefs.saveTheme(activity, theme)) ScheduleWidgetProvider.updateAll(activity);
+        // The native widget settings show the theme too, so they are updated on the UI thread.
+        activity.runOnUiThread(() -> activity.getWidgets().selectTheme(theme == null ? "" : theme));
     }
 
     @JavascriptInterface
@@ -122,31 +122,26 @@ final class CpuAndroidBridge {
         return updates.start(url, fileName);
     }
 
+    /** The Web gallery hands previews to the native viewer when this returns true. */
+    @JavascriptInterface
+    public boolean supportsNativeImagePreview() {
+        return true;
+    }
+
     @JavascriptInterface
     public boolean previewImages(String payload) {
-        try {
-            JSONObject json = new JSONObject(payload == null ? "{}" : payload);
-            JSONArray images = json.optJSONArray("images");
-            if (images == null || images.length() == 0) return false;
-            int index = Math.max(0, Math.min(json.optInt("index", 0), images.length() - 1));
-            JSONObject image = images.optJSONObject(index);
-            String url = image == null ? "" : image.optString("url", "").trim();
-            Uri uri = Uri.parse(url);
-            if (!isHttpUrl(uri)) return false;
-            activity.runOnUiThread(() -> {
-                try {
-                    Intent intent = new Intent(Intent.ACTION_VIEW, uri);
-                    intent.addCategory(Intent.CATEGORY_BROWSABLE);
-                    intent.setDataAndType(uri, "image/*");
-                    activity.startActivity(intent);
-                } catch (Exception ignored) {
-                    Toast.makeText(activity, "无法打开系统图片查看器", Toast.LENGTH_SHORT).show();
-                }
-            });
-            return true;
-        } catch (Exception ignored) {
-            return false;
-        }
+        ImagePreviewRequest request = ImagePreviewRequest.parse(payload);
+        if (request == null) return false;
+        activity.showImagePreview(request);
+        return true;
+    }
+
+    @JavascriptInterface
+    public boolean saveImageUrl(String url, String fileName) {
+        if (url == null || !isHttpUrl(Uri.parse(url.trim()))) return false;
+        String name = ImagePreviewRequest.Companion.sanitizeImageName(fileName == null ? "" : fileName);
+        activity.runOnUiThread(() -> ImagePreviewKt.saveImage(activity, new PreviewImage(url.trim(), name, name)));
+        return true;
     }
 
     @JavascriptInterface
@@ -258,8 +253,9 @@ final class CpuAndroidBridge {
     }
 
     private String parseTheme(String payload) {
+        if (payload == null || !payload.trim().startsWith("{")) return "";
         try {
-            return new JSONObject(payload == null ? "" : payload.trim()).optString("theme", "").trim();
+            return new JSONObject(payload.trim()).optString("theme", "").trim();
         } catch (Exception ignored) {
             return "";
         }

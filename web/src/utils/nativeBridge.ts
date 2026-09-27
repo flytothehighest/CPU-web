@@ -4,6 +4,7 @@ export type NativeAppBridge = {
   supportsScheduleWidget?: () => boolean;
   supportsInAppApkDownload?: () => boolean;
   previewImages?: (payload: string) => boolean;
+  supportsNativeImagePreview?: () => boolean;
   copyText?: (text: string) => boolean;
   openExternalUrl?: (url: string) => void;
   downloadAndInstallApk?: (url: string, fileName?: string) => boolean;
@@ -37,8 +38,10 @@ export function hasNativeImageSaveBridge() {
 }
 
 export function hasNativeImagePreviewBridge() {
-  if (isAndroidNativePreviewFallback()) return false;
-  return typeof getNativeBridge()?.previewImages === "function";
+  const bridge = getNativeBridge();
+  // Older Android shells only opened the system browser; the native shell advertises a real viewer.
+  if (isAndroidNativePreviewFallback() && bridge?.supportsNativeImagePreview?.() !== true) return false;
+  return typeof bridge?.previewImages === "function";
 }
 
 export function previewNativeImages(payload: NativeImagePreviewPayload) {

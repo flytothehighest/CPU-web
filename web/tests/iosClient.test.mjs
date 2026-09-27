@@ -86,3 +86,14 @@ test("other clients and embedded browsers do not receive Safari recommendations"
   assert.equal(client("Mozilla/5.0 CPUWebHarmonyApp/3 CPUTimeNative/1").detectAnalyticsClient(), "harmony");
   assert.equal(client("Mozilla/5.0 Android CPUWebScheduleApp/38").detectAnalyticsClient(), "android");
 });
+
+test("the Android native shell shares CPUTimeNative without being treated as iOS", () => {
+  const android = "Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36";
+  const api = client(`${android} CPUWebScheduleApp/39 CPUWebScheduleAppVersion/4.0.0 CPUTimeNative/1`);
+  assert.equal(api.isIosNativeApp(), false);
+  assert.equal(api.hidesNativeCommerce(), false);
+  assert.equal(api.isNativeScheduleShell(), true);
+  assert.equal(api.detectClientPlatform(), "android");
+  assert.equal(api.getAndroidNativeVersionCode(), 39);
+  assert.equal(api.getAndroidNativeVersionName(), "4.0.0");
+});

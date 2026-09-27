@@ -17,6 +17,7 @@
     "test": "node tools/run-node-tests.mjs",
     "test:node": "node tools/run-node-tests.mjs",
     "harmony:generate": "node harmony/scripts/build-web-bridge.mjs && node harmony/scripts/build-native-theme.mjs",
+    "android:generate": "node android/scripts/build-web-bridge.mjs && node android/scripts/build-native-theme.mjs",
     "start": "concurrently -k -n server,voicehub -c blue,magenta \"npm run start --prefix server\" \"npm run start:cpu --prefix voicehub\"",
     "start:server": "npm run start --prefix server",
     "desktop:install": "npm install --prefix desktop",

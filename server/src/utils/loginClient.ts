@@ -26,15 +26,15 @@ function normalizeClient(value: string | undefined | null): LoginClient | null {
 export function detectLoginClient(req: Request): LoginClientInfo {
   const ua = (req.get("user-agent") ?? "").toLowerCase();
   // Native UA tokens take priority over stale platform headers from older web bundles.
-  // Harmony also uses CPUTimeNative, so it must be checked first.
+  // Harmony and the Android native shell also carry CPUTimeNative, so they are checked first.
   if (ua.includes("cpuwebharmonyapp")) return toInfo("harmony");
+  if (ua.includes("cpuwebscheduleapp")) return toInfo("android");
   if (ua.includes("cpuwebiosapp") || ua.includes("cputimenative/")) return toInfo("ios", "ios-native");
   const variant = req.get("x-cpu-client")?.trim().toLowerCase();
   if (variant === "ios-native" || variant === "ios-pwa") return toInfo("ios", variant);
   const explicit = normalizeClient(req.get("x-cpu-client"));
   if (explicit) return toInfo(explicit);
 
-  if (ua.includes("cpuwebscheduleapp")) return toInfo("android");
   if (ua.includes("electron")) return toInfo("desktop");
   if (ua) return toInfo("web");
   return toInfo("unknown");
