@@ -7,7 +7,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { atomicWrite, cutover, probe, replaceConfig, replaceUpstream, runtimeEnvironment } from './blue-green-core.mjs'
-import { linkSharedDirectory, configSnapshots, restoreConfigs, findProxyConfig, resolveProxyConfigs, publishWebAssets, verifyWeb } from './blue-green.mjs'
+import { hasSchemaChanges, linkSharedDirectory, configSnapshots, restoreConfigs, findProxyConfig, resolveProxyConfigs, publishWebAssets, verifyWeb } from './blue-green.mjs'
 
 const listen = server => new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(server.address().port)))
 const close = server => new Promise(resolve => server.close(resolve))
@@ -244,4 +244,13 @@ test('continuous real HTTP requests and an in-flight stream survive a route swit
   assert.ok(results.length >= 10)
   assert.ok(results.every(([status, body]) => status === 200 && ['old', 'new'].includes(body)))
   await assert.rejects(probe(`${origin}/api/ready`, { commit: 'b'.repeat(40), attempts: 1 }), /mismatch/)
+})
+
+
+test('VoiceHub app/drizzle schema and migrations trigger the production migration gate', () => {
+  for (const file of ['voicehub/app/drizzle/schema.ts', 'voicehub/app/drizzle/migrations/20260927150000_add_song_reviews.sql', 'voicehub/app/drizzle/migrations/meta/_journal.json', 'voicehub/drizzle/legacy.sql', 'voicehub/drizzle.config.ts', 'server/prisma/schema.prisma']) {
+    assert.equal(hasSchemaChanges([file]), true, file)
+  }
+  assert.equal(hasSchemaChanges(['voicehub/app/components/Songs/SongList.vue', 'web/src/views/Home.vue']), false)
+  assert.equal(hasSchemaChanges(new Set(['docs/voicehub-song-review.md', 'voicehub/app/drizzle/schema.ts'])), true)
 })

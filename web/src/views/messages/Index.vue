@@ -387,6 +387,7 @@
 </template>
 
 <script setup lang="ts">
+import { navigateNoticeTarget } from "@/utils/noticeNavigation";
 import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
@@ -999,7 +1000,7 @@ const reviewStateText = computed(() => {
 function goNoticeLink() {
   if (!activeNoticeTargetLink.value) return;
   detailOpen.value = false;
-  router.push(activeNoticeTargetLink.value);
+  navigateNoticeTarget(activeNoticeTargetLink.value, { assign: url => window.location.assign(url), push: url => router.push(url) });
 }
 
 async function requestManualReviewFromNotice() {

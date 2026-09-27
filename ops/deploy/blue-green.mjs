@@ -20,6 +20,10 @@ async function run(command, args, options = {}) {
   return result.stdout.trim()
 }
 
+export function hasSchemaChanges(files) {
+  return [...files].some(file => /^(server\/prisma\/|voicehub\/(?:(?:app\/)?drizzle\/|drizzle\.config|server\/database\/))/.test(file.replaceAll('\\', '/')))
+}
+
 function integer(value, fallback, minimum, maximum) {
   const parsed = Number(value ?? fallback)
   if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) throw new Error(`Invalid deployment integer: ${value}`)
@@ -333,7 +337,7 @@ export async function deploy() {
       previous,
     })
   }
-  const schemaChanged = [...changed].some(file => /^(server\/prisma\/|voicehub\/(drizzle\/|drizzle\.config|server\/database\/))/.test(file))
+  const schemaChanged = hasSchemaChanges(changed)
   if ((schemaChanged || force) && process.env.DEPLOY_ALLOW_SCHEMA_EXPAND !== '1') {
     throw new Error('Schema/full update requires reviewed backward-compatible migrations: set DEPLOY_ALLOW_SCHEMA_EXPAND=1. No running process was changed')
   }

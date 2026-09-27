@@ -1509,7 +1509,7 @@ const searchUsersFromAPI = async (query) => {
   }
 
   try {
-    const response = await $fetch('/api/admin/users', {
+    const response = await $fetch('/api/admin/song-requesters', {
       method: 'GET',
       query: {
         search: query,
