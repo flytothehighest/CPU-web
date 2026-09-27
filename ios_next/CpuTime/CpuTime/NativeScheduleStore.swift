@@ -978,6 +978,9 @@ public protocol NativeScheduleArchive: AnyObject {
 /// mirrors data the schedule service can return again.
 public final class NativeScheduleFileArchive: NativeScheduleArchive {
     private let url: URL?
+    static let maximumArchiveBytes = 8 * 1024 * 1024
+
+    init(url: URL) { self.url = url }
 
     // The native timetable payload has had several normalization revisions.
     // Keep a revisioned archive name so an upgrade cannot paint an old grid
@@ -1001,14 +1004,26 @@ public final class NativeScheduleFileArchive: NativeScheduleArchive {
     }
 
     public func read() -> NativeScheduleArchivedSchedule? {
-        guard let url, let data = try? Data(contentsOf: url) else { return nil }
-        return try? JSONDecoder.nativeScheduleDecoder.decode(NativeScheduleArchivedSchedule.self, from: data)
+        guard let url, let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+        // Bound the read itself as well as decoding, including a file that
+        // changes after opening. A damaged cache must never block app launch.
+        guard let data = try? handle.read(upToCount: Self.maximumArchiveBytes + 1) else { return nil }
+        guard data.count <= Self.maximumArchiveBytes,
+              let record = try? JSONDecoder.nativeScheduleDecoder.decode(NativeScheduleArchivedSchedule.self, from: data) else {
+            let quarantine = url.appendingPathExtension("invalid")
+            try? FileManager.default.removeItem(at: quarantine)
+            try? FileManager.default.moveItem(at: url, to: quarantine)
+            return nil
+        }
+        return record
     }
 
     public func write(_ record: NativeScheduleArchivedSchedule) {
         // ISO8601 on both sides; the flexible decoder cannot read the
         // encoder's default reference-date doubles as fetch timestamps.
-        guard let url, let data = try? JSONEncoder.nativeScheduleEncoder.encode(record) else { return }
+        guard let url, let data = try? JSONEncoder.nativeScheduleEncoder.encode(record),
+              data.count <= Self.maximumArchiveBytes else { return }
         try? data.write(to: url, options: .atomic)
     }
 

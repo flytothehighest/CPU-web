@@ -17,13 +17,22 @@ final class LiveActivityBackgroundRefresh {
         NativeLiveActivityController.shared.scheduleBackgroundWakeup = { [weak self] date in
             self?.schedule(at: date)
         }
-        BGTaskScheduler.shared.register(forTaskWithIdentifier: Self.identifier, using: nil) { task in
-            let completion = Completion(task: task)
-            let work = Task { @MainActor in
-                await NativeLiveActivityController.shared.reconcileInBackground()
-                completion.finish(success: true)
-            }
-            task.expirationHandler = { work.cancel(); completion.finish(success: false) }
+        registered = BGTaskScheduler.shared.register(
+            forTaskWithIdentifier: Self.identifier, using: .main, launchHandler: Self.handle
+        )
+    }
+
+    // The scheduler and expiration callbacks do not inherit the app's default
+    // MainActor isolation. Only controller work crosses onto the main actor.
+    nonisolated private static func handle(_ task: BGTask) {
+        let completion = Completion(task: task)
+        let work = Task { @MainActor in
+            await NativeLiveActivityController.shared.reconcileInBackground()
+            completion.finish(success: !Task.isCancelled)
+        }
+        task.expirationHandler = { @Sendable in
+            work.cancel()
+            completion.finish(success: false)
         }
     }
 
@@ -41,7 +50,7 @@ final class LiveActivityBackgroundRefresh {
         }
     }
 
-    private final class Completion: @unchecked Sendable {
+    nonisolated private final class Completion: @unchecked Sendable {
         private let task: BGTask
         private let lock = NSLock()
         private var finished = false
