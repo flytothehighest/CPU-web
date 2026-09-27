@@ -34,6 +34,7 @@ public class ScheduleWidgetWeekRendererTest {
                     .put("day", day)
                     .put("date", dates[day - 1])
                     .put("courses", new JSONArray());
+            if (day == 3) value.put("isToday", true);
             if (day == 1) {
                 value.getJSONArray("courses")
                         .put(course("药品包装设计学", "E205", 1, 2))
@@ -65,6 +66,10 @@ public class ScheduleWidgetWeekRendererTest {
         assertTrue(preview.getParentFile().exists() || preview.getParentFile().mkdirs());
         try (FileOutputStream stream = new FileOutputStream(preview)) {
             assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream));
+        }
+        Bitmap dark = ScheduleWidgetWeekRenderer.render(days, 1, new ScheduleWidgetPalette("blue", true));
+        try (FileOutputStream stream = new FileOutputStream(new File("build/reports/widget-previews/week-large-dark.png"))) {
+            assertTrue(dark.compress(Bitmap.CompressFormat.PNG, 100, stream));
         }
     }
 

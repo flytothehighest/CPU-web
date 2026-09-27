@@ -151,7 +151,7 @@ private struct NextCourseWidgetView: View {
     private var inlineContent: some View {
         switch entry.state {
         case .course(let occurrence):
-            Text(inlineText(occurrence.course))
+            Text(inlineText(occurrence))
                 .lineLimit(1)
         case .empty:
             Label("近期没有课程", systemImage: "calendar.badge.checkmark")
@@ -251,8 +251,13 @@ private struct NextCourseWidgetView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 
-    private func inlineText(_ course: WatchCourse) -> String {
-        [
+    private func inlineText(_ occurrence: ScheduleCourseOccurrence) -> String {
+        let course = occurrence.course
+        let day = dayLabel(occurrence.date, relativeTo: entry.date)
+        // One line has no room for the rectangular family's date column, but a
+        // course on another day must still say so.
+        return [
+            day == "今天" ? nil : day,
             entry.displayOptions.showTime ? course.startTime : nil,
             entry.displayOptions.primaryValue(for: course),
             entry.displayOptions.metadata(for: course)

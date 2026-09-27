@@ -31,6 +31,8 @@ enum NativeWidgetLocalSchedule {
     struct Record: Codable, Equatable {
         let semester: String
         let days: [Day]
+        /// 调休表里的法定放假日，小组件拿去覆盖离线推算的假期。旧版本写的文件没有这一项。
+        var holidays: [PublishedHoliday]? = nil
     }
 
     static func connect(to store: NativeScheduleStore) {
@@ -42,11 +44,14 @@ enum NativeWidgetLocalSchedule {
     static func accept(_ snapshot: NativeScheduleSnapshot?) {
         guard let snapshot else {
             // 退出登录、换账号：别让下一个人的小组件看到上一个人的课。
+            ChineseCalendarInfo.usePublishedHolidays([])
             write(nil)
             return
         }
         guard snapshot.auth.authenticated, snapshot.error == nil,
               let record = record(from: snapshot, merging: read()) else { return }
+        // App 里的课表、月视图也按这份放假安排显示假期。
+        ChineseCalendarInfo.usePublishedHolidays(record.holidays ?? [])
         write(record)
     }
 
@@ -109,12 +114,19 @@ enum NativeWidgetLocalSchedule {
         }
         guard !days.isEmpty else { return nil }
         var byDate = Dictionary(days.map { ($0.date, $0) }, uniquingKeysWith: { first, _ in first })
+        var holidays = PublishedHoliday.fromOffDays(
+            calendar.adjustments
+                .filter { $0.kind == "off" }
+                .map { (date: $0.date, note: $0.note ?? "") }
+        )
         if !snapshot.completeSemester, let existing, existing.semester == data.currentSemester {
             for day in existing.days where byDate[day.date] == nil { byDate[day.date] = day }
+            if holidays.isEmpty { holidays = existing.holidays ?? [] }
         }
         return Record(
             semester: data.currentSemester,
-            days: byDate.values.sorted { $0.date < $1.date }
+            days: byDate.values.sorted { $0.date < $1.date },
+            holidays: holidays
         )
     }
 

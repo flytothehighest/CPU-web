@@ -48,6 +48,28 @@ final class CpuAndroidBridge {
     }
 
     @JavascriptInterface
+    public boolean supportsScheduleWidgetLocalDays() {
+        return true;
+    }
+
+    /** 网页端按日期展开好的课表（docs/schedule-widget-rules.md 第 7 节），小组件只读这一份。 */
+    @JavascriptInterface
+    public boolean saveScheduleWidgetLocalDays(String json) {
+        return ScheduleWidgetLocalDays.save(activity, json);
+    }
+
+    @JavascriptInterface
+    public void clearScheduleWidgetLocalDays() {
+        ScheduleWidgetLocalDays.clear(activity);
+    }
+
+    /** 网页端切换课表主题时同步给小组件，有变化才重画。 */
+    @JavascriptInterface
+    public void setScheduleWidgetTheme(String theme) {
+        if (ScheduleWidgetPrefs.saveTheme(activity, theme)) ScheduleWidgetProvider.updateAll(activity);
+    }
+
+    @JavascriptInterface
     public boolean supportsInAppApkDownload() {
         return true;
     }
@@ -192,6 +214,8 @@ final class CpuAndroidBridge {
         }
 
         ScheduleWidgetPrefs.saveEndpoint(activity, endpoint);
+        String theme = parseTheme(payload);
+        if (!theme.isEmpty()) ScheduleWidgetPrefs.saveTheme(activity, theme);
         ScheduleWidgetProvider.updateAll(activity);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -215,7 +239,7 @@ final class CpuAndroidBridge {
         int flags = PendingIntent.FLAG_UPDATE_CURRENT;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             flags |= PendingIntent.FLAG_MUTABLE;
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        } else {
             flags |= PendingIntent.FLAG_IMMUTABLE;
         }
         return PendingIntent.getBroadcast(activity, 1001, intent, flags);
@@ -228,6 +252,14 @@ final class CpuAndroidBridge {
         try {
             JSONObject json = new JSONObject(raw);
             return json.optString("endpoint", "").trim();
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private String parseTheme(String payload) {
+        try {
+            return new JSONObject(payload == null ? "" : payload.trim()).optString("theme", "").trim();
         } catch (Exception ignored) {
             return "";
         }

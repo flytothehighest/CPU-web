@@ -11,6 +11,9 @@ export type NativeAppBridge = {
   saveImageUrl?: (url: string, fileName?: string) => boolean | Promise<boolean>;
   installScheduleWidget?: (payload: string) => void;
   setScheduleWidgetTheme?: (theme: string) => void;
+  /** Android only: the widget reads this locally stored schedule (see views/schedule/widgetLocalDays). */
+  saveScheduleWidgetLocalDays?: (json: string) => boolean;
+  clearScheduleWidgetLocalDays?: () => void;
 };
 
 export type NativeImagePreviewItem = {

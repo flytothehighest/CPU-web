@@ -20,7 +20,7 @@
         android:layout_height="match_parent"
         android:gravity="center"
         android:padding="18dp"
-        android:textColor="#475467"
+        android:textColor="@color/widget_secondary_text"
         android:textSize="13sp"
         android:visibility="gone" />
 </FrameLayout>

@@ -1,7 +1,29 @@
 import common from '@ohos.app.ability.common';
 import preferences from '@ohos.data.preferences';
+import fs from '@ohos.file.fs';
 import http from '@ohos.net.http';
 import { formBindingData, formProvider } from '@kit.FormKit';
+import {
+  ChineseCalendar,
+  ChineseCalendarDay,
+  HolidayCountdown,
+  PublishedHoliday,
+  calendarDayBadge,
+  countdownDateLabel,
+  countdownPhrase,
+  lunarShortLabel,
+  windowDayCount
+} from './ChineseCalendar';
+import { systemLunarDate } from './SystemLunarCalendar';
+import {
+  normalizedWidgetTheme,
+  widgetCourseAccent,
+  widgetCourseColorIndex,
+  widgetCourseTint,
+  widgetThemeAccent
+} from './ScheduleWidgetPalette';
+import { NativeScheduleSnapshot } from '../schedule/NativeScheduleStore';
+import { LocalScheduleBlocks, LocalScheduleRecord, localScheduleRecord } from '../schedule/NativeWidgetLocalSchedule';
 
 const PREFERENCES_NAME = 'schedule_widget';
 const ENDPOINT_KEY = 'endpoint';
@@ -10,8 +32,14 @@ const FORMS_KEY = 'forms';
 const CACHE_KEY = 'cached_payload';
 const CACHE_ENDPOINT_KEY = 'cached_endpoint';
 const CACHE_TIME_KEY = 'cached_at';
+// App 写本地课表时递增，刷新卡片途中换了数据就放弃这次结果。
+const LOCAL_REVISION_KEY = 'local_revision';
+// App 按日期展开写下的课表（docs/schedule-widget-rules.md 第 7 节），卡片优先读这一份。
+const LOCAL_SCHEDULE_FILE = 'schedule-widget-local-days.json';
+const LOCAL_SCHEDULE_MAX_BYTES = 4 * 1024 * 1024;
 const DEVICE_CLOCK = new Date();
 let formRecordWrite: Promise<void> = Promise.resolve();
+let localScheduleWrite: Promise<void> = Promise.resolve();
 
 interface WidgetInstallPayload {
   endpoint?: string;
@@ -31,6 +59,8 @@ interface ScheduleCourse {
   slotNote?: string;
   startTime?: string;
   endTime?: string;
+  startSlot?: number;
+  endSlot?: number;
 }
 
 interface ScheduleDay {
@@ -39,6 +69,12 @@ interface ScheduleDay {
   date?: string;
   week?: number;
   courses?: ScheduleCourse[];
+}
+
+// 一天法定放假（国务院放假安排，含连休里的周末），与 iOS 的 PublishedHoliday 同形。
+interface ScheduleHoliday {
+  date?: string;
+  name?: string;
 }
 
 interface SchedulePayload {
@@ -52,6 +88,14 @@ interface SchedulePayload {
   today?: ScheduleDay;
   days?: ScheduleDay[];
   weekDays?: ScheduleDay[];
+  holidays?: ScheduleHoliday[];
+}
+
+// 本地课表文件读出来的样子，字段同 LocalScheduleRecord。
+interface LocalScheduleFile {
+  semester?: string;
+  days?: ScheduleDay[];
+  holidays?: ScheduleHoliday[];
 }
 
 interface ScheduleResponse {
@@ -74,6 +118,8 @@ interface WidgetCourseRow {
   ended: boolean;
   accent: string;
   tint: string;
+  // 多彩主题下取第几种颜色；深色底色随系统深浅色从资源里取，所以卡片要知道序号。
+  colorIndex: number;
 }
 
 export interface ScheduleWidgetBinding {
@@ -96,6 +142,24 @@ export interface ScheduleWidgetBinding {
   secondaryRemaining: number;
   dimension: number;
   variant: string;
+  mode: string;
+  dayNote: string;
+  badge: string;
+  restTitle: string;
+  restDetail: string;
+  lockLine: string;
+  leadLabel: string;
+  trailLabel: string;
+  rightNote: string;
+  lunar: string;
+  badgeStatutory: boolean;
+  // 两日课表右列那天的农历和节日（窄列里节日顶替农历）。
+  rightLunar: string;
+  rightBadge: string;
+  rightBadgeStatutory: boolean;
+  // 锁屏：矩形卡片第一行「明天 9.29 周二」，单行卡片开头「明天」或「周一」。
+  lockTitle: string;
+  lockDay: string;
 }
 
 interface LoadedSchedule {
@@ -103,59 +167,15 @@ interface LoadedSchedule {
   stale: boolean;
 }
 
-interface UpcomingSelection {
+interface DaySelection {
+  mode: string;
   day: ScheduleDay;
-  courses: ScheduleCourse[];
+  offset: number;
 }
 
 interface CourseWindow {
   courses: ScheduleCourse[];
   remainingCount: number;
-}
-
-const COLOR_GLASS_ACCENTS: string[] = [
-  '#E85B4B', '#4A78F2', '#8B5CF6', '#17A69A', '#E0A224', '#EC70A1'
-];
-const COLOR_GLASS_TINTS: string[] = [
-  '#FDECE9', '#EAF0FF', '#F2ECFF', '#E5F8F5', '#FFF7E0', '#FDEBF4'
-];
-
-function normalizedTheme(value?: string): string {
-  const supported = ['green', 'blue', 'teal', 'indigo', 'violet', 'orange', 'rose', 'slate', 'color-glass'];
-  const theme = (value ?? '').trim().toLowerCase();
-  return supported.includes(theme) ? theme : 'color-glass';
-}
-
-function themeAccent(theme: string): string {
-  if (theme === 'green') return '#168776';
-  if (theme === 'blue') return '#2563EB';
-  if (theme === 'teal') return '#0891B2';
-  if (theme === 'indigo') return '#DB2777';
-  if (theme === 'violet') return '#7C3AED';
-  if (theme === 'orange') return '#EA580C';
-  if (theme === 'rose') return '#E11D48';
-  if (theme === 'slate') return '#475569';
-  return '#6D5DFC';
-}
-
-function themeTint(theme: string): string {
-  if (theme === 'green') return '#F4FBF8';
-  if (theme === 'blue') return '#F3F8FF';
-  if (theme === 'teal') return '#F0FBFF';
-  if (theme === 'indigo') return '#FFF5FA';
-  if (theme === 'violet') return '#FAF7FF';
-  if (theme === 'orange') return '#FFF7F1';
-  if (theme === 'rose') return '#FFF5F7';
-  if (theme === 'slate') return '#F8FAFC';
-  return '#F2ECFF';
-}
-
-function courseColorIndex(name: string): number {
-  let hash = 0;
-  for (let index = 0; index < name.length; index += 1) {
-    hash = (hash * 33 + name.charCodeAt(index)) >>> 0;
-  }
-  return hash % COLOR_GLASS_ACCENTS.length;
 }
 
 function normalizedEndpoint(value?: string): string {
@@ -206,6 +226,101 @@ async function saveFormRecords(context: common.Context, records: FormRecord[]): 
   await prefs.flush();
 }
 
+function localSchedulePath(context: common.Context): string {
+  return `${context.filesDir}/${LOCAL_SCHEDULE_FILE}`;
+}
+
+function readLocalScheduleText(context: common.Context): string {
+  const path = localSchedulePath(context);
+  try {
+    if (fs.statSync(path).size > LOCAL_SCHEDULE_MAX_BYTES) return '';
+    return fs.readTextSync(path);
+  } catch (_) {
+    return '';
+  }
+}
+
+function readLocalSchedule(context: common.Context): LocalScheduleFile | undefined {
+  const raw = readLocalScheduleText(context).trim();
+  if (!raw) return undefined;
+  try {
+    const record = JSON.parse(raw) as LocalScheduleFile;
+    if (!normalizedText(record.semester) || !Array.isArray(record.days) || record.days.length === 0) return undefined;
+    return record;
+  } catch (_) {
+    return undefined;
+  }
+}
+
+// 内容没变返回 false：不写、不刷新，省得每次切周都去催卡片。空串表示删除。
+function writeLocalScheduleText(context: common.Context, raw: string): boolean {
+  const path = localSchedulePath(context);
+  if (raw === readLocalScheduleText(context)) return false;
+  if (!raw) {
+    try {
+      fs.unlinkSync(path);
+    } catch (_) {
+      return false;
+    }
+    return true;
+  }
+  const temporary = `${path}.tmp`;
+  const file = fs.openSync(temporary, fs.OpenMode.CREATE | fs.OpenMode.READ_WRITE | fs.OpenMode.TRUNC);
+  try {
+    fs.writeSync(file.fd, raw);
+  } finally {
+    fs.closeSync(file);
+  }
+  fs.renameSync(temporary, path);
+  return true;
+}
+
+async function bumpLocalRevision(context: common.Context): Promise<void> {
+  const prefs = await widgetPreferences(context);
+  await prefs.put(LOCAL_REVISION_KEY, Number(await prefs.get(LOCAL_REVISION_KEY, 0)) + 1);
+  await prefs.flush();
+}
+
+function enqueueLocalSchedule(task: () => Promise<void>): Promise<void> {
+  const next = localScheduleWrite.then(task);
+  localScheduleWrite = next.catch(() => undefined);
+  return next;
+}
+
+// 课表页拿到登录后的快照（整学期或单周）就按日期展开写下来；snapshot 为 undefined 表示退出登录、
+// 换账号，删掉这份，别让下一个人的卡片看到上一个人的课。写完刷新所有卡片。
+export function saveLocalScheduleSnapshot(
+  context: common.UIAbilityContext,
+  snapshot: NativeScheduleSnapshot | undefined,
+  blocks: LocalScheduleBlocks
+): Promise<void> {
+  return enqueueLocalSchedule(async () => {
+    let raw = '';
+    if (snapshot) {
+      if (!snapshot.auth?.authenticated || snapshot.error) return;
+      let existing: LocalScheduleRecord | undefined = undefined;
+      try {
+        const text = readLocalScheduleText(context).trim();
+        existing = text ? JSON.parse(text) as LocalScheduleRecord : undefined;
+      } catch (_) {
+        existing = undefined;
+      }
+      const record = localScheduleRecord(snapshot, blocks, existing);
+      if (!record) return;
+      raw = JSON.stringify(record);
+    }
+    if (!writeLocalScheduleText(context, raw)) return;
+    await bumpLocalRevision(context);
+    void refreshAllScheduleForms(context).catch(() => undefined);
+  });
+}
+
+function clearLocalSchedule(context: common.Context): Promise<void> {
+  return enqueueLocalSchedule(async () => {
+    if (writeLocalScheduleText(context, '')) await bumpLocalRevision(context);
+  });
+}
+
 export async function registerScheduleForm(
   context: common.Context,
   formId: string,
@@ -251,31 +366,33 @@ export async function saveScheduleWidgetConfiguration(
     await prefs.delete(CACHE_TIME_KEY);
   }
   await prefs.put(ENDPOINT_KEY, endpoint);
-  await prefs.put(THEME_KEY, normalizedTheme(payload.theme));
+  await prefs.put(THEME_KEY, normalizedWidgetTheme(payload.theme));
   await prefs.flush();
   return true;
 }
 
 export async function saveScheduleWidgetTheme(context: common.Context, value: string): Promise<void> {
   const prefs = await widgetPreferences(context);
-  await prefs.put(THEME_KEY, normalizedTheme(value));
+  await prefs.put(THEME_KEY, normalizedWidgetTheme(value));
   await prefs.flush();
 }
 
 export async function readScheduleWidgetSettings(context: common.Context): Promise<ScheduleWidgetSettings> {
   const prefs = await widgetPreferences(context);
   const endpoint = String(await prefs.get(ENDPOINT_KEY, '')).trim();
-  const theme = normalizedTheme(String(await prefs.get(THEME_KEY, 'color-glass')));
-  return { configured: normalizedEndpoint(endpoint).length > 0, theme };
+  const theme = normalizedWidgetTheme(String(await prefs.get(THEME_KEY, 'color-glass')));
+  return { configured: normalizedEndpoint(endpoint).length > 0 || readLocalSchedule(context) !== undefined, theme };
 }
 
 export async function clearScheduleWidgetAccount(context: common.UIAbilityContext): Promise<void> {
+  const localCleared = clearLocalSchedule(context);
   const prefs = await widgetPreferences(context);
   await prefs.delete(ENDPOINT_KEY);
   await prefs.delete(CACHE_KEY);
   await prefs.delete(CACHE_ENDPOINT_KEY);
   await prefs.delete(CACHE_TIME_KEY);
   await prefs.flush();
+  await localCleared.catch(() => undefined);
   await refreshAllScheduleForms(context);
 }
 
@@ -309,7 +426,7 @@ function loadingBinding(
     secondaryCourses: '[]',
     footer: '打开药大拾间完成教务授权',
     theme,
-    accent: themeAccent(theme),
+    accent: widgetThemeAccent(theme),
     semester: '',
     currentWeek: 0,
     primaryWeek: 0,
@@ -317,7 +434,23 @@ function loadingBinding(
     primaryRemaining: 0,
     secondaryRemaining: 0,
     dimension,
-    variant: formVariant(formName)
+    variant: formVariant(formName),
+    mode: 'today',
+    dayNote: '',
+    badge: '',
+    restTitle: '今日无课',
+    restDetail: '',
+    lockLine: '今日无课',
+    leadLabel: '当前',
+    trailLabel: '接下来',
+    rightNote: '',
+    lunar: '',
+    badgeStatutory: false,
+    rightLunar: '',
+    rightBadge: '',
+    rightBadgeStatutory: false,
+    lockTitle: '',
+    lockDay: ''
   };
 }
 
@@ -413,21 +546,55 @@ function courses(day: ScheduleDay): ScheduleCourse[] {
   });
 }
 
-function upcoming(payload: SchedulePayload): UpcomingSelection {
-  const current = nowMinutes();
-  const today = resolveDay(payload, 0, false);
-  const remaining = courses(today).filter((course: ScheduleCourse) => {
-    const end = courseEnd(course);
-    return end >= current || (minutes(course.startTime) < 0 && end < 0);
-  });
-  const useTomorrow = current >= 22 * 60 || (courses(today).length > 0 && remaining.length === 0);
-  if (useTomorrow) {
-    const tomorrow = resolveDay(payload, 1, false);
-    return { day: tomorrow, courses: courses(tomorrow).slice(0, 2) };
+// 「接着显示下一次课」往后找几天，与各端规则一致。服务端只下发两周左右的日期，找不到的按没课处理。
+const LOOKAHEAD_DAYS = 21;
+const HOLIDAY_LOOKAHEAD_DAYS = 120;
+
+function unfinished(course: ScheduleCourse, current: number): boolean {
+  const end = courseEnd(course);
+  return end >= current || (minutes(course.startTime) < 0 && end < 0);
+}
+
+function nextCourseDay(payload: SchedulePayload): DaySelection | undefined {
+  for (let offset = 1; offset <= LOOKAHEAD_DAYS; offset += 1) {
+    const day = resolveDay(payload, offset, true);
+    if (courses(day).length > 0) return { mode: 'ahead', day, offset };
   }
-  if (remaining.length > 0) return { day: today, courses: remaining.slice(0, 2) };
-  const tomorrow = resolveDay(payload, 1, false);
-  return { day: tomorrow, courses: courses(tomorrow).slice(0, 2) };
+  return undefined;
+}
+
+// 今天还有没下课的课就看今天；否则接着显示 21 天内下一个有课的日子；都没有就进休息状态。
+function selectDay(payload: SchedulePayload, today: ScheduleDay, current: number): DaySelection {
+  if (courses(today).some((course: ScheduleCourse) => unfinished(course, current))) {
+    return { mode: 'today', day: today, offset: 0 };
+  }
+  return nextCourseDay(payload) ?? { mode: 'rest', day: today, offset: 0 };
+}
+
+function aheadNote(day: ScheduleDay, offset: number): string {
+  if (offset === 1) return '明天的课';
+  if (offset === 2) return '后天的课';
+  const date = normalizedText(day.date);
+  return date.length >= 10 ? `${Number(date.substring(5, 7))}/${Number(date.substring(8, 10))} 的课` : '';
+}
+
+// 农历用系统的 chinese 日历；放假安排用 App 写下的 holidays，没有发布的年份按节日离线推算。
+let sharedCalendar: ChineseCalendar | undefined = undefined;
+let sharedCalendarKey: string = '';
+
+function chineseCalendar(payload: SchedulePayload): ChineseCalendar {
+  const published: PublishedHoliday[] = [];
+  (payload.holidays ?? []).forEach((item: ScheduleHoliday) => {
+    const date = normalizedText(item.date);
+    const name = normalizedText(item.name);
+    if (date && name) published.push({ date, name });
+  });
+  const key = JSON.stringify(published);
+  if (!sharedCalendar || key !== sharedCalendarKey) {
+    sharedCalendar = new ChineseCalendar(systemLunarDate, published);
+    sharedCalendarKey = key;
+  }
+  return sharedCalendar;
 }
 
 function normalizedText(value?: string): string {
@@ -443,15 +610,15 @@ function courseRows(source: ScheduleCourse[], current: number, theme: string): W
       .filter((value: string) => value.length > 0)
       .join(' · ');
     const name = normalizedText(course.name) || '课程';
-    const colorIndex = courseColorIndex(name);
     return {
       name,
       start,
       time: end ? `${start} - ${end}` : start,
       meta: metadata || '地点待确认',
       ended: current >= 0 && courseEnd(course) >= 0 && courseEnd(course) < current,
-      accent: theme === 'color-glass' ? COLOR_GLASS_ACCENTS[colorIndex] : themeAccent(theme),
-      tint: theme === 'color-glass' ? COLOR_GLASS_TINTS[colorIndex] : themeTint(theme)
+      accent: widgetCourseAccent(name, theme),
+      tint: widgetCourseTint(name, theme, false),
+      colorIndex: widgetCourseColorIndex(name)
     };
   });
 }
@@ -484,11 +651,73 @@ function weekOf(payload: SchedulePayload, day: ScheduleDay): number {
   return day.week ?? payload.week ?? payload.displayWeek ?? payload.currentWeek ?? 0;
 }
 
+function weekdayText(day: ScheduleDay): string {
+  return normalizedText(day.label).replace(/今天/g, '').trim();
+}
+
 function dayTitle(day: ScheduleDay): string {
-  const label = normalizedText(day.label).replace(/今天/g, '').trim();
+  const label = weekdayText(day);
   const date = compactDate(day.date);
   if (date && label) return `${date} ${label}`;
   return date || label || '课表';
+}
+
+// 锁屏上说「明天」「后天」「3 天后」，今天返回空串。
+function aheadLabel(offset: number): string {
+  if (offset <= 0) return '';
+  if (offset === 1) return '明天';
+  if (offset === 2) return '后天';
+  return `${offset} 天后`;
+}
+
+interface DayMarks {
+  lunar: string;
+  badge: string;
+  badgeStatutory: boolean;
+}
+
+function dayMarks(payload: SchedulePayload, date: string): DayMarks {
+  const info: ChineseCalendarDay | undefined = date ? chineseCalendar(payload).info(date) : undefined;
+  return {
+    lunar: info?.lunar ? lunarShortLabel(info.lunar) : '',
+    badge: info ? calendarDayBadge(info) : '',
+    badgeStatutory: info !== undefined && info.holiday.length > 0
+  };
+}
+
+interface HolidayText {
+  lunar: string;
+  badge: string;
+  badgeStatutory: boolean;
+  restTitle: string;
+  restDetail: string;
+  lockLine: string;
+}
+
+// 日期栏：今天的农历和节日徽标（法定假日 > 节日 > 节气）。休息状态：法定假日道贺，其余「今日无课」；
+// 副文案是 120 天内最近的一段法定假期。锁屏单行：祝福 → 假期倒计时 → 「今日无课」。文案同 iOS。
+function holidayText(payload: SchedulePayload, today: string): HolidayText {
+  const calendar = chineseCalendar(payload);
+  const marks = dayMarks(payload, today);
+  const greeting = calendar.restGreeting(today);
+  const countdown: HolidayCountdown | undefined = calendar.countdown(today, HOLIDAY_LOOKAHEAD_DAYS);
+  let restDetail = '';
+  let upcoming = '';
+  if (countdown && countdown.daysAway > 0) {
+    upcoming = countdownPhrase(countdown);
+    restDetail = `${upcoming} · ${countdownDateLabel(countdown)}`;
+  } else if (countdown && windowDayCount(countdown.window) > 1) {
+    // 已经在假期里：再说「今天是中秋节」跟祝福重复了，改说这一段连休几天。
+    restDetail = `假期 ${countdownDateLabel(countdown)}`;
+  }
+  return {
+    lunar: marks.lunar,
+    badge: marks.badge,
+    badgeStatutory: marks.badgeStatutory,
+    restTitle: greeting || '今日无课',
+    restDetail,
+    lockLine: greeting || upcoming || '今日无课'
+  };
 }
 
 function readyBinding(
@@ -499,41 +728,90 @@ function readyBinding(
   formName: string
 ): ScheduleWidgetBinding {
   const current = nowMinutes();
+  const todayKey = dateKey(dateOffset(0));
   const today = resolveDay(payload, 0, true);
-  const tomorrow = resolveDay(payload, 1, true);
-  const upcomingSelection = upcoming(payload);
+  const todayCurrent = today.date === todayKey ? current : -1;
+  const selection = selectDay(payload, today, current);
+  // 两日课表的右列默认是之后最近有课的一天，找不到才是明天。
+  const next = nextCourseDay(payload);
+  const right: DaySelection = next ?? { mode: 'ahead', day: resolveDay(payload, 1, true), offset: 1 };
   const variant = formVariant(formName);
   const layout = formLayout(formName, dimension);
-  const useUpcoming = layout === 'upcoming';
-  const selected = useUpcoming ? upcomingSelection.day : today;
-  const todayCurrent = today.date === dateKey(dateOffset(0)) ? current : -1;
-  const todayWindow = courseWindow(courses(today), dimension === 3 ? 2 : layout === 'today' ? 7 : 5, todayCurrent);
-  const tomorrowWindow = courseWindow(courses(tomorrow), 5, -1);
-  const primaryWindow: CourseWindow = useUpcoming
-    ? { courses: upcomingSelection.courses, remainingCount: 0 }
-    : todayWindow;
-  const week = weekOf(payload, selected);
+  const holiday = holidayText(payload, todayKey);
+  const selectedCourses = selection.mode === 'rest' ? [] : courses(selection.day);
+  const selectedCurrent = selection.mode === 'today' ? todayCurrent : -1;
+  let primaryWindow: CourseWindow;
+  if (layout === 'two-day') {
+    primaryWindow = courseWindow(courses(today), 5, todayCurrent);
+  } else if (layout === 'upcoming') {
+    const visible = selection.mode === 'today'
+      ? selectedCourses.filter((course: ScheduleCourse) => unfinished(course, current))
+      : selectedCourses;
+    primaryWindow = { courses: visible.slice(0, 2), remainingCount: 0 };
+  } else {
+    primaryWindow = courseWindow(selectedCourses, dimension === 3 ? 2 : 7, selectedCurrent);
+  }
+  const rightWindow = courseWindow(courses(right.day), 5, -1);
+  const first = primaryWindow.courses.length > 0 ? primaryWindow.courses[0] : undefined;
+  const inClass = selection.mode === 'today' && first !== undefined
+    && minutes(first.startTime) >= 0 && minutes(first.startTime) <= current;
+  const week = weekOf(payload, today);
+  const rightMarks = dayMarks(payload, normalizedText(right.day.date));
+  const lockOffset = selection.mode === 'ahead' ? selection.offset : 0;
+  const lockDay = aheadLabel(lockOffset) || weekdayText(selection.day) || compactDate(selection.day.date) || '今天';
   return {
     layout,
     state: 'ready',
     title: normalizedText(payload.title) || '药大课表',
     subtitle: '',
-    leftTitle: dayTitle(selected),
-    rightTitle: dayTitle(tomorrow),
-    primaryCourses: JSON.stringify(courseRows(primaryWindow.courses, selected.date === dateKey(dateOffset(0)) ? current : -1, theme)),
-    secondaryCourses: JSON.stringify(courseRows(tomorrowWindow.courses, -1, theme)),
+    leftTitle: dayTitle(today),
+    rightTitle: dayTitle(right.day),
+    primaryCourses: JSON.stringify(courseRows(primaryWindow.courses, layout === 'two-day' ? todayCurrent : selectedCurrent, theme)),
+    secondaryCourses: JSON.stringify(courseRows(rightWindow.courses, -1, theme)),
     footer: stale || payload.stale === true ? '打开 App 可刷新' : '',
     theme,
-    accent: themeAccent(theme),
+    accent: widgetThemeAccent(theme),
     semester: normalizedText(payload.semester),
     currentWeek: payload.currentWeek ?? week,
     primaryWeek: week,
-    secondaryWeek: weekOf(payload, tomorrow),
+    secondaryWeek: weekOf(payload, right.day),
     primaryRemaining: primaryWindow.remainingCount,
-    secondaryRemaining: tomorrowWindow.remainingCount,
+    secondaryRemaining: rightWindow.remainingCount,
     dimension,
-    variant
+    variant,
+    mode: layout === 'two-day' ? 'today' : selection.mode,
+    dayNote: layout !== 'two-day' && selection.mode === 'ahead' ? aheadNote(selection.day, selection.offset) : '',
+    badge: holiday.badge,
+    restTitle: holiday.restTitle,
+    restDetail: holiday.restDetail,
+    lockLine: holiday.lockLine,
+    leadLabel: selection.mode !== 'today' ? '第一节' : inClass ? '当前' : '下一节',
+    trailLabel: selection.mode !== 'today' || inClass ? '接下来' : '之后',
+    rightNote: right.offset === 1 ? '' : aheadNote(right.day, right.offset),
+    lunar: holiday.lunar,
+    badgeStatutory: holiday.badgeStatutory,
+    rightLunar: rightMarks.lunar,
+    rightBadge: rightMarks.badge,
+    rightBadgeStatutory: rightMarks.badgeStatutory,
+    lockTitle: [aheadLabel(lockOffset), dayTitle(selection.day)].filter((value: string) => value.length > 0).join(' '),
+    lockDay
   };
+}
+
+// 下次刷新：今天每节课开始、结束后 1 分钟，午夜 00:01 换日，兜底 30 分钟。
+function nextRefreshMinutes(payload: SchedulePayload): number {
+  const current = nowMinutes();
+  const today = resolveDay(payload, 0, true);
+  let next = 24 * 60 + 1 - current;
+  if (today.date === dateKey(dateOffset(0))) {
+    for (const course of courses(today)) {
+      for (const boundary of [minutes(course.startTime), courseEnd(course)]) {
+        if (boundary >= 0 && boundary + 1 > current) next = Math.min(next, boundary + 1 - current);
+      }
+    }
+  }
+  // 系统不接受 5 分钟以内的下次刷新。
+  return Math.max(5, Math.min(30, next));
 }
 
 async function fetchEndpoint(endpoint: string): Promise<SchedulePayload> {
@@ -570,7 +848,16 @@ async function fetchEndpoint(endpoint: string): Promise<SchedulePayload> {
   throw new Error(lastMessage);
 }
 
+// App 写下的课表按日期精确匹配：不在里面的日子就是没课，不借别的周同一天的课。
+function localPayload(record: LocalScheduleFile): SchedulePayload {
+  const days = record.days ?? [];
+  return { semester: record.semester, strictDate: true, days, weekDays: days, holidays: record.holidays ?? [] };
+}
+
 async function loadSchedule(context: common.Context): Promise<LoadedSchedule> {
+  // 优先读 App 写在本地的课表；还没打开过新版 App 时才退回服务端小组件接口。
+  const local = readLocalSchedule(context);
+  if (local) return { payload: localPayload(local), stale: false };
   const prefs = await widgetPreferences(context);
   const endpoint = String(await prefs.get(ENDPOINT_KEY, '')).trim();
   if (!endpoint) throw new Error('unconfigured');
@@ -601,25 +888,38 @@ async function loadSchedule(context: common.Context): Promise<LoadedSchedule> {
   }
 }
 
-async function bindingFor(context: common.Context, dimension: number, formName: string): Promise<ScheduleWidgetBinding> {
+interface FormContent {
+  binding: ScheduleWidgetBinding;
+  refreshMinutes: number;
+}
+
+async function contentFor(context: common.Context, dimension: number, formName: string): Promise<FormContent> {
   const prefs = await widgetPreferences(context);
-  const theme = normalizedTheme(String(await prefs.get(THEME_KEY, 'color-glass')));
+  const theme = normalizedWidgetTheme(String(await prefs.get(THEME_KEY, 'color-glass')));
   try {
     const loaded = await loadSchedule(context);
-    return readyBinding(loaded.payload, dimension, theme, loaded.stale, formName);
+    return {
+      binding: readyBinding(loaded.payload, dimension, theme, loaded.stale, formName),
+      refreshMinutes: nextRefreshMinutes(loaded.payload)
+    };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (message === 'unconfigured') {
-      return messageBinding(dimension, theme, formName, 'unconfigured', '尚未配置课表', '打开药大拾间，在课表菜单中添加小组件');
+      return { binding: messageBinding(dimension, theme, formName, 'unconfigured', '尚未配置课表', '打开药大拾间，在课表菜单中添加小组件'), refreshMinutes: 30 };
     }
     if (message === 'unauthorized') {
-      return messageBinding(dimension, theme, formName, 'unauthorized', '教务授权已失效', '打开药大拾间重新登录教务');
+      return { binding: messageBinding(dimension, theme, formName, 'unauthorized', '教务授权已失效', '打开药大拾间重新登录教务'), refreshMinutes: 30 };
     }
-    return messageBinding(dimension, theme, formName, 'failed', '暂时无法刷新', '请检查网络，卡片会自动重试');
+    return { binding: messageBinding(dimension, theme, formName, 'failed', '暂时无法刷新', '请检查网络，卡片会自动重试'), refreshMinutes: 30 };
   }
 }
 
+async function bindingFor(context: common.Context, dimension: number, formName: string): Promise<ScheduleWidgetBinding> {
+  return (await contentFor(context, dimension, formName)).binding;
+}
+
 export async function readScheduleWidgetPreview(context: common.Context, dimension: number, formName: string): Promise<ScheduleWidgetBinding> {
+  if (readLocalSchedule(context)) return bindingFor(context, dimension, formName);
   const prefs = await widgetPreferences(context);
   const endpoint = String(await prefs.get(ENDPOINT_KEY, ''));
   const cachedAt = Number(await prefs.get(CACHE_TIME_KEY, 0));
@@ -628,7 +928,7 @@ export async function readScheduleWidgetPreview(context: common.Context, dimensi
   if (endpoint && cachedEndpoint === endpoint && cached && Date.now() - cachedAt >= 0 && Date.now() - cachedAt < 60000) {
     try {
       return readyBinding(JSON.parse(cached) as SchedulePayload, dimension,
-        normalizedTheme(String(await prefs.get(THEME_KEY, 'color-glass'))), false, formName);
+        normalizedWidgetTheme(String(await prefs.get(THEME_KEY, 'color-glass'))), false, formName);
     } catch (_) {}
   }
   return bindingFor(context, dimension, formName);
@@ -643,9 +943,19 @@ export async function refreshScheduleForm(
   const prefs = await widgetPreferences(context);
   const endpoint = String(await prefs.get(ENDPOINT_KEY, ''));
   const theme = String(await prefs.get(THEME_KEY, ''));
-  const binding = await bindingFor(context, dimension, formName);
-  if (endpoint !== String(await prefs.get(ENDPOINT_KEY, '')) || theme !== String(await prefs.get(THEME_KEY, ''))) return;
-  await formProvider.updateForm(formId, formBindingData.createFormBindingData(binding));
+  const revision = Number(await prefs.get(LOCAL_REVISION_KEY, 0));
+  const content = await contentFor(context, dimension, formName);
+  // 算卡片内容时 App 可能换了账号、主题或本地课表，重新读一次，变了就丢掉这次结果。
+  const latest = await widgetPreferences(context);
+  if (endpoint !== String(await latest.get(ENDPOINT_KEY, '')) || theme !== String(await latest.get(THEME_KEY, ''))
+    || revision !== Number(await latest.get(LOCAL_REVISION_KEY, 0))) return;
+  await formProvider.updateForm(formId, formBindingData.createFormBindingData(content.binding));
+  try {
+    // 配置里的 30 分钟定时刷新对不上上下课，这里按课程边界另约一次，系统到点回调 onUpdateForm。
+    await formProvider.setFormNextRefreshTime(formId, content.refreshMinutes);
+  } catch (_) {
+    // 刷新次数用完或卡片已移除时系统会拒绝，保留定时刷新即可。
+  }
 }
 
 export async function refreshRegisteredScheduleForm(context: common.Context, formId: string): Promise<void> {
