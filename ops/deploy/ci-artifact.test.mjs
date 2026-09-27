@@ -130,26 +130,27 @@ test('release artifact transport resumes partial downloads and keeps a hard tota
     const script = `set -u
       log() { echo "log: $*"; }
       warn() { echo "warn: $*" >&2; }
-      DEPLOY_ARTIFACT_URL=https://example.test/cpu-web-linux-deploy.tar.gz
+      DEPLOY_ARTIFACT_URL=https://unused.test/cpu-web-linux-deploy.tar.gz
       DEPLOY_ARTIFACT_RELEASE_TIMEOUT_SECONDS="$FETCH_TIMEOUT"
       DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_LIMIT=1024
       DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_SECONDS=90
       ${shellFunction('fetch_ci_artifact_release_transport')}
-      fetch_ci_artifact_release_transport ${'b'.repeat(40)} 3 "$DESTINATION"`
+      fetch_ci_artifact_release_transport ${'b'.repeat(40)} 3 "$DESTINATION" "$RELEASE_URL"`
     execFileSync('bash', ['-c', script], {
-      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, RECORD: record, DESTINATION: destination, FETCH_TIMEOUT: '7' },
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, RECORD: record, DESTINATION: destination, FETCH_TIMEOUT: '7', RELEASE_URL: 'https://mirror.test/cpu-web-linux-deploy.tar.gz' },
       encoding: 'utf8',
     })
     assert.equal(readFileSync(destination, 'utf8'), 'partialtail')
     const invocation = readFileSync(record, 'utf8')
     assert.match(invocation, /--continue-at -/u)
     assert.match(invocation, /--speed-limit 1024 --speed-time 90/u)
-    assert.match(invocation, /cpu-web-linux-deploy\.tar\.gz\?commit=b{40}/u)
+    assert.match(invocation, /mirror\.test\/cpu-web-linux-deploy\.tar\.gz\?commit=b{40}/u)
+    assert.doesNotMatch(invocation, /unused\.test/u)
 
     writeFileSync(destination, 'partial')
     const startedAt = Date.now()
     assert.throws(() => execFileSync('bash', ['-c', script], {
-      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, RECORD: record, DESTINATION: destination, FETCH_TIMEOUT: '1', SLOW: '1' },
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, RECORD: record, DESTINATION: destination, FETCH_TIMEOUT: '1', RELEASE_URL: 'https://mirror.test/cpu-web-linux-deploy.tar.gz', SLOW: '1' },
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: 5_000,
     }), error => error.status === 124)
@@ -158,4 +159,18 @@ test('release artifact transport resumes partial downloads and keeps a hard tota
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
+})
+
+test('release artifact download uses the fast mirror before the legacy fallback', () => {
+  assert.match(deploy, /DEPLOY_CI_FETCH_TIMEOUT_SECONDS="\$\{DEPLOY_CI_FETCH_TIMEOUT_SECONDS:-20\}"/u)
+  assert.match(deploy, /DEPLOY_ARTIFACT_URL="\$\{DEPLOY_ARTIFACT_URL:-https:\/\/gh\.noki\.eu\.org\//u)
+  assert.match(deploy, /DEPLOY_ARTIFACT_FALLBACK_URL="\$\{DEPLOY_ARTIFACT_FALLBACK_URL:-https:\/\/ghfast\.top\//u)
+  assert.match(deploy, /DEPLOY_ARTIFACT_PRIMARY_TIMEOUT_SECONDS="\$\{DEPLOY_ARTIFACT_PRIMARY_TIMEOUT_SECONDS:-300\}"/u)
+  const download = shellFunction('download_ci_artifact')
+  const primary = download.indexOf('"$DEPLOY_ARTIFACT_URL"')
+  const fallback = download.indexOf('"$DEPLOY_ARTIFACT_FALLBACK_URL"')
+  assert.ok(primary >= 0)
+  assert.ok(fallback > primary)
+  assert.match(download, /"\$DEPLOY_ARTIFACT_URL" "\$DEPLOY_ARTIFACT_PRIMARY_TIMEOUT_SECONDS"/u)
+  assert.match(download, /"\$DEPLOY_ARTIFACT_FALLBACK_URL" "\$DEPLOY_ARTIFACT_RELEASE_TIMEOUT_SECONDS"/u)
 })

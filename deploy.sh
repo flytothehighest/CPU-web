@@ -75,11 +75,13 @@ DEPLOY_BUILD_NICE="${DEPLOY_BUILD_NICE:-10}"
 DEPLOY_NODE_HEAP_MB="${DEPLOY_NODE_HEAP_MB:-2304}"
 DEPLOY_CI_WAIT_SECONDS="${DEPLOY_CI_WAIT_SECONDS:-600}"
 DEPLOY_CI_POLL_SECONDS="${DEPLOY_CI_POLL_SECONDS:-15}"
-DEPLOY_CI_FETCH_TIMEOUT_SECONDS="${DEPLOY_CI_FETCH_TIMEOUT_SECONDS:-90}"
+DEPLOY_CI_FETCH_TIMEOUT_SECONDS="${DEPLOY_CI_FETCH_TIMEOUT_SECONDS:-20}"
 DEPLOY_CI_GIT_LOW_SPEED_LIMIT="${DEPLOY_CI_GIT_LOW_SPEED_LIMIT:-10240}"
 DEPLOY_CI_GIT_LOW_SPEED_SECONDS="${DEPLOY_CI_GIT_LOW_SPEED_SECONDS:-30}"
 # 制品分支适合快速链路；生产网络较慢时回退到可续传的 Release 包。清单仍会校验精确提交 SHA。
-DEPLOY_ARTIFACT_URL="${DEPLOY_ARTIFACT_URL:-https://ghfast.top/https://github.com/sx120609/CPU-web/releases/download/deploy-artifacts/cpu-web-linux-deploy.tar.gz}"
+DEPLOY_ARTIFACT_URL="${DEPLOY_ARTIFACT_URL:-https://gh.noki.eu.org/https://github.com/sx120609/CPU-web/releases/download/deploy-artifacts/cpu-web-linux-deploy.tar.gz}"
+DEPLOY_ARTIFACT_FALLBACK_URL="${DEPLOY_ARTIFACT_FALLBACK_URL:-https://ghfast.top/https://github.com/sx120609/CPU-web/releases/download/deploy-artifacts/cpu-web-linux-deploy.tar.gz}"
+DEPLOY_ARTIFACT_PRIMARY_TIMEOUT_SECONDS="${DEPLOY_ARTIFACT_PRIMARY_TIMEOUT_SECONDS:-300}"
 DEPLOY_ARTIFACT_RELEASE_TIMEOUT_SECONDS="${DEPLOY_ARTIFACT_RELEASE_TIMEOUT_SECONDS:-1200}"
 DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_LIMIT="${DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_LIMIT:-1024}"
 DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_SECONDS="${DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_SECONDS:-90}"
@@ -1505,17 +1507,20 @@ fetch_ci_artifact_release_transport() {
   local commit="$1"
   local attempt="$2"
   local destination="$3"
+  local release_url="${4:-$DEPLOY_ARTIFACT_URL}"
+  local release_timeout="${5:-$DEPLOY_ARTIFACT_RELEASE_TIMEOUT_SECONDS}"
   local separator='?' release_status=0
   local -a resume_args=()
+  [ -n "$release_url" ] || return 1
   [ ! -L "$destination" ] || { warn "Refusing symlinked CI release download destination"; return 1; }
   if [ -e "$destination" ] && [ ! -f "$destination" ]; then
     warn "CI release download destination is not a regular file"
     return 1
   fi
-  [[ "$DEPLOY_ARTIFACT_URL" == *\?* ]] && separator='&'
+  [[ "$release_url" == *\?* ]] && separator='&'
   [ -s "$destination" ] && resume_args=(--continue-at -)
-  log "Fetching resumable CI release artifact (attempt $attempt, timeout ${DEPLOY_ARTIFACT_RELEASE_TIMEOUT_SECONDS}s)"
-  if timeout --signal=TERM --kill-after=5s "${DEPLOY_ARTIFACT_RELEASE_TIMEOUT_SECONDS}s" \
+  log "Fetching resumable CI release artifact from $release_url (attempt $attempt, timeout ${release_timeout}s)"
+  if timeout --signal=TERM --kill-after=5s "${release_timeout}s" \
     curl --fail --location \
       --connect-timeout 15 \
       --retry 3 \
@@ -1526,14 +1531,14 @@ fetch_ci_artifact_release_transport() {
       --progress-bar \
       -H 'Cache-Control: no-cache' \
       "${resume_args[@]}" \
-      "${DEPLOY_ARTIFACT_URL}${separator}commit=$commit" \
+      "${release_url}${separator}commit=$commit" \
       -o "$destination"; then
     return 0
   else
     release_status=$?
   fi
   if [ "$release_status" -eq 124 ] || [ "$release_status" -eq 137 ]; then
-    warn "CI release artifact fetch timed out after ${DEPLOY_ARTIFACT_RELEASE_TIMEOUT_SECONDS}s; partial download kept for resume"
+    warn "CI release artifact fetch timed out after ${release_timeout}s; partial download kept for resume"
   elif [ "$release_status" -eq 33 ]; then
     warn "CI release artifact no longer accepts the saved byte range; restarting on the next attempt"
     rm -f "$destination"
@@ -1553,6 +1558,7 @@ download_ci_artifact() {
   [[ "$DEPLOY_CI_FETCH_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]] || { warn "DEPLOY_CI_FETCH_TIMEOUT_SECONDS must be a positive integer"; return 1; }
   [[ "$DEPLOY_CI_GIT_LOW_SPEED_LIMIT" =~ ^[1-9][0-9]*$ ]] || { warn "DEPLOY_CI_GIT_LOW_SPEED_LIMIT must be a positive integer"; return 1; }
   [[ "$DEPLOY_CI_GIT_LOW_SPEED_SECONDS" =~ ^[1-9][0-9]*$ ]] || { warn "DEPLOY_CI_GIT_LOW_SPEED_SECONDS must be a positive integer"; return 1; }
+  [[ "$DEPLOY_ARTIFACT_PRIMARY_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]] || { warn "DEPLOY_ARTIFACT_PRIMARY_TIMEOUT_SECONDS must be a positive integer"; return 1; }
   [[ "$DEPLOY_ARTIFACT_RELEASE_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]] || { warn "DEPLOY_ARTIFACT_RELEASE_TIMEOUT_SECONDS must be a positive integer"; return 1; }
   [[ "$DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_LIMIT" =~ ^[1-9][0-9]*$ ]] || { warn "DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_LIMIT must be a positive integer"; return 1; }
   [[ "$DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_SECONDS" =~ ^[1-9][0-9]*$ ]] || { warn "DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_SECONDS must be a positive integer"; return 1; }
@@ -1598,7 +1604,12 @@ download_ci_artifact() {
         log "Using completed resumable CI release download"
         cp "$release_download" "$incoming_dir/bundle.tar.gz"
         transport_ready=1
-      elif fetch_ci_artifact_release_transport "$commit" "$attempt" "$release_download"; then
+      elif fetch_ci_artifact_release_transport "$commit" "$attempt" "$release_download" "$DEPLOY_ARTIFACT_URL" "$DEPLOY_ARTIFACT_PRIMARY_TIMEOUT_SECONDS"; then
+        cp "$release_download" "$incoming_dir/bundle.tar.gz"
+        transport_ready=1
+      elif [ -n "$DEPLOY_ARTIFACT_FALLBACK_URL" ] \
+        && [ "$DEPLOY_ARTIFACT_FALLBACK_URL" != "$DEPLOY_ARTIFACT_URL" ] \
+        && fetch_ci_artifact_release_transport "$commit" "$attempt" "$release_download" "$DEPLOY_ARTIFACT_FALLBACK_URL" "$DEPLOY_ARTIFACT_RELEASE_TIMEOUT_SECONDS"; then
         cp "$release_download" "$incoming_dir/bundle.tar.gz"
         transport_ready=1
       else
