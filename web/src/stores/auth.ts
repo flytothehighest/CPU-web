@@ -6,6 +6,7 @@ import { jwxtApi, getJwxtToken, setJwxtToken, clearJwxtToken, JWXT_COOKIE_SESSIO
 import { clearCreds, saveCreds } from "@/utils/credCrypto";
 import { encryptAgentLoginCredentials } from "@/utils/agentCredentialCrypto";
 import { withMediaRevision } from "@/utils/cdnMedia";
+import { shouldHideHarmonyForum } from "@/utils/clientInfo";
 import { clearJwxtDataCaches, purgeLegacySensitiveJwxtCaches } from "@/utils/jwxtCache";
 import {
   academicIdentityLabel,
@@ -99,11 +100,13 @@ export const useAuthStore = defineStore("auth", {
     isVoiceHubSuperAdmin: (s) => s.user?.role === "admin" || s.user?.voiceHubRole === "super_admin",
     isLostFoundAdmin: (s) => s.user?.role === "admin" || s.user?.role === "mod" || !!s.user?.lostFoundRole,
     isLostFoundSuperAdmin: (s) => s.user?.role === "admin" || s.user?.lostFoundRole === "super_admin",
-    canAccessModuleAdmin: (s) => s.user?.role === "admin"
+    canAccessModuleAdmin: (s) => !shouldHideHarmonyForum(s.user?.username) && (s.user?.role === "admin"
       || s.user?.role === "mod"
       || s.user?.voiceHubRole === "super_admin"
-      || !!s.user?.lostFoundRole,
-    canAccessForum: (state) => !useSiteStore().features.forumLoginRequired || !!state.user,
+      || !!s.user?.lostFoundRole),
+    forumHidden: (state) => shouldHideHarmonyForum(state.user?.username),
+    canAccessForum: (state) => !shouldHideHarmonyForum(state.user?.username)
+      && (!useSiteStore().features.forumLoginRequired || !!state.user),
     needSetupNickname: (s) => !!s.user
       && (!s.user.nickname || s.user.nickname.trim() === "")
       && !(["checking", "manual_pending"].includes(s.user.nicknameReview?.status || "") && s.user.nicknameReview?.pendingNickname?.trim()),

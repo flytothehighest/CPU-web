@@ -167,9 +167,9 @@
     >
       <IosAppRecommendation v-if="route.name === 'home'" />
       <router-view v-slot="{ Component }">
-        <transition name="page-route" :css="!useIosRouteTransition || (iosRouteTransitionEnabled && !useIosNextShell)"
+        <transition name="page-route" :css="!auth.forumHidden && (!useIosRouteTransition || (iosRouteTransitionEnabled && !useIosNextShell))"
           @before-leave="freezeRoutePage" @after-leave="releaseRoutePage" @leave-cancelled="releaseRoutePage">
-          <component :is="Component" />
+          <component :is="Component" v-if="!auth.forumHidden || !isForumDestination(route.path)" />
         </transition>
       </router-view>
     </main>
@@ -419,6 +419,7 @@ import UserAvatar from "@/components/common/UserAvatar.vue";
 import AppIcon from "@/components/common/AppIcon.vue";
 import { useAuthStore } from "@/stores/auth";
 import { useMessageStore } from "@/stores/message";
+import { isForumDestination } from "@/utils/nativeForumVisibility";
 import { useSiteStore } from "@/stores/site";
 import { useAppearanceStore, type AppearanceMode } from "@/stores/appearance";
 import { iosRouteTransitionEnabled } from "@/router";
@@ -590,7 +591,7 @@ const navigationIconMap: Record<TopNavigationIcon, unknown> = {
 const nicknameHint = computed(() => {
   const actions: string[] = [];
   if (site.features.forum && auth.canAccessForum) actions.push("发帖、回复");
-  if (site.features.coursereview) actions.push("课程点评");
+  if (site.features.coursereview && !auth.forumHidden) actions.push("课程点评");
   if (!actions.length) return "后续使用站内功能时会显示昵称";
   return `后续${actions.join("和")}都会显示昵称`;
 });
@@ -637,6 +638,8 @@ const drawerItems = computed(() => {
 });
 
 function navigationItemVisible(item: TopNavigationItem) {
+  if (auth.forumHidden && (isForumDestination(item.to) || item.requireForumAccess
+    || ["forum", "market", "coursereview"].includes(item.feature || ""))) return false;
   if (!item.enabled) return false;
   if (/^\/search(?:[?#]|$)/.test(item.to) && !site.features.assistantEntry) return false;
   if (/^\/(?:forum|market|coursereview)(?:[/?#]|$)/.test(item.to) && !auth.canAccessForum) return false;

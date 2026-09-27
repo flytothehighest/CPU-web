@@ -1,6 +1,6 @@
 <template>
   <span
-    v-if="visibleLevel"
+    v-if="visibleLevel && !auth.forumHidden"
     class="reputation-badge"
     :title="`论坛等级：Lv.${visibleLevel.level} ${visibleLevel.name}`"
     :aria-label="`论坛等级 Lv.${visibleLevel.level} ${visibleLevel.name}`"
@@ -12,6 +12,9 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
+import { useAuthStore } from "@/stores/auth";
+
+const auth = useAuthStore();
 
 type ReputationLevel = {
   level: number;

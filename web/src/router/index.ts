@@ -16,6 +16,7 @@ import {
 } from "@/utils/clientInfo";
 import { preloadScheduleBackgroundAsset } from "@/utils/scheduleBackgroundStorage";
 import { readForumListRestoreState } from "@/utils/forumListRestore";
+import { isForumDestination } from "@/utils/nativeForumVisibility";
 
 const MainLayout = () => import("@/layouts/MainLayout.vue");
 export const loadHomeView = () => import("@/views/Home.vue");
@@ -244,18 +245,28 @@ router.beforeEach(async (to) => {
   }
   const auth = useAuthStore();
   const site = useSiteStore();
-  if (to.meta.title) document.title = `${to.meta.title} · 药大拾间`;
   if (import.meta.env.DEV && to.name === "profile-verification" && to.query.preview === "organization-verification") {
     return true;
   }
   // 课表和教务页必须先渲染本地缓存；站内会话探测放到后台，不能阻塞路由首屏。
   if (to.name && CACHE_FIRST_EDUCATION_ROUTES.has(String(to.name))) {
+    if (to.meta.title) document.title = `${to.meta.title} · 药大拾间`;
     if (!auth.ready) void auth.fetchMe({ probe: true });
     return true;
   }
   // HttpOnly Cookie 无法由前端直接读取；首次导航静默探测一次真实会话。
   // 游客的 401 不提示、不跳转，避免公开页面被错误抢到登录页。
   if (!auth.ready) await auth.fetchMe({ probe: true });
+
+  if (auth.forumHidden && isForumDestination(to.path)) {
+    return { name: "home", replace: true };
+  }
+  if (auth.forumHidden && to.name === "messages"
+    && (["private", "reply", "like", "system"].includes(String(to.query.tab || ""))
+      || ["conversation", "user", "forumKind", "forumId"].some((key) => key in to.query))) {
+    return { name: "messages", replace: true };
+  }
+  if (to.meta.title) document.title = `${to.meta.title} · 药大拾间`;
 
   const nativeForumRestricted = isNativeForumIntranetOnlyAccount(auth.user?.username);
   if (to.name === "home" && nativeForumRestricted) {

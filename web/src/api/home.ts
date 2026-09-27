@@ -1,4 +1,5 @@
 import { request, type RequestOptions } from "./request";
+import { isForumDestination } from "@/utils/nativeForumVisibility";
 
 export interface HomeSummary {
   identity: any;
@@ -18,7 +19,12 @@ function filterHomeStreamTopics<T extends { board?: { type?: string } }>(items: 
 }
 
 export const homeApi = {
-  summary: (options?: RequestOptions) => request.get<HomeSummary>("/home/summary", undefined, options),
+  summary: async (options?: RequestOptions, servicesOnly = false): Promise<HomeSummary> => {
+    if (!servicesOnly) return request.get<HomeSummary>("/home/summary", undefined, options);
+    const services = await request.get<any[]>("/services", undefined, options);
+    return { identity: null, pinnedTopics: [], hotTopics: [], latestTopics: [], announce: [],
+      services: services.filter((service) => !isForumDestination(String(service?.url || ""))) };
+  },
   hotRanking: async (params?: { stream?: HomeFeedStream }, options?: RequestOptions) => {
     const list = await request.get<any[]>("/home/hot-ranking", params, options);
     return filterHomeStreamTopics(list, params?.stream);

@@ -1,5 +1,7 @@
 import { defineStore } from "pinia";
 import { messageApi } from "@/api/message";
+import { useAuthStore } from "@/stores/auth";
+import { visibleNativeNotices } from "@/utils/nativeForumVisibility";
 
 export type MessageNotice = {
   id: number;
@@ -20,13 +22,15 @@ export const useMessageStore = defineStore("message", {
   }),
   actions: {
     async refresh() {
+      const userId = useAuthStore().user?.id;
       try {
         const list = await messageApi.list() as MessageNotice[];
+        if (useAuthStore().user?.id !== userId) return;
         this.setNotices(list);
       } catch { /* ignore */ }
     },
     setNotices(list: MessageNotice[]) {
-      const unread = list.filter((notice) => !notice.readAt);
+      const unread = visibleNativeNotices(list, useAuthStore().forumHidden).filter((notice) => !notice.readAt);
       const directUnread = unread
         .filter((notice) => notice.category === "direct-message")
         .sort((a, b) => {

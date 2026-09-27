@@ -1,9 +1,9 @@
 <template>
   <main class="privacy-page" v-loading="loading">
     <h2>账号与隐私</h2>
-    <p><a href="/privacy.html">隐私政策</a> · <a href="/community-rules.html">社区治理规则</a></p>
+    <p><a href="/privacy.html">隐私政策</a><template v-if="!auth.forumHidden"> · <a href="/community-rules.html">社区治理规则</a></template></p>
     <template v-if="auth.isLoggedIn">
-      <section class="cpu-card">
+      <section v-if="!auth.forumHidden" class="cpu-card">
         <h3>已屏蔽用户</h3>
         <p>屏蔽后不显示该账号的帖子和回复，双方无法继续私聊。匿名内容按实际账号生效，不会显示其真实身份。</p>
         <p v-if="!blocks.length">暂无屏蔽用户</p>
@@ -11,7 +11,7 @@
       </section>
       <section class="cpu-card">
         <h3>永久删除账户</h3>
-        <p>提交后立即停止原账户访问，系统自动清理账号资料、绑定、教务缓存、小组件凭证、AI 历史、上传文件及药苑之声身份。你发布的帖子和回复将清空并隐藏；与你相关的私聊会话（含双方消息）会删除。你创建的问卷、文件收集任务及其提交内容也会删除。请先保存需要的资料。</p>
+        <p>提交后立即停止原账户访问，系统自动清理账号资料、绑定、教务缓存、小组件凭证、AI 历史、上传文件及药苑之声身份。<template v-if="!auth.forumHidden">你发布的帖子和回复将清空并隐藏；与你相关的私聊会话（含双方消息）会删除。</template><template v-else>你在本站发布的内容及交流记录也会清理。</template>你创建的问卷、文件收集任务及其提交内容也会删除。请先保存需要的资料。</p>
         <p>学校账号及学校保存的数据不受影响。再次使用学校登录会创建全新的本站账户，原账户不可恢复。赞助不因注销自动退款，未使用权益和积分会失效。</p>
         <p>交易对账记录、无法回溯身份的数字关联和删除回执会按隐私政策保留；备份及第三方接收方的历史数据不等同于在线数据即时删除。任务遇到故障会自动重试，只有全部在线清理完成才显示完成。</p>
         <el-checkbox v-model="acknowledged">我已理解删除范围及不可恢复的后果</el-checkbox>
@@ -45,7 +45,7 @@ try { receipt.value = localStorage.getItem('cpu-account-deletion-receipt') || ''
 async function refresh() {
   loading.value = true;
   try {
-    if (auth.isLoggedIn) {
+    if (auth.isLoggedIn && !auth.forumHidden) {
       blocks.value = await request.get('/user/blocks');
     }
   } finally { loading.value = false; }

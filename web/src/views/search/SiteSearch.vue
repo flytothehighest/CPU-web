@@ -112,6 +112,7 @@ import { ElMessage } from "element-plus";
 import TopicListItem from "@/components/forum/TopicListItem.vue";
 import { searchApi, type SearchResult } from "@/api/search";
 import { useAuthStore } from "@/stores/auth";
+import { isForumDestination } from "@/utils/nativeForumVisibility";
 import { isNativeForumIntranetOnlyAccount, shouldHideNativeYaodaCanFly } from "@/utils/clientInfo";
 
 const route = useRoute();
@@ -126,7 +127,9 @@ let searchSeq = 0;
 const query = computed(() => String(route.query.q ?? "").trim().slice(0, 100));
 const servicesOnly = computed(() => route.query.scope === "services"
   || isNativeForumIntranetOnlyAccount(auth.user?.username));
-const displayedServices = computed(() => (result.value?.services || []).filter((service) => !(
+const displayedServices = computed(() => (result.value?.services || [])
+  .filter((service) => !auth.forumHidden || !isForumDestination(String(service?.url || "")))
+  .filter((service) => !(
   shouldHideNativeYaodaCanFly(auth.isLoggedIn, auth.user?.username)
   && String(service?.url || "").includes("/services/tools/yaoda-can-fly")
 )));
