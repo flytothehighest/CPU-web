@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
@@ -70,4 +70,48 @@ test('auto and ci build sources fail closed without the exact artifact; only exp
   assert.doesNotMatch(local.stdout, /download/u)
   assert.match(local.stdout, /protected local compilation/u)
   assert.equal(run('unknown', '0').status, 37)
+})
+
+test('artifact transport fetch is non-interactive and bounded by a hard timeout', { skip: process.platform === 'win32' }, () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'cpu-artifact-fetch-test-'))
+  try {
+    const bin = path.join(root, 'bin')
+    const record = path.join(root, 'git-call.txt')
+    mkdirSync(bin)
+    const fakeGit = path.join(bin, 'git')
+    writeFileSync(fakeGit, `#!/usr/bin/env bash\nprintf '%s\\n' "$GIT_TERMINAL_PROMPT|$*" > "$RECORD"\nsleep 30\n`)
+    chmodSync(fakeGit, 0o755)
+    const script = `set -u
+      log() { echo "log: $*"; }
+      warn() { echo "warn: $*" >&2; }
+      DEPLOY_CI_FETCH_TIMEOUT_SECONDS=1
+      DEPLOY_CI_GIT_LOW_SPEED_LIMIT=10240
+      DEPLOY_CI_GIT_LOW_SPEED_SECONDS=30
+      DEPLOY_ARTIFACT_GIT_SOURCE=refs/heads/deploy-artifacts
+      DEPLOY_ARTIFACT_GIT_REF=refs/remotes/origin/deploy-artifacts
+      ${shellFunction('fetch_ci_artifact_transport')}
+      fetch_ci_artifact_transport 2`
+    const startedAt = Date.now()
+    let result
+    try {
+      execFileSync('bash', ['-c', script], {
+        env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, RECORD: record },
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: 5_000,
+      })
+      assert.fail('fetch unexpectedly succeeded')
+    } catch (error) {
+      result = error
+    }
+    assert.ok(Date.now() - startedAt < 4_000, 'fetch did not stop within the hard timeout')
+    assert.equal(result.status, 124)
+    assert.match(String(result.stderr), /timed out after 1s/u)
+    const invocation = readFileSync(record, 'utf8')
+    assert.match(invocation, /^0\|/u)
+    assert.match(invocation, /maintenance\.auto=false/u)
+    assert.match(invocation, /http\.lowSpeedLimit=10240/u)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })

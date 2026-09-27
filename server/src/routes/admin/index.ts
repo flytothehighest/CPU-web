@@ -157,6 +157,7 @@ adminRouter.use("/profile-reviews", modOrAbove, profileReviewAdminRouter);
 adminRouter.use("/account-verifications", modOrAbove, accountVerificationAdminRouter);
 const deploymentUpdateSchema = z.object({
   confirmation: z.literal("UPDATE_AND_DEPLOY"),
+  allowSchemaExpand: z.literal(true),
 });
 
 adminRouter.get("/deployment", adminOnly, async (_req, res, next) => {
@@ -176,6 +177,7 @@ adminRouter.post(
       ok(res, await startAdminDeploymentUpdate({
         operatorId: req.user!.userId,
         confirmation: req.body.confirmation,
+        allowSchemaExpand: req.body.allowSchemaExpand,
       }));
     } catch (error) {
       if (error instanceof DeploymentAlreadyRunningError) {

@@ -31,6 +31,9 @@
 | `DEPLOY_VERIFY_URL` | `https://cputime.cn`，用于验证公网切换 |
 | `DEPLOY_INTERNAL_ORIGIN` | `https://cputime.cn`，VoiceHub 调用主站的稳定入口，不能指向会退役的实例端口 |
 | `DEPLOY_DRAIN_SECONDS` | 每阶段默认等 120 秒；超时保留实例，而非强制关闭连接 |
+| `DEPLOY_CI_FETCH_TIMEOUT_SECONDS` | 单次制品分支拉取默认最多 90 秒；超时终止完整 Git 进程组并重试，不再永久占用部署锁 |
+| `DEPLOY_CI_GIT_LOW_SPEED_LIMIT` / `DEPLOY_CI_GIT_LOW_SPEED_SECONDS` | Git HTTP 连续 30 秒低于 10 KiB/s 时中止本次拉取，并进入受限重试 |
+| `ADMIN_DEPLOY_TIMEOUT_SECONDS` | 后台部署 runner 默认最多运行 1800 秒；超时先终止部署进程组，10 秒后仍未退出则强制结束并释放锁 |
 
 默认在站点配置和其所在目录下的绝对路径 include 中寻找唯一的主站代理文件。间接 upstream、多个匹配文件、外部配置或不明确的匹配会停止更新，需明确指定 `DEPLOY_NGINX_CONFIG`。检测到配置被其他操作修改时不覆盖。不要同时通过宝塔或另一个工具修改同一代理配置。
 
@@ -73,6 +76,8 @@ DEPLOY_ALLOW_SCHEMA_EXPAND=1 bash deploy.sh update
 ```
 
 该开关是迁移兼容性的人工确认，不是自动验证证明。删除/重命名字段、收紧约束、重写数据等需要分阶段发布或安排维护窗口。数据库写入不随文件回退自动撤销。
+
+管理后台的“更新并部署”会在弹窗中要求超级管理员作出同样的一次性确认，并把授权只传给本次 detached runner。授权会写入脱敏部署日志，但会从候选服务和 PM2 运行环境中移除；后台不接受自定义命令或持久化该开关。
 
 `DEPLOY_UPDATE_MODE=maintenance` 仅保留给尚未接管蓝绿的旧安装，明确允许短暂中断；已有蓝绿状态时拒绝混用旧式运行目录更新。维护更新同样只发布精确 SHA 的 GitHub 制品，制品缺失时失败关闭；只有明确授权的应急场景显式设置 `DEPLOY_BUILD_MODE=local` 才会在生产机编译。
 

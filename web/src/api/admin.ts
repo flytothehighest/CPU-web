@@ -1117,7 +1117,7 @@ export const adminApi = {
   startDeploymentUpdate: () =>
     request.post<AdminDeploymentStatus>(
       "/admin/deployment/update",
-      { confirmation: "UPDATE_AND_DEPLOY" },
+      { confirmation: "UPDATE_AND_DEPLOY", allowSchemaExpand: true },
       { preserveResponseCache: true },
     ),
   jwxtAgents: (options?: RequestOptions) =>

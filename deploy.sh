@@ -75,6 +75,9 @@ DEPLOY_BUILD_NICE="${DEPLOY_BUILD_NICE:-10}"
 DEPLOY_NODE_HEAP_MB="${DEPLOY_NODE_HEAP_MB:-2304}"
 DEPLOY_CI_WAIT_SECONDS="${DEPLOY_CI_WAIT_SECONDS:-600}"
 DEPLOY_CI_POLL_SECONDS="${DEPLOY_CI_POLL_SECONDS:-15}"
+DEPLOY_CI_FETCH_TIMEOUT_SECONDS="${DEPLOY_CI_FETCH_TIMEOUT_SECONDS:-90}"
+DEPLOY_CI_GIT_LOW_SPEED_LIMIT="${DEPLOY_CI_GIT_LOW_SPEED_LIMIT:-10240}"
+DEPLOY_CI_GIT_LOW_SPEED_SECONDS="${DEPLOY_CI_GIT_LOW_SPEED_SECONDS:-30}"
 # 默认只复用当前仓库 origin（生产机配置为 GitHub 镜像）。Release 下载仅在显式传入时启用，
 # 避免镜像把大文件 302 回 GitHub 资产域后再次卡住。
 DEPLOY_ARTIFACT_URL="${DEPLOY_ARTIFACT_URL:-}"
@@ -1472,12 +1475,39 @@ verify_ci_artifact_directory() {
     || return 1
 }
 
+fetch_ci_artifact_transport() {
+  local attempt="$1"
+  local fetch_status=0
+  log "Fetching CI artifact transport (attempt $attempt, timeout ${DEPLOY_CI_FETCH_TIMEOUT_SECONDS}s)"
+  if GIT_TERMINAL_PROMPT=0 timeout --signal=TERM --kill-after=5s "${DEPLOY_CI_FETCH_TIMEOUT_SECONDS}s" \
+    git -c maintenance.auto=false \
+      -c gc.auto=0 \
+      -c "http.lowSpeedLimit=$DEPLOY_CI_GIT_LOW_SPEED_LIMIT" \
+      -c "http.lowSpeedTime=$DEPLOY_CI_GIT_LOW_SPEED_SECONDS" \
+      fetch --force --no-tags origin \
+      "$DEPLOY_ARTIFACT_GIT_SOURCE:$DEPLOY_ARTIFACT_GIT_REF" >/dev/null 2>&1; then
+    return 0
+  else
+    fetch_status=$?
+  fi
+  if [ "$fetch_status" -eq 124 ] || [ "$fetch_status" -eq 137 ]; then
+    warn "CI artifact transport fetch timed out after ${DEPLOY_CI_FETCH_TIMEOUT_SECONDS}s"
+  else
+    warn "CI artifact transport fetch failed (exit $fetch_status)"
+  fi
+  return "$fetch_status"
+}
+
 download_ci_artifact() {
   local commit="$1"
-  local cache_root target_dir incoming_dir extract_dir bundle_url deadline attempt=1
+  local cache_root target_dir incoming_dir extract_dir bundle_url deadline attempt=1 transport_ready=0
   [[ "$commit" =~ ^[0-9a-fA-F]{40}$ ]] || return 1
   commit="${commit,,}"
   command -v tar >/dev/null 2>&1 || return 1
+  command -v timeout >/dev/null 2>&1 || { warn "CI artifact fetch requires the timeout command"; return 1; }
+  [[ "$DEPLOY_CI_FETCH_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]] || { warn "DEPLOY_CI_FETCH_TIMEOUT_SECONDS must be a positive integer"; return 1; }
+  [[ "$DEPLOY_CI_GIT_LOW_SPEED_LIMIT" =~ ^[1-9][0-9]*$ ]] || { warn "DEPLOY_CI_GIT_LOW_SPEED_LIMIT must be a positive integer"; return 1; }
+  [[ "$DEPLOY_CI_GIT_LOW_SPEED_SECONDS" =~ ^[1-9][0-9]*$ ]] || { warn "DEPLOY_CI_GIT_LOW_SPEED_SECONDS must be a positive integer"; return 1; }
   cache_root="$(artifact_cache_root)" || return 1
   target_dir="$cache_root/$commit"
   incoming_dir="$cache_root/.incoming-$commit-$$"
@@ -1500,26 +1530,33 @@ download_ci_artifact() {
     rm -rf "$incoming_dir"
     mkdir -p "$extract_dir"
     bundle_url="${DEPLOY_ARTIFACT_URL:+${DEPLOY_ARTIFACT_URL}?commit=$commit&attempt=$attempt}"
-    if { \
-        git fetch --force --no-tags origin \
-          "$DEPLOY_ARTIFACT_GIT_SOURCE:$DEPLOY_ARTIFACT_GIT_REF" >/dev/null 2>&1 \
-        && git show "$DEPLOY_ARTIFACT_GIT_REF:cpu-web-linux-deploy.tar.gz" \
-          > "$incoming_dir/bundle.tar.gz"; \
-      } \
-      || { \
-        [ -n "$bundle_url" ] \
-        && command -v curl >/dev/null 2>&1 \
-        && curl -fsSL \
-          --connect-timeout 15 \
-          --max-time 60 \
-          --retry 1 \
-          --retry-delay 2 \
-          --speed-limit 10240 \
-          --speed-time 20 \
-          -H 'Cache-Control: no-cache' \
-          "$bundle_url" \
-          -o "$incoming_dir/bundle.tar.gz"; \
-      }; then
+    transport_ready=0
+    if fetch_ci_artifact_transport "$attempt"; then
+      if git show "$DEPLOY_ARTIFACT_GIT_REF:cpu-web-linux-deploy.tar.gz" \
+        > "$incoming_dir/bundle.tar.gz"; then
+        transport_ready=1
+      else
+        warn "CI artifact transport does not contain the expected bundle"
+      fi
+    fi
+    if [ "$transport_ready" != "1" ] && [ -n "$bundle_url" ] && command -v curl >/dev/null 2>&1; then
+      log "Fetching CI artifact from the release transport (attempt $attempt)"
+      if curl -fsSL \
+        --connect-timeout 15 \
+        --max-time 60 \
+        --retry 1 \
+        --retry-delay 2 \
+        --speed-limit 10240 \
+        --speed-time 20 \
+        -H 'Cache-Control: no-cache' \
+        "$bundle_url" \
+        -o "$incoming_dir/bundle.tar.gz"; then
+        transport_ready=1
+      else
+        warn "CI artifact release transport fetch failed"
+      fi
+    fi
+    if [ "$transport_ready" = "1" ]; then
       if validate_bundle_archive "$incoming_dir/bundle.tar.gz" \
       && tar -xzf "$incoming_dir/bundle.tar.gz" -C "$extract_dir" \
       && verify_ci_artifact_directory "$commit" "$extract_dir"; then
@@ -1531,6 +1568,7 @@ download_ci_artifact() {
         log "CI deployment artifact is ready for ${commit:0:12}"
         return 0
       fi
+      warn "Downloaded CI artifact failed validation for ${commit:0:12}"
     fi
     if [ "$SECONDS" -le "$deadline" ]; then
       warn "CI artifact for ${commit:0:12} is not ready; retrying in ${DEPLOY_CI_POLL_SECONDS}s"
