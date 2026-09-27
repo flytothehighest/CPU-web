@@ -767,7 +767,10 @@ final class HybridWebViewStore: NSObject, ObservableObject, WKScriptMessageHandl
         assistantTaskID = taskID
         let task = Task { @MainActor [weak self] in
             guard let self else { throw NativeAssistantError.unavailable }
+            let account = self.authState.account
             let cookies = await self.assistantCookies()
+            try Task.checkCancellation()
+            guard self.authState.account == account else { throw CancellationError() }
             if !cookies.isEmpty {
                 return try await self.nativeAssistantStreamViaURLSession(
                     message: message,
@@ -785,7 +788,16 @@ final class HybridWebViewStore: NSObject, ObservableObject, WKScriptMessageHandl
             )
         }
         assistantKeepAliveTask = task
-        defer { if assistantTaskID == taskID { assistantKeepAliveTask = nil } }
+        let backgroundID = UIApplication.shared.beginBackgroundTask(withName: "Assistant reply") { [weak self] in
+            Task { @MainActor in
+                guard let self, self.assistantTaskID == taskID else { return }
+                self.cancelNativeAssistantStreams()
+            }
+        }
+        defer {
+            if assistantTaskID == taskID { assistantKeepAliveTask = nil }
+            if backgroundID != .invalid { UIApplication.shared.endBackgroundTask(backgroundID) }
+        }
         return try await task.value
     }
 
@@ -967,55 +979,35 @@ final class HybridWebViewStore: NSObject, ObservableObject, WKScriptMessageHandl
     }
 
     private func nativeAssistantAPIRequest(path: String, method: String, body: [String: Any]?) async throws -> Data {
-        guard let webView else { throw NativeAssistantError.unavailable }
-        let bodyJSON: String
-        if let body, JSONSerialization.isValidJSONObject(body),
-           let encoded = try? JSONSerialization.data(withJSONObject: body),
-           let string = String(data: encoded, encoding: .utf8) {
-            bodyJSON = string
-        } else {
-            bodyJSON = ""
+        guard let url = IOSNextWebConfiguration.routeURL(path) else { throw NativeAssistantError.unavailable }
+        let account = authState.account
+        let cookies = await assistantCookies()
+        guard authState.account == account, isLoggedIn else {
+            throw NativeAssistantError.requestFailed("登录状态已变化，请重新登录后重试。")
         }
-        let script = """
-        return await (async () => {
-          const csrfCookie = document.cookie.match(/(?:^|;\\s*)(?:__Host-cpu-csrf|cpu-csrf)=([^;]+)/i);
-          const headers = {'Accept': 'application/json', 'X-CPU-Auth-Mode': 'cookie'};
-          if (\(methodJSONHeader(method))) headers['Content-Type'] = 'application/json';
-          if (csrfCookie?.[1]) headers['X-CSRF-Token'] = decodeURIComponent(csrfCookie[1]);
-          try {
-            const response = await fetch(\(IOSNextWebConfiguration.javascriptString(path)), {
-              method: \(IOSNextWebConfiguration.javascriptString(method)),
-              credentials: 'include',
-              headers,
-              body: \(method == "GET" ? "undefined" : IOSNextWebConfiguration.javascriptString(bodyJSON)),
-            });
-            const raw = await response.text();
-            let payload = null;
-            try { payload = raw ? JSON.parse(raw) : null; } catch (_) {}
-            const apiOk = response.ok && (!payload || typeof payload.code !== 'number' || payload.code === 0);
-            return JSON.stringify({
-              ok: apiOk,
-              status: response.status,
-              message: payload?.message || '',
-              payload: payload?.code === 0 && payload?.data !== undefined ? payload.data : payload,
-            });
-          } catch (_) {
-            return JSON.stringify({ok: false, status: 0, message: '请检查网络连接后重试。'});
-          }
-        })();
-        """
-        let result = try await webView.callAsyncJavaScript(script, arguments: [:], in: nil, contentWorld: .page)
-        guard let raw = result as? String, let data = raw.data(using: .utf8),
-              let envelope = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              envelope["ok"] as? Bool == true else {
-            if let data = (result as? String)?.data(using: .utf8),
-               let envelope = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let message = envelope["message"] as? String, !message.isEmpty {
-                throw NativeAssistantError.requestFailed(message)
-            }
-            throw NativeAssistantError.requestFailed("拾间 AI 历史记录暂时不可用，请重试。")
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.timeoutInterval = 30
+        request.httpShouldHandleCookies = false
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("cookie", forHTTPHeaderField: "X-CPU-Auth-Mode")
+        request.setValue("ios", forHTTPHeaderField: "X-CPU-Client")
+        request.setValue(HTTPCookie.requestHeaderFields(with: cookies)["Cookie"], forHTTPHeaderField: "Cookie")
+        if let csrf = cookies.first(where: { $0.name == "__Host-cpu-csrf" || $0.name == "cpu-csrf" })?.value {
+            request.setValue(csrf.removingPercentEncoding ?? csrf, forHTTPHeaderField: "X-CSRF-Token")
         }
-        guard let payload = envelope["payload"], JSONSerialization.isValidJSONObject(payload) else {
+        if let body {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        }
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard authState.account == account else { throw CancellationError() }
+        let envelope = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+              (envelope?["code"] as? Int) == 0 else {
+            throw NativeAssistantError.requestFailed(envelope?["message"] as? String ?? "历史记录同步失败，请重试。")
+        }
+        guard let payload = envelope?["data"], JSONSerialization.isValidJSONObject(payload) else {
             throw NativeAssistantError.invalidResponse
         }
         return try JSONSerialization.data(withJSONObject: payload)

@@ -180,6 +180,11 @@ final class NativeAssistantModel: ObservableObject {
 
     func accountDidChange(using session: HybridWebViewStore) {
         accountChangeTask?.cancel()
+        if session.authState.ready, !session.authState.account.isEmpty,
+           session.authState.account != confirmedAccount {
+            applyConfirmedAccountChange(using: session)
+            return
+        }
         // WKWebView can publish a transient empty or unauthenticated report
         // while restoring cookies after a route change. Confirm the state after
         // a short quiet period before clearing a conversation or its stream.
@@ -251,10 +256,16 @@ final class NativeAssistantModel: ObservableObject {
         // Loading history must never replace a live answer or a newly opened draft.
         let generation = historyGeneration
         historyLoading = true
-        defer { historyLoading = false }
+        defer {
+            historyLoading = false
+            if session.authState.account != account {
+                Task { await self.loadHistory(using: session) }
+            }
+        }
         do {
             let cloud = try await session.listNativeAssistantConversations()
-            guard session.authState.account == account, confirmedAccount == account else { return }
+            guard session.authState.account == account, confirmedAccount == account,
+                  generation == historyGeneration else { return }
             conversations = mergeConversations(local: conversations, cloud: cloud)
                 .filter { !pendingDeletes.contains($0.id) }
             saveLocalHistory(using: session)
@@ -572,14 +583,18 @@ struct NativeAssistantView: View {
                     }
                     Color.clear.frame(height: 1).id("bottom")
                         .onAppear { followsLatest = true }
-                        .onDisappear { followsLatest = false }
+
                 }
                 .frame(maxWidth: 700, alignment: .leading)
                 .padding(.horizontal, 18)
                 .padding(.vertical, 16)
             }
             .scrollDismissesKeyboard(.interactively)
+            .simultaneousGesture(DragGesture().onChanged { _ in followsLatest = false })
             .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
+            .onChange(of: assistant.isLoading) { _, loading in
+                if !loading, followsLatest { proxy.scrollTo("bottom", anchor: .bottom) }
+            }
             .onChange(of: assistant.messages.count) { _, _ in
                 followsLatest = true
                 proxy.scrollTo("bottom", anchor: .bottom)
@@ -614,18 +629,16 @@ struct NativeAssistantView: View {
                     .background(Color.cpuBrand)
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             } else {
+                HStack(spacing: 5) {
+                    Image(systemName: "sparkles").foregroundStyle(Color.cpuBrand)
+                    Text("拾间 AI").foregroundStyle(.secondary)
+                }.font(.caption.weight(.medium))
                 HStack(alignment: .bottom, spacing: 2) {
                     Text(message.streaming ? AttributedString(message.content) : markdown(message.content))
                         .font(.body)
                         .foregroundStyle(.primary)
                         .frame(maxWidth: 620, alignment: .leading)
                         .textSelection(.enabled)
-                    if message.streaming {
-                        Text("▌")
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(Color.cpuBrand)
-                            .transition(.opacity)
-                    }
                 }
                 if message.streaming || !message.streamStatus.isEmpty {
                     HStack(spacing: 6) {
