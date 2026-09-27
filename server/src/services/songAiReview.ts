@@ -4,7 +4,7 @@ import { matchesSongIdentity, normalizeSongReviewResult, SONG_REVIEW_SYSTEM_PROM
 
 export function getSongReviewConfig() {
   const config = getSiteConfig();
-  return { enabled: config.songReviewEnabled, policyVersion: songReviewPolicyVersion(config.songReviewRules) };
+  return { enabled: config.songReviewEnabled, policyVersion: songReviewPolicyVersion(config.songReviewRules), previousPolicyVersion: songReviewPolicyVersion(config.songReviewRules, "song-review-v1") };
 }
 
 async function publicJson(url: string, headers?: Record<string, string>) {
@@ -76,10 +76,6 @@ export async function reviewSong(input: SongReviewInput): Promise<SongReviewResu
       logContext: { kind: "song-review", targetId: input.songId, targetLabel: `${input.title} / ${input.artist}` },
     });
     const decision = normalizeSongReviewResult(result.content, { model: result.model, hasLyrics: Boolean(evidence.lyrics), webSearchApplied: result.webSearchApplied, sources: result.webSearchSources });
-    if (!evidence.identityVerified && decision.status !== 'uncertain') {
-      decision.status = 'uncertain';
-      decision.reason = '投稿标题或歌手与音源资料未能一致核验，请完善曲目来源后重审。' + decision.reason;
-    }
     return { ...decision, policyVersion };
   } catch {
     return { status: "error", reason: "AI审核暂不可用或返回格式异常，将自动重试，也可重新发起AI审核", model: config.songReviewModel, sources: [], policyVersion };

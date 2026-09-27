@@ -14,19 +14,21 @@
     </div>
     <p v-if="error" role="alert" class="text-sm text-red-300">{{ error }}</p>
     <p role="status" aria-live="polite" class="text-sm text-zinc-300">{{ progress || `待审 ${pendingIds.length} 首 · AI暂无法确认 ${uncertainCount} 首` }}</p>
-    <dialog ref="dialog" class="review-dialog rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 p-5" @close="active = null">
+    <dialog ref="dialog" class="review-dialog rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 p-5" aria-label="歌曲审核详情" @close="active = null">
       <template v-if="active">
-        <div class="flex items-start justify-between gap-3">
+        <div class="review-dialog-header flex items-start justify-between gap-3">
           <h3 class="text-lg font-bold">{{ active.title }} · {{ active.artist }}</h3>
           <button class="review-button" @click="dialog?.close()" aria-label="关闭歌曲审核详情">关闭</button>
         </div>
+        <div class="review-dialog-body">
         <p class="mt-4 text-sm">{{ activeReview.confirmedAt ? '用户已确认继续投稿' : labels[activeReview.status || 'pending'] || '待审核' }}<span v-if="activeReview.model"> · {{ activeReview.model }}</span></p>
         <p class="my-3 whitespace-pre-wrap break-words text-sm text-zinc-300">{{ activeReview.reason }}</p>
         <ul v-if="activeReview.sources?.length" class="space-y-2 my-3">
           <li v-for="source in safeSources" :key="source.url"><a :href="source.url" target="_blank" rel="noopener noreferrer" class="text-sm text-blue-300 underline break-all">{{ source.title || source.url }}</a></li>
         </ul>
-        <p class="text-xs text-zinc-400">AI依据歌词及公开来源审核。证据不足或调用失败时暂不放行，调用失败最多自动尝试3次。有建议时由投稿人确认或撤回，管理员不能代替确认。</p>
-        <div class="flex flex-wrap gap-2 mt-4">
+        <p class="text-xs text-zinc-400">AI只提示有依据的具体选曲风险，不要求歌手证明没有争议；调用失败最多自动尝试3次。有建议时由投稿人确认或撤回，管理员不能代替确认。</p>
+        </div>
+        <div class="review-dialog-footer flex flex-wrap gap-2 mt-4">
           <button class="review-button" :disabled="busy || !config?.enabled" @click="reviewBatch([active.id])">重新AI审核</button>
         </div>
       </template>
@@ -35,7 +37,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 type Song = { id: number; title: string; artist: string; played?: boolean }
 type Review = { songId: number; status: string; reason: string; model?: string; fingerprint: string; policyVersion: string; sources: Array<{ title: string; url: string }>; confirmedAt?: string | null }
 const apiBase = String(useRuntimeConfig().public.apiBase || '/api').replace(/\/$/, '')
@@ -68,9 +70,10 @@ async function refresh() {
     error.value = ''
   } catch (e) { error.value = `无法读取审核状态：${message(e)}`; config.value = null }
 }
-function open(song: Song) {
+async function open(song: Song) {
   active.value = { ...song }
-  dialog.value?.showModal()
+  await nextTick()
+  if (!dialog.value?.open) dialog.value?.showModal()
 }
 async function reviewBatch(ids: number[]) {
   if (busy.value) return
@@ -100,6 +103,11 @@ defineExpose({ open, refresh })
 .review-button:hover:not(:disabled) { background: #3f3f46; }
 .review-button:focus-visible { outline: 2px solid #60a5fa; outline-offset: 3px; }
 .review-button:disabled { opacity: .45; cursor: not-allowed; }
-.review-dialog { width: min(640px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; }
+.review-dialog { position: fixed; inset: 0; margin: auto; width: min(640px, calc(100vw - 32px)); max-width: calc(100vw - 32px); max-height: calc(100dvh - 32px); overflow: hidden; box-sizing: border-box; padding: 0; border-radius: 16px; border: 1px solid #c6d4bf; background: #fffdf8; color: #263c2c; }
+.review-dialog[open] { display: flex; flex-direction: column; }
+.review-dialog-header, .review-dialog-footer { flex: 0 0 auto; padding: 16px 20px; margin: 0; }
+.review-dialog-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; border-bottom: 1px solid #dbe5d5; }
+.review-dialog-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 20px 20px; overflow-wrap: anywhere; }
+.review-dialog-footer { border-top: 1px solid #dbe5d5; }
 .review-dialog::backdrop { background: rgb(0 0 0 / 65%); }
 </style>

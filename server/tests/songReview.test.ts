@@ -7,21 +7,32 @@ const source = { title: "曲目来源", url: "https://music.example/song/1" };
 const context = { model: "song-model", hasLyrics: true, webSearchApplied: true, sources: [source] };
 const response = (patch = {}) => JSON.stringify({ decision: "approved", reason: "版本、歌词及来源已核对", category: "none", sufficient_evidence: true, source_urls: [source.url], ...patch });
 
-test("歌曲审核只有完整证据才能自动通过，缺歌词或联网能力不放行", () => {
+test("已核实曲目没有具体问题时通过，不要求联网证明歌手没有争议", () => {
   assert.equal(normalizeSongReviewResult(response(), context).status, "approved");
-  for (const patch of [{ hasLyrics: false }, { webSearchApplied: false }, { sources: [] }]) {
-    assert.equal(normalizeSongReviewResult(response(), { ...context, ...patch }).status, "uncertain");
+  for (const patch of [{ webSearchApplied: false }, { sources: [] }]) {
+    assert.equal(normalizeSongReviewResult(response(), { ...context, ...patch }).status, "approved");
   }
-  assert.equal(normalizeSongReviewResult(response({ sufficient_evidence: false }), context).status, "uncertain");
+  assert.equal(normalizeSongReviewResult(response(), { ...context, hasLyrics: false }).status, "approved");
+  assert.equal(normalizeSongReviewResult(response({ sufficient_evidence: false }), context).status, "approved");
+});
+
+test("Love U 2式的舆情资料不足不能触发确认，有确切重大风险才提示", () => {
+  const noRumor = response({ decision: 'uncertain', category: 'artist', content_checks_passed: true, sufficient_evidence: false, source_urls: [], reason: '粤语歌词，未发现DJ或现场问题，但无法证明歌手没有争议' });
+  const result = normalizeSongReviewResult(noRumor, { ...context, sources: [] });
+  assert.equal(result.status, 'approved');
+  assert.doesNotMatch(result.reason, /无法证明/);
+  assert.equal(normalizeSongReviewResult(response({ decision: 'rejected', category: 'artist', content_checks_passed: true, sufficient_evidence: false }), context).status, 'approved');
+  assert.equal(normalizeSongReviewResult(response({ decision: 'rejected', category: 'artist', content_checks_passed: true, major_artist_event: true }), context).status, 'rejected');
+  assert.equal(normalizeSongReviewResult(noRumor, { ...context, hasLyrics: false }).status, 'approved');
 });
 
 test("伪造引用、矛盾决定、无证据指控不能转为自动结论", () => {
   const forged = normalizeSongReviewResult(response({ source_urls: ["https://invented.example/"] }), context);
-  assert.equal(forged.status, "uncertain");
+  assert.equal(forged.status, "approved");
   assert.deepEqual(forged.sources, []);
-  assert.equal(normalizeSongReviewResult(response({ category: "live" }), context).status, "uncertain");
-  assert.equal(normalizeSongReviewResult(response({ decision: "rejected", category: "unknown" }), context).status, "uncertain");
-  assert.equal(normalizeSongReviewResult(response({ decision: "rejected", category: "artist" }), { ...context, sources: [] }).status, "uncertain");
+  assert.throws(() => normalizeSongReviewResult(response({ category: "live" }), context));
+  assert.equal(normalizeSongReviewResult(response({ decision: "rejected", category: "unknown" }), context).status, "approved");
+  assert.equal(normalizeSongReviewResult(response({ decision: "rejected", category: "artist" }), { ...context, sources: [] }).status, "approved");
   assert.equal(normalizeSongReviewResult(response({ decision: "rejected", category: "live" }), context).status, "rejected");
 });
 
@@ -165,4 +176,13 @@ test('歌词和身份资料仅从固定平台读取，任意URL ID不会被访�
   assert.equal((await getSongReviewEvidence({ ...input, musicId: 'http://127.0.0.1/' })).identityVerified, false);
   assert.equal(urls.length, count);
   assert.ok(urls.every(url => new URL(url).hostname === 'music.163.com'));
+});
+
+
+test('名称格式、未核实音乐ID和资料不全不构成风险，明确歌词或现场问题仍给建议', () => {
+  for (const reason of ['歌曲为中文且无明显问题，但QQ音乐ID未核验', '歌手艺名写法不同', '未取得源音频文件', '只有中文歌词和官方发行资料，舆情未知']) {
+    assert.equal(normalizeSongReviewResult(response({decision: 'uncertain', category: 'unknown', sufficient_evidence: false, reason}), {...context, hasLyrics: false, sources: []}).status, 'approved');
+  }
+  assert.equal(normalizeSongReviewResult(response({ decision: 'rejected', category: 'lyrics', reason: '已提供的歌词有明确粗口' }), { ...context, webSearchApplied: false, sources: [] }).status, 'rejected');
+  assert.equal(normalizeSongReviewResult(response({ decision: 'rejected', category: 'live' }), context).status, 'rejected');
 });

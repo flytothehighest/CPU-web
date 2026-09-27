@@ -1,6 +1,6 @@
 import { onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
 
-type Advice = { songId: number; status: string; message: string; detail: string; reviewToken: string | null; requiresConfirmation: boolean; confirmedAt: string | null; expiresAt: string | null; expired: boolean }
+type Advice = { songId: number; status: string; message: string; detail: string; adviceText?: string; reviewToken: string | null; requiresConfirmation: boolean; confirmedAt: string | null; expiresAt: string | null; expired: boolean }
 export function useSongReviewAdvice(userId: Ref<number | null>) {
   const apiBase = String(useRuntimeConfig().public.apiBase || '/api').replace(/\/$/, '')
   const advice = ref<Record<number, Advice>>({})
@@ -15,7 +15,7 @@ export function useSongReviewAdvice(userId: Ref<number | null>) {
     pending = true
     try {
       const result = await $fetch<{ enabled: boolean; reviews: Advice[] }>(`${apiBase}/songs/review-status`)
-      if (!disposed && userId.value === requester) advice.value = Object.fromEntries(result.reviews.map(r => [r.songId, r]))
+      if (!disposed && userId.value === requester) advice.value = Object.fromEntries(result.reviews.map(r => [r.songId, { ...r, detail: r.adviceText || r.detail }]))
     } catch { /* Advice availability never changes submission success or the song list. */ }
     finally { pending = false }
   }

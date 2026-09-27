@@ -6,7 +6,7 @@ import { songs, songReviews, schedules } from '~/drizzle/schema'
 import { cpuWebOrigin } from '../utils/cpu-web-auth'
 import { isSongReadyForScheduling, needsAutomaticSongReview, songReviewFingerprint } from '../utils/song-review-policy'
 
-export type SongReviewConfig = { enabled: boolean; policyVersion: string }
+export type SongReviewConfig = { enabled: boolean; policyVersion: string; previousPolicyVersion?: string }
 type ReviewDecision = { status: 'approved' | 'rejected' | 'uncertain' | 'error'; reason: string; model: string; sources: Array<{ title: string; url: string }>; policyVersion: string }
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0]
 
@@ -81,7 +81,8 @@ export async function reviewSongWithAi(songId: number, config = undefined as Son
       throw createError({ statusCode: 409, message: '该歌曲正在审核，请稍后刷新' })
     }
     const attempts = existing && existing.fingerprint === songReviewFingerprint(song) && existing.policyVersion === policyVersion ? existing.attempts + 1 : 1
-    const value = { songId, attempts, status: 'checking', fingerprint: songReviewFingerprint(song), policyVersion, reason: 'AI正在核对曲目和来源', model: '', sources: '[]', confirmedAt: null, notifiedAt: null, notificationKey: null, attemptId, updatedAt: new Date() }
+    const keepConfirmation = automatic && existing?.fingerprint === songReviewFingerprint(song) && existing?.policyVersion === config?.previousPolicyVersion && existing?.confirmedAt
+    const value = { songId, attempts, status: 'checking', fingerprint: songReviewFingerprint(song), policyVersion, reason: 'AI正在核对曲目和来源', model: '', sources: '[]', confirmedAt: keepConfirmation ? existing?.confirmedAt || null : null, notifiedAt: keepConfirmation ? existing?.notifiedAt || null : null, notificationKey: null, attemptId, updatedAt: new Date() }
     await tx.insert(songReviews).values(value).onConflictDoUpdate({ target: songReviews.songId, set: value })
     return song
   })
@@ -93,8 +94,6 @@ export async function reviewSongWithAi(songId: number, config = undefined as Son
       musicId: song.musicId || null })
     if (!['approved', 'rejected', 'uncertain', 'error'].includes(decision.status) || typeof decision.reason !== 'string'
       || !Array.isArray(decision.sources) || decision.policyVersion !== policyVersion) throw new Error('Invalid review')
-    // A custom playback URL can differ from the provider recording that was reviewed.
-    if (song.playUrl && decision.status === 'approved') decision = { ...decision, status: 'uncertain', reason: '存在自定义播放地址，AI无法核对实际音频版本。' + decision.reason }
   } catch {
     decision = { status: 'error', reason: 'AI审核未完成，将自动重试，也可重新发起AI审核', model: '', sources: [], policyVersion }
   }

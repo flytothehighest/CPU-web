@@ -23,7 +23,8 @@ export default defineEventHandler(async event => {
       advice.message = '已确认继续投稿，等待排期'
       advice.detail = `你已阅读选曲建议并确认继续投稿，后续由广播站安排，不保证播出。原建议：${review.reason}`
     }
-    return { songId: song.id, ...advice, requiresConfirmation: Boolean(current && !review.confirmedAt && ['rejected', 'uncertain'].includes(review.status)),
+    // User-facing advice is content, not an error detail (the error sanitizer truncates detail).
+    return { songId: song.id, ...advice, adviceText: advice.detail, requiresConfirmation: Boolean(current && !review.confirmedAt && ['rejected', 'uncertain'].includes(review.status)),
       reviewToken: current ? review.attemptId : null, confirmedAt: current ? review.confirmedAt : null,
       expiresAt: current ? songAdviceDeadline(review.notifiedAt) : null, expired: current ? isSongAdviceExpired(review) : false }
   }) }

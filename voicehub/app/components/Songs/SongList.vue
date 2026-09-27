@@ -265,7 +265,6 @@
                   </span>
                   <span v-else-if="song.isReplay" title="重播歌曲" class="replay-tag"> 重播 </span>
                 </h3>
-                <SongAdviceCard v-if="isMySong(song) && reviewAdvice[song.id] && !song.played" :advice="reviewAdvice[song.id]" :busy="reviewActing.includes(song.id)" :error="reviewActionErrors[song.id]" @action="handleReviewAdvice(song.id, $event)" />
                 <div class="song-meta">
                   <span
                     :title="
@@ -328,13 +327,23 @@
               </div>
             </div>
 
+            <!-- Advice must occupy its own full-width row, outside the fixed-height song header. -->
+            <SongAdviceCard
+              v-if="isMySong(song) && reviewAdvice[song.id] && !song.played"
+              :song-title="`${song.title} - ${song.artist}`"
+              :advice="reviewAdvice[song.id]"
+              :busy="reviewActing.includes(song.id)"
+              :error="reviewActionErrors[song.id]"
+              @action="handleReviewAdvice(song.id, $event)"
+            />
+
             <!-- 投稿时间和撤销按钮 -->
             <div class="submission-footer">
               <div class="submission-time">投稿时间：{{ song.requestedAt }}</div>
 
               <div class="submission-actions">
                 <button
-                  v-if="isMySong(song) && !song.played && !song.scheduled"
+                  v-if="isMySong(song) && !song.played && !song.scheduled && !reviewAdvice[song.id]?.requiresConfirmation"
                   :disabled="actionInProgress || props.loading"
                   title="撤回投稿"
                   class="withdraw-button"
