@@ -78,9 +78,11 @@ DEPLOY_CI_POLL_SECONDS="${DEPLOY_CI_POLL_SECONDS:-15}"
 DEPLOY_CI_FETCH_TIMEOUT_SECONDS="${DEPLOY_CI_FETCH_TIMEOUT_SECONDS:-90}"
 DEPLOY_CI_GIT_LOW_SPEED_LIMIT="${DEPLOY_CI_GIT_LOW_SPEED_LIMIT:-10240}"
 DEPLOY_CI_GIT_LOW_SPEED_SECONDS="${DEPLOY_CI_GIT_LOW_SPEED_SECONDS:-30}"
-# 默认只复用当前仓库 origin（生产机配置为 GitHub 镜像）。Release 下载仅在显式传入时启用，
-# 避免镜像把大文件 302 回 GitHub 资产域后再次卡住。
-DEPLOY_ARTIFACT_URL="${DEPLOY_ARTIFACT_URL:-}"
+# 制品分支适合快速链路；生产网络较慢时回退到可续传的 Release 包。清单仍会校验精确提交 SHA。
+DEPLOY_ARTIFACT_URL="${DEPLOY_ARTIFACT_URL:-https://ghfast.top/https://github.com/sx120609/CPU-web/releases/download/deploy-artifacts/cpu-web-linux-deploy.tar.gz}"
+DEPLOY_ARTIFACT_RELEASE_TIMEOUT_SECONDS="${DEPLOY_ARTIFACT_RELEASE_TIMEOUT_SECONDS:-1200}"
+DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_LIMIT="${DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_LIMIT:-1024}"
+DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_SECONDS="${DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_SECONDS:-90}"
 DEPLOY_ARTIFACT_GIT_SOURCE="${DEPLOY_ARTIFACT_GIT_SOURCE:-refs/heads/deploy-artifacts}"
 DEPLOY_ARTIFACT_GIT_REF="${DEPLOY_ARTIFACT_GIT_REF:-refs/remotes/origin/deploy-artifacts}"
 DEPLOY_ARTIFACT_READY=0
@@ -1451,8 +1453,9 @@ prune_ci_artifact_cache() {
     fi
     rm -rf "${cache_root:?}/$name" || warn "无法清理旧的 CI 制品缓存：$cache_root/$name"
   done < <(ls -1t "$cache_root" 2>/dev/null)
-  # 中断的下载会留下 .incoming-*；下载每次重试都会重建该目录，一天未更新的已不在使用。
+  # 中断的下载会留下临时目录和可续传包；一天未更新的文件已不在使用。
   find "$cache_root" -mindepth 1 -maxdepth 1 -type d -name '.incoming-*' -mmin +1440 -exec rm -rf {} + 2>/dev/null || true
+  find "$cache_root" -mindepth 1 -maxdepth 1 \( -type f -o -type l \) -name '.download-*.tar.gz.part' -mmin +1440 -delete 2>/dev/null || true
 }
 
 verify_ci_artifact_directory() {
@@ -1498,9 +1501,51 @@ fetch_ci_artifact_transport() {
   return "$fetch_status"
 }
 
+fetch_ci_artifact_release_transport() {
+  local commit="$1"
+  local attempt="$2"
+  local destination="$3"
+  local separator='?' release_status=0
+  local -a resume_args=()
+  [ ! -L "$destination" ] || { warn "Refusing symlinked CI release download destination"; return 1; }
+  if [ -e "$destination" ] && [ ! -f "$destination" ]; then
+    warn "CI release download destination is not a regular file"
+    return 1
+  fi
+  [[ "$DEPLOY_ARTIFACT_URL" == *\?* ]] && separator='&'
+  [ -s "$destination" ] && resume_args=(--continue-at -)
+  log "Fetching resumable CI release artifact (attempt $attempt, timeout ${DEPLOY_ARTIFACT_RELEASE_TIMEOUT_SECONDS}s)"
+  if timeout --signal=TERM --kill-after=5s "${DEPLOY_ARTIFACT_RELEASE_TIMEOUT_SECONDS}s" \
+    curl --fail --location \
+      --connect-timeout 15 \
+      --retry 3 \
+      --retry-all-errors \
+      --retry-delay 3 \
+      --speed-limit "$DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_LIMIT" \
+      --speed-time "$DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_SECONDS" \
+      --progress-bar \
+      -H 'Cache-Control: no-cache' \
+      "${resume_args[@]}" \
+      "${DEPLOY_ARTIFACT_URL}${separator}commit=$commit" \
+      -o "$destination"; then
+    return 0
+  else
+    release_status=$?
+  fi
+  if [ "$release_status" -eq 124 ] || [ "$release_status" -eq 137 ]; then
+    warn "CI release artifact fetch timed out after ${DEPLOY_ARTIFACT_RELEASE_TIMEOUT_SECONDS}s; partial download kept for resume"
+  elif [ "$release_status" -eq 33 ]; then
+    warn "CI release artifact no longer accepts the saved byte range; restarting on the next attempt"
+    rm -f "$destination"
+  else
+    warn "CI release artifact fetch failed (exit $release_status); partial download kept for resume"
+  fi
+  return "$release_status"
+}
+
 download_ci_artifact() {
   local commit="$1"
-  local cache_root target_dir incoming_dir extract_dir bundle_url deadline attempt=1 transport_ready=0
+  local cache_root target_dir incoming_dir extract_dir release_download deadline attempt=1 transport_ready=0
   [[ "$commit" =~ ^[0-9a-fA-F]{40}$ ]] || return 1
   commit="${commit,,}"
   command -v tar >/dev/null 2>&1 || return 1
@@ -1508,14 +1553,24 @@ download_ci_artifact() {
   [[ "$DEPLOY_CI_FETCH_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]] || { warn "DEPLOY_CI_FETCH_TIMEOUT_SECONDS must be a positive integer"; return 1; }
   [[ "$DEPLOY_CI_GIT_LOW_SPEED_LIMIT" =~ ^[1-9][0-9]*$ ]] || { warn "DEPLOY_CI_GIT_LOW_SPEED_LIMIT must be a positive integer"; return 1; }
   [[ "$DEPLOY_CI_GIT_LOW_SPEED_SECONDS" =~ ^[1-9][0-9]*$ ]] || { warn "DEPLOY_CI_GIT_LOW_SPEED_SECONDS must be a positive integer"; return 1; }
+  [[ "$DEPLOY_ARTIFACT_RELEASE_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]] || { warn "DEPLOY_ARTIFACT_RELEASE_TIMEOUT_SECONDS must be a positive integer"; return 1; }
+  [[ "$DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_LIMIT" =~ ^[1-9][0-9]*$ ]] || { warn "DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_LIMIT must be a positive integer"; return 1; }
+  [[ "$DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_SECONDS" =~ ^[1-9][0-9]*$ ]] || { warn "DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_SECONDS must be a positive integer"; return 1; }
   cache_root="$(artifact_cache_root)" || return 1
   target_dir="$cache_root/$commit"
   incoming_dir="$cache_root/.incoming-$commit-$$"
   extract_dir="$incoming_dir/extracted"
+  release_download="$cache_root/.download-$commit.tar.gz.part"
   case "$target_dir" in "$cache_root/"*) ;; *) return 1 ;; esac
   case "$incoming_dir" in "$cache_root/"*) ;; *) return 1 ;; esac
+  case "$release_download" in "$cache_root/"*) ;; *) return 1 ;; esac
 
   mkdir -p "$cache_root"
+  [ ! -L "$release_download" ] || rm -f "$release_download"
+  if [ -e "$release_download" ] && [ ! -f "$release_download" ]; then
+    warn "CI release download cache path is not a regular file: $release_download"
+    return 1
+  fi
   if [ -d "$target_dir" ] && verify_ci_artifact_directory "$commit" "$target_dir" >/dev/null 2>&1; then
     prune_ci_artifact_cache "$cache_root" "$commit"
     DEPLOY_ARTIFACT_DIR="$target_dir"
@@ -1529,7 +1584,6 @@ download_ci_artifact() {
   while [ "$SECONDS" -le "$deadline" ]; do
     rm -rf "$incoming_dir"
     mkdir -p "$extract_dir"
-    bundle_url="${DEPLOY_ARTIFACT_URL:+${DEPLOY_ARTIFACT_URL}?commit=$commit&attempt=$attempt}"
     transport_ready=0
     if fetch_ci_artifact_transport "$attempt"; then
       if git show "$DEPLOY_ARTIFACT_GIT_REF:cpu-web-linux-deploy.tar.gz" \
@@ -1539,18 +1593,13 @@ download_ci_artifact() {
         warn "CI artifact transport does not contain the expected bundle"
       fi
     fi
-    if [ "$transport_ready" != "1" ] && [ -n "$bundle_url" ] && command -v curl >/dev/null 2>&1; then
-      log "Fetching CI artifact from the release transport (attempt $attempt)"
-      if curl -fsSL \
-        --connect-timeout 15 \
-        --max-time 60 \
-        --retry 1 \
-        --retry-delay 2 \
-        --speed-limit 10240 \
-        --speed-time 20 \
-        -H 'Cache-Control: no-cache' \
-        "$bundle_url" \
-        -o "$incoming_dir/bundle.tar.gz"; then
+    if [ "$transport_ready" != "1" ] && [ -n "$DEPLOY_ARTIFACT_URL" ] && command -v curl >/dev/null 2>&1; then
+      if [ -f "$release_download" ] && validate_bundle_archive "$release_download" >/dev/null 2>&1; then
+        log "Using completed resumable CI release download"
+        cp "$release_download" "$incoming_dir/bundle.tar.gz"
+        transport_ready=1
+      elif fetch_ci_artifact_release_transport "$commit" "$attempt" "$release_download"; then
+        cp "$release_download" "$incoming_dir/bundle.tar.gz"
         transport_ready=1
       else
         warn "CI artifact release transport fetch failed"
@@ -1562,6 +1611,7 @@ download_ci_artifact() {
       && verify_ci_artifact_directory "$commit" "$extract_dir"; then
         mv "$extract_dir" "$target_dir"
         rm -rf "$incoming_dir"
+        rm -f "$release_download"
         prune_ci_artifact_cache "$cache_root" "$commit"
         DEPLOY_ARTIFACT_DIR="$target_dir"
         DEPLOY_ARTIFACT_READY=1
@@ -1569,6 +1619,7 @@ download_ci_artifact() {
         return 0
       fi
       warn "Downloaded CI artifact failed validation for ${commit:0:12}"
+      rm -f "$release_download"
     fi
     if [ "$SECONDS" -le "$deadline" ]; then
       warn "CI artifact for ${commit:0:12} is not ready; retrying in ${DEPLOY_CI_POLL_SECONDS}s"

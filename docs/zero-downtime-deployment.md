@@ -33,6 +33,9 @@
 | `DEPLOY_DRAIN_SECONDS` | 每阶段默认等 120 秒；超时保留实例，而非强制关闭连接 |
 | `DEPLOY_CI_FETCH_TIMEOUT_SECONDS` | 单次制品分支拉取默认最多 90 秒；超时终止完整 Git 进程组并重试，不再永久占用部署锁 |
 | `DEPLOY_CI_GIT_LOW_SPEED_LIMIT` / `DEPLOY_CI_GIT_LOW_SPEED_SECONDS` | Git HTTP 连续 30 秒低于 10 KiB/s 时中止本次拉取，并进入受限重试 |
+| `DEPLOY_ARTIFACT_URL` | 制品分支拉取失败后的 Release 备用地址；默认使用已验证可达的 GitHub 镜像 Release |
+| `DEPLOY_ARTIFACT_RELEASE_TIMEOUT_SECONDS` | Release 单次下载总时限，默认 1200 秒；下载文件保留并在重试或下次部署时续传 |
+| `DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_LIMIT` / `DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_SECONDS` | Release 连续 90 秒低于 1 KiB/s 才判定停滞；正常慢速下载不会被误杀，并显示实时进度 |
 | `ADMIN_DEPLOY_TIMEOUT_SECONDS` | 后台部署 runner 默认最多运行 1800 秒；超时先终止部署进程组，10 秒后仍未退出则强制结束并释放锁 |
 
 默认在站点配置和其所在目录下的绝对路径 include 中寻找唯一的主站代理文件。间接 upstream、多个匹配文件、外部配置或不明确的匹配会停止更新，需明确指定 `DEPLOY_NGINX_CONFIG`。检测到配置被其他操作修改时不覆盖。不要同时通过宝塔或另一个工具修改同一代理配置。
