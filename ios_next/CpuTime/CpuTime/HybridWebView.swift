@@ -75,6 +75,20 @@ struct NativeAssistantAction: Codable, Sendable, Identifiable {
     let url: String
     let icon: String
     let requireLogin: Bool
+    var owner: String = ""
+
+    private enum CodingKeys: String, CodingKey { case id, label, description, url, icon, requireLogin, owner }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id)
+        label = try values.decode(String.self, forKey: .label)
+        description = try values.decode(String.self, forKey: .description)
+        url = try values.decode(String.self, forKey: .url)
+        icon = try values.decode(String.self, forKey: .icon)
+        requireLogin = try values.decode(Bool.self, forKey: .requireLogin)
+        owner = try values.decodeIfPresent(String.self, forKey: .owner) ?? ""
+    }
 
     var identity: String { id }
 }
@@ -338,6 +352,7 @@ final class HybridWebViewStore: NSObject, ObservableObject, WKScriptMessageHandl
     /// happens to render it. Keeping the transport task here prevents a route
     /// transition or SwiftUI sheet rebuild from tearing down an answer.
     private var assistantKeepAliveTask: Task<NativeAssistantReply, Error>?
+    private var assistantTaskID = UUID()
     private let pathMonitor = NWPathMonitor()
     private let pathMonitorQueue = DispatchQueue(label: "cn.cputime.ios.network-monitor")
 
@@ -614,7 +629,9 @@ final class HybridWebViewStore: NSObject, ObservableObject, WKScriptMessageHandl
             ready: payload["ready"] as? Bool ?? true,
             canAccessAdmin: payload["canAccessAdmin"] as? Bool ?? false
         )
+        let accountChanged = authState != state
         authState = state
+        if accountChanged { assistantModel.accountDidChange(using: self) }
         isLoggedIn = state.authenticated
         canAccessAdmin = state.canAccessAdmin
         return state
@@ -746,6 +763,8 @@ final class HybridWebViewStore: NSObject, ObservableObject, WKScriptMessageHandl
         if let existing = assistantKeepAliveTask {
             return try await existing.value
         }
+        let taskID = UUID()
+        assistantTaskID = taskID
         let task = Task { @MainActor [weak self] in
             guard let self else { throw NativeAssistantError.unavailable }
             let cookies = await self.assistantCookies()
@@ -766,7 +785,7 @@ final class HybridWebViewStore: NSObject, ObservableObject, WKScriptMessageHandl
             )
         }
         assistantKeepAliveTask = task
-        defer { assistantKeepAliveTask = nil }
+        defer { if assistantTaskID == taskID { assistantKeepAliveTask = nil } }
         return try await task.value
     }
 
@@ -775,7 +794,10 @@ final class HybridWebViewStore: NSObject, ObservableObject, WKScriptMessageHandl
         return await withCheckedContinuation { continuation in
             webView.configuration.websiteDataStore.httpCookieStore.getAllCookies { cookies in
                 let filtered = cookies.filter { cookie in
-                    cookie.domain.lowercased().contains(IOSNextWebConfiguration.appHost)
+                    let domain = cookie.domain.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "."))
+                    let host = IOSNextWebConfiguration.appHost.lowercased()
+                    return (host == domain || host.hasSuffix("." + domain))
+                        && (cookie.expiresDate.map { $0 > Date() } ?? true)
                 }
                 continuation.resume(returning: filtered)
             }
@@ -794,6 +816,7 @@ final class HybridWebViewStore: NSObject, ObservableObject, WKScriptMessageHandl
         }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        request.timeoutInterval = 90
         request.httpShouldHandleCookies = false
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
@@ -827,47 +850,30 @@ final class HybridWebViewStore: NSObject, ObservableObject, WKScriptMessageHandl
             throw NativeAssistantError.requestFailed("拾间 AI 暂时不可用，请重试。")
         }
 
-        var event = "message"
-        var dataLines: [String] = []
-        var completed: NativeAssistantReply?
-        func consumeEvent() throws {
-            guard !dataLines.isEmpty else {
-                event = "message"
-                return
-            }
-            let data = Data(dataLines.joined(separator: "\n").utf8)
-            guard let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                throw NativeAssistantError.invalidResponse
-            }
-            switch event {
+        guard http.value(forHTTPHeaderField: "Content-Type")?.lowercased().contains("text/event-stream") == true else {
+            throw NativeAssistantError.invalidResponse
+        }
+        var decoder = AssistantEventDecoder()
+        for try await byte in bytes {
+            try Task.checkCancellation()
+            guard let event = try decoder.append(byte) else { continue }
+            switch event.name {
             case "delta":
-                if let delta = payload["delta"] as? String { onDelta(delta) }
+                let payload = try JSONSerialization.jsonObject(with: event.data) as? [String: Any]
+                if let delta = payload?["delta"] as? String { onDelta(delta) }
             case "status", "heartbeat":
-                let elapsed = (payload["elapsedMs"] as? NSNumber)?.intValue ?? 0
+                let payload = try JSONSerialization.jsonObject(with: event.data) as? [String: Any]
+                let elapsed = (payload?["elapsedMs"] as? NSNumber)?.intValue ?? 0
                 onStatus(elapsed >= 5_000 ? "仍在生成，已等待 \(elapsed / 1_000) 秒…" : "正在生成回答…")
             case "done":
-                completed = try JSONDecoder().decode(NativeAssistantReply.self, from: data)
+                return try JSONDecoder().decode(NativeAssistantReply.self, from: event.data)
             case "error":
-                throw NativeAssistantError.requestFailed(payload["message"] as? String ?? "拾间 AI 暂时不可用，请重试。")
-            default:
-                break
-            }
-            event = "message"
-            dataLines.removeAll(keepingCapacity: true)
-        }
-
-        for try await line in bytes.lines {
-            if line.isEmpty {
-                try consumeEvent()
-            } else if line.hasPrefix("event:") {
-                event = String(line.dropFirst(6)).trimmingCharacters(in: .whitespaces)
-            } else if line.hasPrefix("data:") {
-                dataLines.append(String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces))
+                let payload = try JSONSerialization.jsonObject(with: event.data) as? [String: Any]
+                throw NativeAssistantError.requestFailed(payload?["message"] as? String ?? "拾间 AI 暂时不可用，请重试。")
+            default: break
             }
         }
-        try consumeEvent()
-        guard let completed else { throw NativeAssistantError.invalidResponse }
-        return completed
+        throw NativeAssistantError.requestFailed("连接已中断，回答未完成，请重试。")
     }
 
     private func nativeAssistantStreamViaWebView(
@@ -1314,7 +1320,9 @@ final class HybridWebViewStore: NSObject, ObservableObject, WKScriptMessageHandl
             onRoute?(path, source)
         case "authChanged":
             let auth = Self.nativeAuthState(from: body)
+            let accountChanged = authState != auth
             authState = auth
+            if accountChanged { assistantModel.accountDidChange(using: self) }
             isLoggedIn = auth.authenticated
             canAccessAdmin = auth.canAccessAdmin
             if auth.ready && !auth.authenticated {
