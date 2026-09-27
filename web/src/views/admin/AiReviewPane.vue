@@ -279,6 +279,16 @@
     </section>
 
     <section class="settings-card" :class="{ 'is-config-disabled': Boolean(configLoadError) }" v-loading="loadingConfig">
+      <h3 class="section-title">药苑之声 · 歌曲审核</h3>
+      <p class="section-desc">投稿始终先保存，AI异步给出选曲建议，风险投稿会提示用户“大概率不会被接受”；有建议时通过主站通知用户；用户二次确认后才进入待排期，24小时未确认自动撤回。存量未播放歌曲自动排队，也可在歌曲管理中批量重审；用户也可直接撤回投稿。</p>
+      <label class="ai-row"><span class="ai-label">启用歌曲审核</span><el-switch v-model="form.songReviewEnabled" inline-prompt active-text="开" inactive-text="关" /></label>
+      <label class="ai-row"><span class="ai-label">备用模型</span><el-input v-model="form.songReviewFallbackModels" maxlength="400" placeholder="逗号分隔；主模型失败后依次尝试" /></label>
+      <label class="ai-row"><span class="ai-label">选曲规则</span><el-input v-model="form.songReviewRules" type="textarea" :rows="4" maxlength="6000" show-word-limit /></label>
+      <p class="desc">服务及模型在上方“歌曲审核”场景单独配置。AI核对歌词和公开来源；证据不足时请投稿人阅读建议并确认；调用失败只重试，不启动撤回倒计时。修改规则后原审核结果需重新确认。</p>
+      <el-button type="primary" :loading="saving" :disabled="saving || Boolean(configLoadError)" @click="saveConfig">保存歌曲审核配置</el-button>
+    </section>
+
+    <section class="settings-card" :class="{ 'is-config-disabled': Boolean(configLoadError) }" v-loading="loadingConfig">
       <div class="section-head">
         <div>
           <h3 class="section-title">文字审核</h3>
@@ -664,6 +674,7 @@
           <el-option label="回复" value="reply" />
           <el-option label="编辑相似度" value="topic-edit" />
           <el-option label="智慧发帖" value="smart-post" />
+          <el-option label="歌曲审核" value="song-review" />
           <el-option label="QQ群广告" value="qqbot-group-ad" />
           <el-option label="图片" value="image" />
           <el-option label="视频" value="video" />
@@ -764,6 +775,7 @@ const videoFilters = reactive<{ status: "" | "pending" | "manual_review" | "reje
 const modelAssignments = [
   { key: "assistantModel", serviceKey: "assistantServiceId", label: "拾间 AI", description: "站内问答与校园服务咨询" },
   { key: "smartPostModel", serviceKey: "smartPostServiceId", label: "智慧发帖", description: "文字与多附件生成可编辑帖子草稿" },
+  { key: "songReviewModel", serviceKey: "songReviewServiceId", label: "药苑之声歌曲审核", description: "语种、曲风、录音版本与选曲规则审核" },
   { key: "aiReviewModel", serviceKey: "aiReviewServiceId", label: "文字审核", description: "帖子、回复与编辑相似度" },
   { key: "qqGroupAdReviewModel", serviceKey: "qqGroupAdReviewServiceId", label: "QQ群广告过滤", description: "群消息广告与引流识别" },
   { key: "imageReviewModel", serviceKey: "imageReviewServiceId", label: "图片审核", description: "论坛图片安全审核" },
@@ -773,6 +785,7 @@ const serviceAssignments = [
   { key: "assistantServiceId", scene: "assistant", label: "拾间 AI" },
   { key: "learningAssistantServiceId", scene: "learning-assistant", label: "网课解题" },
   { key: "smartPostServiceId", scene: "smart-post", label: "智慧发帖" },
+  { key: "songReviewServiceId", scene: "song-review", label: "歌曲审核" },
   { key: "aiReviewServiceId", scene: "text-review", label: "文字审核" },
   { key: "qqGroupAdReviewServiceId", scene: "qq-group-ad", label: "QQ群广告过滤" },
   { key: "imageReviewServiceId", scene: "image-review", label: "图片审核" },
@@ -832,6 +845,7 @@ const form = reactive<SiteConfig>({
     assistant: [],
     "learning-assistant": [],
     "smart-post": [],
+    "song-review": [],
     "text-review": [],
     "qq-group-ad": [],
     "image-review": [],
@@ -840,6 +854,11 @@ const form = reactive<SiteConfig>({
   assistantServiceId: "default-main",
   learningAssistantServiceId: "default-main",
   smartPostServiceId: "default-main",
+  songReviewServiceId: "default-main",
+  songReviewEnabled: false,
+  songReviewModel: "deepseek-v4-flash",
+  songReviewFallbackModels: "",
+  songReviewRules: "仅支持中文歌曲，包括粤语、闽南语等。禁止DJ、rap、喊麦、现场live版、含有违规内容、政治敏感以及演唱歌手舆论较大的歌曲。",
   smartPostEnabled: true,
   smartPostModel: "gpt-5.6-sol",
   smartPostFallbackModels: "",
@@ -999,6 +1018,7 @@ function ensureAiServices() {
       assistant: [],
       "learning-assistant": [],
       "smart-post": [],
+      "song-review": [],
       "text-review": [],
       "qq-group-ad": [],
       "image-review": [],
@@ -1301,6 +1321,11 @@ async function saveConfig() {
       assistantServiceId: assistantService.id,
       learningAssistantServiceId: learningAssistantService.id,
       smartPostServiceId: smartPostService.id,
+      songReviewServiceId: form.songReviewServiceId,
+      songReviewEnabled: form.songReviewEnabled,
+      songReviewModel: form.songReviewModel,
+      songReviewFallbackModels: form.songReviewFallbackModels,
+      songReviewRules: form.songReviewRules,
       smartPostEnabled: form.smartPostEnabled,
       smartPostModel: form.smartPostModel,
       smartPostFallbackModels: form.smartPostFallbackModels,

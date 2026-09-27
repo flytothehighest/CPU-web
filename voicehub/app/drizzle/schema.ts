@@ -68,6 +68,23 @@ export const songs = pgTable('Song', {
   semesterIdx: index('Song_semester_idx').on(t.semester),
 }));
 
+// 歌曲审核与播放元数据绑定，编辑歌曲后必须重新审核。
+export const songReviews = pgTable('song_reviews', {
+  songId: integer('song_id').primaryKey().references(() => songs.id, { onDelete: 'cascade' }),
+  status: text('status').notNull().default('pending'),
+  fingerprint: text('fingerprint').notNull(),
+  policyVersion: text('policy_version').notNull(),
+  reason: text('reason').notNull().default('等待审核'),
+  model: text('model').notNull().default(''),
+  sources: text('sources').notNull().default('[]'),
+  attempts: integer('attempts').notNull().default(0),
+  confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+  notifiedAt: timestamp('notified_at', { withTimezone: true }),
+  notificationKey: text('notification_key'),
+  attemptId: uuid('attempt_id'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 // 投票表
 export const votes = pgTable('Vote', {
   id: serial('id').primaryKey(),

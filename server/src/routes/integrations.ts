@@ -1,10 +1,14 @@
 import { timingSafeEqual } from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
+import type { Prisma } from "@prisma/client";
 import { config } from "../config";
 import { validate } from "../middleware/validate";
 import { prisma } from "../prisma";
 import { Errors, ok } from "../utils/response";
+
+import { getSongReviewConfig, reviewSong } from "../services/songAiReview";
+import { songReviewInputSchema } from "../services/songReviewPolicy";
 
 export const integrationsRouter = Router();
 
@@ -15,6 +19,7 @@ const voiceHubNotificationSchema = z.object({
   type: z.string().trim().min(1).max(80),
   songId: z.number().int().positive().optional(),
   level: z.enum(["strong", "normal", "weak"]).optional(),
+  deliveryKey: z.string().regex(/^[a-f0-9]{64}$/).optional(),
 });
 
 const voiceHubBatchSchema = z.object({
@@ -46,9 +51,10 @@ integrationsRouter.post(
       const validUserIds = new Set(users.map((user) => user.id));
       const deliverable = input.filter((item) => validUserIds.has(item.userId));
 
-      const result = deliverable.length
-        ? await prisma.notification.createMany({
-            data: deliverable.map((item) => ({
+      let count = 0;
+      const plainData: Prisma.NotificationCreateManyInput[] = [];
+      for (const item of deliverable) {
+        const data = {
               userId: item.userId,
               category: "service-tool",
               level: item.level ?? "normal",
@@ -58,19 +64,48 @@ integrationsRouter.post(
                 type: item.type,
                 toolCode: "voicehub",
                 ...(item.songId ? { voiceHubSongId: item.songId } : {}),
+                ...(item.deliveryKey ? { deliveryKey: item.deliveryKey } : {}),
               }),
-              link: "/voicehub/",
+              link: item.type === "SONG_REVIEW_ADVICE" && item.songId ? `/voicehub/?reviewSong=${item.songId}` : "/voicehub/",
               source: "药苑之声",
-            })),
-          })
-        : { count: 0 };
+        };
+        if (item.deliveryKey) {
+          await prisma.$transaction(async tx => {
+            // Cross-process idempotency: a retried VoiceHub outbox delivery must not notify twice.
+            await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${item.deliveryKey}, 0))`;
+            const existing = await tx.notification.findFirst({ where: { userId: item.userId, source: "药苑之声", payload: { contains: `"deliveryKey":"${item.deliveryKey}"` } }, select: { id: true } });
+            if (!existing) await tx.notification.create({ data });
+          });
+        } else {
+          plainData.push(data);
+        }
+        count++;
+      }
+      if (plainData.length) await prisma.notification.createMany({ data: plainData });
 
       ok(res, {
-        count: result.count,
-        skipped: input.length - result.count,
+        count,
+        skipped: input.length - count,
       });
     } catch (error) {
       next(error);
     }
   },
 );
+
+
+integrationsRouter.get("/voicehub/song-review/config", (req, res, next) => {
+  try {
+    if (!hasValidVoiceHubSecret(String(req.header("x-voicehub-integration-secret") || ""))) throw Errors.unauthorized("VoiceHub integration authentication failed");
+    ok(res, getSongReviewConfig());
+  } catch (error) { next(error); }
+});
+
+integrationsRouter.post("/voicehub/song-review", async (req, res, next) => {
+  try {
+    if (!hasValidVoiceHubSecret(String(req.header("x-voicehub-integration-secret") || ""))) throw Errors.unauthorized("VoiceHub integration authentication failed");
+    if (!getSongReviewConfig().enabled) throw Errors.forbidden("歌曲审核未启用");
+    const input = songReviewInputSchema.parse(req.body);
+    ok(res, await reviewSong(input));
+  } catch (error) { next(error); }
+});

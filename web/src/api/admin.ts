@@ -12,7 +12,7 @@ export type AiServiceConfig = {
   assistantContextMaxCharsPerMessage: number;
 };
 
-export type AiServiceScene = "assistant" | "learning-assistant" | "smart-post" | "text-review" | "qq-group-ad" | "image-review" | "video-review";
+export type AiServiceScene = "assistant" | "learning-assistant" | "smart-post" | "song-review" | "text-review" | "qq-group-ad" | "image-review" | "video-review";
 export type AiServiceFallbackRoute = {
   serviceId: string;
   model: string;
@@ -37,6 +37,11 @@ export type SiteConfig = {
   assistantServiceId: string;
   learningAssistantServiceId: string;
   smartPostServiceId: string;
+  songReviewEnabled: boolean;
+  songReviewServiceId: string;
+  songReviewModel: string;
+  songReviewFallbackModels: string;
+  songReviewRules: string;
   smartPostEnabled: boolean;
   smartPostModel: string;
   smartPostFallbackModels: string;
@@ -1263,6 +1268,11 @@ export const adminApi = {
     assistantServiceId?: string;
     learningAssistantServiceId?: string;
     smartPostServiceId?: string;
+    songReviewEnabled?: boolean;
+    songReviewServiceId?: string;
+    songReviewModel?: string;
+    songReviewFallbackModels?: string;
+    songReviewRules?: string;
     smartPostEnabled?: boolean;
     smartPostModel?: string;
     smartPostFallbackModels?: string;

@@ -1,3 +1,4 @@
+import { getSongReviewConfig, requireSchedulableSongs } from '~~/server/services/songReviewService'
 import { db } from '~/drizzle/db'
 import { playTimes, schedules, songs, songReplayRequests } from '~/drizzle/schema'
 import { and, eq, gte, lte, inArray } from 'drizzle-orm'
@@ -65,7 +66,9 @@ export default defineEventHandler(async (event) => {
     }> = []
 
     // 开始事务
+    const reviewConfig = await getSongReviewConfig()
     await db.transaction(async (tx) => {
+      await requireSchedulableSongs(tx, songIds, reviewConfig)
       // 1. 构建查询条件：指定日期 + (可选)指定时段
       const whereConditions = [
         gte(schedules.playDate, startOfDay),
@@ -174,7 +177,7 @@ export default defineEventHandler(async (event) => {
     })
 
     throw createError({
-      statusCode: 500,
+      statusCode: error.statusCode || 500,
       message: error.message || '发布排期失败'
     })
   }

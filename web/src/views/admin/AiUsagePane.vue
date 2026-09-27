@@ -97,6 +97,7 @@ import { adminApi, type AiReviewLogRow } from "@/api/admin";
 import { fmtDate } from "@/utils/format";
 
 const sceneOptions = [
+  { label: "药苑之声歌曲审核", value: "song-review" },
   { label: "拾间 AI 对话", value: "campus-assistant" },
   { label: "学习通 AI 解题", value: "learning-answer" },
   { label: "帖子审核", value: "topic" },

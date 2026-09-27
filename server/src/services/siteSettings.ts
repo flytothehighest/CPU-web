@@ -69,6 +69,7 @@ export const AI_SERVICE_SCENES = [
   "learning-assistant",
   "smart-post",
   "text-review",
+  "song-review",
   "qq-group-ad",
   "image-review",
   "video-review",
@@ -93,6 +94,11 @@ export type SiteConfig = {
   assistantServiceId: string;
   learningAssistantServiceId: string;
   smartPostServiceId: string;
+  songReviewServiceId: string;
+  songReviewEnabled: boolean;
+  songReviewModel: string;
+  songReviewFallbackModels: string;
+  songReviewRules: string;
   smartPostEnabled: boolean;
   smartPostModel: string;
   smartPostFallbackModels: string;
@@ -336,7 +342,7 @@ function normalizeAiServiceFallbacks(
   input: unknown,
   services: AiServiceConfig[],
   primaryIds: Partial<Pick<SiteConfig,
-    "assistantServiceId" | "learningAssistantServiceId" | "smartPostServiceId" | "aiReviewServiceId" | "qqGroupAdReviewServiceId" | "imageReviewServiceId" | "videoReviewServiceId"
+    "assistantServiceId" | "learningAssistantServiceId" | "smartPostServiceId" | "songReviewServiceId" | "aiReviewServiceId" | "qqGroupAdReviewServiceId" | "imageReviewServiceId" | "videoReviewServiceId"
   >>,
 ): AiServiceFallbackMap {
   const parsed = typeof input === "string" ? parseJsonValue<unknown>(input, {}) : input;
@@ -452,13 +458,14 @@ function legacyFieldForScene(source: AiServiceLegacySource, scene: AiServiceScen
 }
 
 function sceneServiceId(input: AiServiceLegacySource & Partial<Pick<SiteConfig,
-  "assistantServiceId" | "learningAssistantServiceId" | "smartPostServiceId" | "aiReviewServiceId" | "qqGroupAdReviewServiceId" | "imageReviewServiceId" | "videoReviewServiceId"
+  "assistantServiceId" | "learningAssistantServiceId" | "smartPostServiceId" | "songReviewServiceId" | "aiReviewServiceId" | "qqGroupAdReviewServiceId" | "imageReviewServiceId" | "videoReviewServiceId"
 >>, scene: AiServiceScene) {
   if (scene === "assistant") return String(input.assistantServiceId || input.aiReviewServiceId || "").trim();
   if (scene === "learning-assistant") {
     return String(input.learningAssistantServiceId || input.assistantServiceId || input.aiReviewServiceId || "").trim();
   }
   if (scene === "smart-post") return String(input.smartPostServiceId || input.assistantServiceId || "").trim();
+  if (scene === "song-review") return String(input.songReviewServiceId || "").trim();
   if (scene === "text-review") return String(input.aiReviewServiceId || "").trim();
   if (scene === "qq-group-ad") return String(input.qqGroupAdReviewServiceId || "").trim();
   if (scene === "image-review") return String(input.imageReviewServiceId || "").trim();
@@ -470,6 +477,7 @@ function sceneLabel(scene: AiServiceScene) {
   if (scene === "assistant") return "拾间 AI 服务";
   if (scene === "learning-assistant") return "网课解题服务";
   if (scene === "smart-post") return "智慧发帖服务";
+  if (scene === "song-review") return "歌曲审核服务";
   if (scene === "text-review") return "文字审核服务";
   if (scene === "qq-group-ad") return "QQ群广告服务";
   if (scene === "image-review") return "图片审核服务";
@@ -479,7 +487,7 @@ function sceneLabel(scene: AiServiceScene) {
 
 function findSceneService(
   input: AiServiceLegacySource & Partial<Pick<SiteConfig,
-    "aiServices" | "assistantServiceId" | "learningAssistantServiceId" | "smartPostServiceId" | "aiReviewServiceId" | "qqGroupAdReviewServiceId" | "imageReviewServiceId" | "videoReviewServiceId"
+    "aiServices" | "assistantServiceId" | "learningAssistantServiceId" | "smartPostServiceId" | "songReviewServiceId" | "aiReviewServiceId" | "qqGroupAdReviewServiceId" | "imageReviewServiceId" | "videoReviewServiceId"
   >>,
   scene: AiServiceScene,
 ) {
@@ -499,7 +507,7 @@ function findSceneService(
 
 export function resolveAiServiceForScene(
   input: AiServiceLegacySource & Partial<Pick<SiteConfig,
-    "aiServices" | "aiServiceFallbacks" | "assistantServiceId" | "learningAssistantServiceId" | "smartPostServiceId" | "aiReviewServiceId" | "qqGroupAdReviewServiceId" | "imageReviewServiceId" | "videoReviewServiceId"
+    "aiServices" | "aiServiceFallbacks" | "assistantServiceId" | "learningAssistantServiceId" | "smartPostServiceId" | "songReviewServiceId" | "aiReviewServiceId" | "qqGroupAdReviewServiceId" | "imageReviewServiceId" | "videoReviewServiceId"
   >>,
   scene: AiServiceScene,
 ) {
@@ -508,7 +516,7 @@ export function resolveAiServiceForScene(
 
 export function resolveAiServiceCandidatesForScene(
   input: AiServiceLegacySource & Partial<Pick<SiteConfig,
-    "aiServices" | "aiServiceFallbacks" | "assistantServiceId" | "learningAssistantServiceId" | "smartPostServiceId" | "aiReviewServiceId" | "qqGroupAdReviewServiceId" | "imageReviewServiceId" | "videoReviewServiceId"
+    "aiServices" | "aiServiceFallbacks" | "assistantServiceId" | "learningAssistantServiceId" | "smartPostServiceId" | "songReviewServiceId" | "aiReviewServiceId" | "qqGroupAdReviewServiceId" | "imageReviewServiceId" | "videoReviewServiceId"
   >>,
   scene: AiServiceScene,
 ) {
@@ -559,6 +567,10 @@ function applyAiServiceToLegacyFields(target: SiteConfig, scene: AiServiceScene,
   }
   if (scene === "learning-assistant") {
     target.learningAssistantServiceId = service.id;
+    return;
+  }
+  if (scene === "song-review") {
+    target.songReviewServiceId = service.id;
     return;
   }
   if (scene === "smart-post") {
@@ -673,6 +685,8 @@ const AI_SERVICES_KEY = "ai.services";
 const AI_SERVICE_FALLBACKS_KEY = "ai.serviceFallbacks";
 const ASSISTANT_SERVICE_ID_KEY = "assistant.serviceId";
 const LEARNING_ASSISTANT_SERVICE_ID_KEY = "assistant.learningServiceId";
+const SONG_REVIEW_CONFIG_KEY = "ai.songReview.config";
+export const DEFAULT_SONG_REVIEW_RULES = "仅支持中文歌曲，包括粤语、闽南语等。禁止DJ、rap、喊麦、现场live版、含有违规内容、政治敏感以及演唱歌手舆论较大的歌曲。";
 const SMART_POST_SERVICE_ID_KEY = "ai.smartPost.serviceId";
 const SMART_POST_ENABLED_KEY = "ai.smartPost.enabled";
 const SMART_POST_MODEL_KEY = "ai.smartPost.model";
@@ -999,6 +1013,11 @@ const configCache: SiteConfig = {
   assistantServiceId: "",
   learningAssistantServiceId: "",
   smartPostServiceId: "",
+  songReviewServiceId: "",
+  songReviewEnabled: false,
+  songReviewModel: "deepseek-v4-flash",
+  songReviewFallbackModels: "",
+  songReviewRules: DEFAULT_SONG_REVIEW_RULES,
   smartPostEnabled: true,
   smartPostModel: "gpt-5.6-sol",
   smartPostFallbackModels: "",
@@ -1175,6 +1194,7 @@ export async function loadFeatures(): Promise<void> {
           AI_SERVICE_FALLBACKS_KEY,
           ASSISTANT_SERVICE_ID_KEY,
           LEARNING_ASSISTANT_SERVICE_ID_KEY,
+          SONG_REVIEW_CONFIG_KEY,
           SMART_POST_SERVICE_ID_KEY,
           SMART_POST_ENABLED_KEY,
           SMART_POST_MODEL_KEY,
@@ -1262,6 +1282,15 @@ export async function loadFeatures(): Promise<void> {
     },
   });
   for (const r of rows) {
+    if (r.key === SONG_REVIEW_CONFIG_KEY) {
+      const value = parseJsonValue<Record<string, unknown>>(r.value, {});
+      configCache.songReviewEnabled = value.enabled === true;
+      configCache.songReviewServiceId = String(value.serviceId || "").slice(0, 48);
+      configCache.songReviewModel = String(value.model || "deepseek-v4-flash").slice(0, 80);
+      configCache.songReviewFallbackModels = String(value.fallbackModels || "").slice(0, 400);
+      configCache.songReviewRules = String(value.rules || DEFAULT_SONG_REVIEW_RULES).slice(0, 6000);
+      continue;
+    }
     if (r.key === SITE_ORIGIN_KEY) {
       try {
         configCache.siteOrigin = normalizeSiteOrigin(r.value);
@@ -1738,6 +1767,7 @@ export function getSiteConfig(): SiteConfig {
     ["smart-post", (service) => {
       result.smartPostServiceId = service.serviceId;
     }],
+    ["song-review", (service) => { result.songReviewServiceId = service.serviceId; }],
     ["text-review", (service) => {
       result.aiReviewServiceId = service.serviceId;
       result.aiReviewProvider = service.provider;
@@ -2366,6 +2396,7 @@ export async function setAiReviewConfig(input: Partial<SiteConfig>): Promise<Sit
   const assistantService = selectedServices.get("assistant") || aiServices[0] || DEFAULT_AI_SERVICES[0];
   const learningAssistantService = selectedServices.get("learning-assistant") || assistantService;
   const smartPostService = selectedServices.get("smart-post") || assistantService;
+  const songReviewService = selectedServices.get("song-review") || assistantService;
   const textReviewService = selectedServices.get("text-review") || assistantService;
   const qqService = selectedServices.get("qq-group-ad") || assistantService;
   const requestedPeakServiceId = String(
@@ -2387,6 +2418,7 @@ export async function setAiReviewConfig(input: Partial<SiteConfig>): Promise<Sit
       assistantServiceId: assistantService.id,
       learningAssistantServiceId: learningAssistantService.id,
       smartPostServiceId: smartPostService.id,
+      songReviewServiceId: songReviewService.id,
       aiReviewServiceId: textReviewService.id,
       qqGroupAdReviewServiceId: qqService.id,
       imageReviewServiceId: imageService.id,
@@ -2400,6 +2432,11 @@ export async function setAiReviewConfig(input: Partial<SiteConfig>): Promise<Sit
     assistantServiceId: assistantService.id,
     learningAssistantServiceId: learningAssistantService.id,
     smartPostServiceId: smartPostService.id,
+    songReviewServiceId: songReviewService.id,
+    songReviewEnabled: input.songReviewEnabled ?? configCache.songReviewEnabled,
+    songReviewModel: String(input.songReviewModel ?? configCache.songReviewModel).trim() || "deepseek-v4-flash",
+    songReviewFallbackModels: normalizeFallbackModelList(input.songReviewFallbackModels ?? configCache.songReviewFallbackModels, input.songReviewModel ?? configCache.songReviewModel),
+    songReviewRules: String(input.songReviewRules ?? configCache.songReviewRules).trim() || DEFAULT_SONG_REVIEW_RULES,
     smartPostEnabled: input.smartPostEnabled ?? configCache.smartPostEnabled,
     smartPostModel: String(input.smartPostModel ?? configCache.smartPostModel ?? "gpt-5.6-sol").trim() || "gpt-5.6-sol",
     smartPostFallbackModels: normalizeFallbackModelList(
@@ -2496,6 +2533,11 @@ export async function setAiReviewConfig(input: Partial<SiteConfig>): Promise<Sit
       where: { key: LEARNING_ASSISTANT_SERVICE_ID_KEY },
       update: { value: next.learningAssistantServiceId },
       create: { key: LEARNING_ASSISTANT_SERVICE_ID_KEY, value: next.learningAssistantServiceId },
+    }),
+    prisma.siteSetting.upsert({
+      where: { key: SONG_REVIEW_CONFIG_KEY },
+      update: { value: JSON.stringify({ enabled: next.songReviewEnabled, serviceId: next.songReviewServiceId, model: next.songReviewModel, fallbackModels: next.songReviewFallbackModels, rules: next.songReviewRules }) },
+      create: { key: SONG_REVIEW_CONFIG_KEY, value: JSON.stringify({ enabled: next.songReviewEnabled, serviceId: next.songReviewServiceId, model: next.songReviewModel, fallbackModels: next.songReviewFallbackModels, rules: next.songReviewRules }) },
     }),
     prisma.siteSetting.upsert({
       where: { key: SMART_POST_SERVICE_ID_KEY },

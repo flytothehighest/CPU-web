@@ -712,6 +712,7 @@ onUnmounted(() => {
 
 // 标签页状态
 const activeTab = ref('schedule') // 默认显示播出排期
+onMounted(() => { if (Number(router.currentRoute.value.query.reviewSong) > 0) activeTab.value = 'songs' })
 
 const tabOrder = ['schedule', 'songs', 'request']
 const activeIndex = computed(() => {
@@ -1320,7 +1321,7 @@ const handleRequest = async (songData) => {
     if (result) {
       // 显示投稿成功通知
       if (window.$showNotification) {
-        window.$showNotification(`《${songData.title} - ${songData.artist}》投稿成功！`, 'success')
+        window.$showNotification(`《${songData.title} - ${songData.artist}》投稿成功！可在“我的投稿”查看后续选曲建议和排期情况。`, 'success')
       }
 
       // 强制刷新歌曲列表

@@ -141,6 +141,13 @@
       "when": 1790357919671,
       "tag": "20260925173839_vote_unique_and_hot_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790511600000,
+      "tag": "20260927150000_add_song_reviews",
+      "breakpoints": true
     }
   ]
 }

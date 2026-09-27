@@ -1,3 +1,4 @@
+import { getSongReviewConfig, requireSchedulableSongs } from '~~/server/services/songReviewService'
 import { createError, defineEventHandler, readBody, readMultipartFormData } from 'h3'
 import { db } from '~/drizzle/db'
 import {
@@ -1108,6 +1109,7 @@ export default defineEventHandler(async (event) => {
                         }
 
                         // 动态构建排期数据，自动跳过不存在的字段
+                        if (!record.played) await requireSchedulableSongs(tx, [validSongId], await getSongReviewConfig())
                         const scheduleData = {
                           songId: validSongId,
                           playDate: new Date(record.playDate),

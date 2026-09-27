@@ -2590,6 +2590,11 @@ const siteConfigPatchSchema = z.object({
   assistantServiceId: z.string().trim().max(48).optional(),
   learningAssistantServiceId: z.string().trim().max(48).optional(),
   smartPostServiceId: z.string().trim().max(48).optional(),
+  songReviewEnabled: z.boolean().optional(),
+  songReviewServiceId: z.string().trim().max(48).optional(),
+  songReviewModel: z.string().trim().min(1).max(80).optional(),
+  songReviewFallbackModels: z.string().trim().max(400).optional(),
+  songReviewRules: z.string().trim().min(1).max(6000).optional(),
   smartPostEnabled: z.boolean().optional(),
   smartPostModel: z.string().trim().min(1).max(200).optional(),
   smartPostFallbackModels: z.string().trim().max(400).optional(),
@@ -2682,6 +2687,11 @@ adminRouter.patch("/site-config", adminOnly, validate(siteConfigPatchSchema), as
       req.body.assistantServiceId !== undefined ||
       req.body.learningAssistantServiceId !== undefined ||
       req.body.smartPostServiceId !== undefined ||
+      req.body.songReviewEnabled !== undefined ||
+      req.body.songReviewServiceId !== undefined ||
+      req.body.songReviewModel !== undefined ||
+      req.body.songReviewFallbackModels !== undefined ||
+      req.body.songReviewRules !== undefined ||
       req.body.smartPostEnabled !== undefined ||
       req.body.smartPostModel !== undefined ||
       req.body.smartPostFallbackModels !== undefined ||

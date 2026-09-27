@@ -1,3 +1,4 @@
+import { getSongReviewConfig, requireSchedulableSongs } from '~~/server/services/songReviewService'
 import { db } from '~/drizzle/db'
 import { playTimes, schedules, songs, songReplayRequests } from '~/drizzle/schema'
 import { and, desc, eq, gte, lte } from 'drizzle-orm'
@@ -82,7 +83,9 @@ export default defineEventHandler(async (event) => {
     }
 
     // 使用数据库事务确保数据一致性
+    const reviewConfig = await getSongReviewConfig()
     const result = await db.transaction(async (tx) => {
+      await requireSchedulableSongs(tx, [body.songId], reviewConfig)
       // 检查歌曲是否存在
       const songResult = await tx.select().from(songs).where(eq(songs.id, body.songId)).limit(1)
 
