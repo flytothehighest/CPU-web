@@ -1,21 +1,25 @@
 import { liveApp } from './adapters';
+import { isForumDestination } from '../../web/src/utils/nativeForumVisibility';
 
 const ROOT_TITLES: Record<string, string> = {
-  '/home': '药大拾间', '/jwxt': '教务', '/schedule': '课表', '/services': '服务', '/profile': '我的',
+  '/home': '药大拾间', '/home/services': '药大拾间', '/jwxt': '教务', '/schedule': '课表', '/services': '服务', '/profile': '我的',
 };
 
 export function readHeaderState(router: any, stores: Map<string, any>, doc: Document = document) {
   const route = router.currentRoute.value;
-  const path = route.path;
-  const authenticated = Boolean(stores.get('auth')?.isLoggedIn);
+  const auth = stores.get('auth');
+  const hidden = Boolean(auth?.forumHidden);
+  const blocked = hidden && isForumDestination(route.path);
+  const path = blocked ? '/home' : route.path;
+  const authenticated = Boolean(auth?.isLoggedIn);
   const messages = stores.get('message');
   return {
     path, title: ROOT_TITLES[path] || String(route.meta?.title || '药大拾间'),
     contentReady: doc.body?.dataset?.cpuAppReady === '1',
     visible: Boolean(doc.querySelector('.layout-root > .topbar')),
     back: !Object.prototype.hasOwnProperty.call(ROOT_TITLES, path), authenticated,
-    unread: authenticated ? Math.max(0, Number(messages?.unreadCount) || 0) : 0,
-    directUnread: authenticated ? Math.max(0, Number(messages?.directUnreadCount) || 0) : 0,
+    unread: authenticated && !hidden ? Math.max(0, Number(messages?.unreadCount) || 0) : 0,
+    directUnread: authenticated && !hidden ? Math.max(0, Number(messages?.directUnreadCount) || 0) : 0,
   };
 }
 
@@ -27,7 +31,7 @@ export function runHeaderAction(action: string, root: string, router: any, store
     else return router.push(root);
   } else if (action === 'messages') {
     return router.push(stores.get('auth')?.isLoggedIn
-      ? (stores.get('message')?.directUnreadCount ? '/messages?tab=private' : '/messages') : '/login');
+      ? (!stores.get('auth')?.forumHidden && stores.get('message')?.directUnreadCount ? '/messages?tab=private' : '/messages') : '/login');
   } else if (action === 'login') {
     return router.push({ path: '/login', query: { redirect: router.currentRoute.value.fullPath } });
   } else if (action === 'more') {

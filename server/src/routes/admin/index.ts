@@ -116,6 +116,7 @@ import {
 } from "../../services/webStaticSwitch";
 import { getCloudUsageSummary, type CloudUsageRange } from "../../services/cloudUsage";
 import { getIosClientDiagnostic, getIosClientStats, parseIosClientStatsRange } from "../../services/iosClientStats";
+import { getDesktopInstallReports, parseDesktopInstallReportRange } from "../../services/desktopInstallReports";
 import { migrateLegacyDataAvatars } from "../../services/userAvatarStorage";
 import { qqBotAdminRouter } from "./qqbot";
 import { backfillAdminDailyLoginsFromLastLogin, getChinaDayRange, listAdminDailyLoginSeries } from "../../services/adminStats";
@@ -156,6 +157,7 @@ adminRouter.use("/profile-reviews", modOrAbove, profileReviewAdminRouter);
 adminRouter.use("/account-verifications", modOrAbove, accountVerificationAdminRouter);
 const deploymentUpdateSchema = z.object({
   confirmation: z.literal("UPDATE_AND_DEPLOY"),
+  allowSchemaExpand: z.literal(true),
 });
 
 adminRouter.get("/deployment", adminOnly, async (_req, res, next) => {
@@ -175,6 +177,7 @@ adminRouter.post(
       ok(res, await startAdminDeploymentUpdate({
         operatorId: req.user!.userId,
         confirmation: req.body.confirmation,
+        allowSchemaExpand: req.body.allowSchemaExpand,
       }));
     } catch (error) {
       if (error instanceof DeploymentAlreadyRunningError) {
@@ -2355,6 +2358,14 @@ adminRouter.get("/ios-clients/diagnostics/:id", adminOnly, async (req, res, next
     const row = await getIosClientDiagnostic(String(req.params.id));
     if (!row) return next(Errors.notFound("诊断记录不存在"));
     ok(res, row);
+  } catch (e) {
+    next(e);
+  }
+});
+
+adminRouter.get("/desktop-install-reports", adminOnly, async (req, res, next) => {
+  try {
+    ok(res, await getDesktopInstallReports(parseDesktopInstallReportRange(req.query.range)));
   } catch (e) {
     next(e);
   }

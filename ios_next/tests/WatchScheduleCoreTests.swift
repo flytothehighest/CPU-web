@@ -481,3 +481,20 @@ final class WatchScheduleCoreTests: XCTestCase {
         XCTAssertEqual(finisher.pendingCount, 0)
     }
 }
+
+final class ScheduleArchiveRecoveryTests: XCTestCase {
+    func testDamagedAndOversizedArchivesAreQuarantined() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("cache.json")
+        let archive = NativeScheduleFileArchive(url: url)
+        for data in [Data("{invalid".utf8), Data(repeating: 32, count: NativeScheduleFileArchive.maximumArchiveBytes + 1)] {
+            try data.write(to: url)
+            XCTAssertNil(archive.read())
+            XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+            XCTAssertTrue(FileManager.default.fileExists(atPath: url.appendingPathExtension("invalid").path))
+            XCTAssertNil(archive.read())
+        }
+    }
+}

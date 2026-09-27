@@ -87,10 +87,10 @@
                 <img :src="image.url" :alt="image.alt" loading="lazy" />
               </button>
             </div>
-            <div v-if="message.role === 'assistant' && message.sources?.length" class="assistant-sources">
+            <div v-if="message.role === 'assistant' && visibleLinks(message.sources).length" class="assistant-sources">
               <span>参考来源</span>
               <a
-                v-for="source in message.sources"
+                v-for="source in visibleLinks(message.sources)"
                 :key="source.url"
                 :href="source.url"
                 target="_blank"
@@ -104,9 +104,9 @@
             <div v-if="message.streaming && message.content" class="assistant-stream-status">
               <i></i>{{ message.streamStatus || "正在生成回答…" }}
             </div>
-            <div v-if="message.actions?.length" class="action-list">
+            <div v-if="visibleLinks(message.actions).length" class="action-list">
               <button data-cpu-button="surface"
-                v-for="action in message.actions"
+                v-for="action in visibleLinks(message.actions)"
                 :key="action.id"
                 type="button"
                 class="action-card"
@@ -277,6 +277,7 @@ import {
   type CampusAssistantSource,
 } from "@/api/search";
 import { useAuthStore } from "@/stores/auth";
+import { isForumDestination } from "@/utils/nativeForumVisibility";
 import { mergeAssistantHistorySessions } from "@/utils/assistantHistorySync";
 import { openImageGallery } from "@/utils/imageViewer";
 import { renderMarkdown } from "@/utils/markdown";
@@ -318,6 +319,9 @@ const MAX_LOCAL_TOMBSTONES = 500;
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
+function visibleLinks<T extends { url: string }>(links?: T[]): T[] {
+  return (links || []).filter((link) => !auth.forumHidden || !isForumDestination(link.url));
+}
 const q = ref(embedded ? "" : ((route.query.q as string) ?? ""));
 const keywordInput = ref("");
 const assistantLoading = ref(false);

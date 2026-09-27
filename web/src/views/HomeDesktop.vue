@@ -16,7 +16,7 @@
             <span class="action-label-full">二手交流</span>
             <span class="action-label-short">二手</span>
           </el-button>
-          <el-button v-else type="primary" size="large" @click="$router.push('/announcements')">
+          <el-button v-else-if="!auth.forumHidden" type="primary" size="large" @click="$router.push('/announcements')">
             <el-icon><Bell /></el-icon>
             <span class="action-label-full">看校园公告</span>
             <span class="action-label-short">公告</span>
@@ -204,6 +204,7 @@ import AppIcon from "@/components/common/AppIcon.vue";
 import DormElectricDialog from "@/components/services/DormElectricDialog.vue";
 import { homeApi, type HomeSummary } from "@/api/home";
 import { forumAdsApi, type ForumAd } from "@/api/forumAds";
+import { isForumDestination } from "@/utils/nativeForumVisibility";
 import { useAuthStore } from "@/stores/auth";
 import { useSiteStore } from "@/stores/site";
 import { isNativeForumIntranetOnlyAccount, shouldHideNativeYaodaCanFly } from "@/utils/clientInfo";
@@ -223,7 +224,9 @@ const electricOpen = ref(false);
 const pinnedAds = ref<ForumAd[]>([]);
 const hotAds = ref<ForumAd[]>([]);
 const hotPreview = computed(() => (summary.value?.hotTopics ?? []).slice(0, 3));
-const visibleServices = computed(() => (summary.value?.services ?? []).filter((service) => !(
+const visibleServices = computed(() => (summary.value?.services ?? [])
+  .filter((service) => !auth.forumHidden || !isForumDestination(String(service?.url || "")))
+  .filter((service) => !(
   shouldHideNativeYaodaCanFly(auth.isLoggedIn, auth.user?.username)
   && String(service?.url || "").includes("/services/tools/yaoda-can-fly")
 )));
@@ -242,7 +245,7 @@ let adsLoadSeq = 0;
 let mounted = false;
 
 const enabledFeatureLabels = computed(() => {
-  const labels = ["公告聚合", "教务数据", "常用校园服务"];
+  const labels = auth.forumHidden ? ["教务数据", "常用校园服务"] : ["公告聚合", "教务数据", "常用校园服务"];
   if (site.features.coursereview && showForumContent.value) labels.splice(2, 0, "课程点评");
   if (site.features.market && showForumContent.value) labels.splice(labels.length - 1, 0, "二手交流");
   if (site.features.electric) labels.push("宿舍电费查询");
@@ -310,7 +313,7 @@ async function loadSummary(options: { scope?: string; fallback?: HomeSummary | n
   loading.value = !summary.value;
   homeError.value = "";
   try {
-    const next = await homeApi.summary({ suppressErrorMessage: true, cacheTtlMs: 0 });
+    const next = await homeApi.summary({ suppressErrorMessage: true, cacheTtlMs: 0 }, auth.forumHidden);
     if (seq !== loadSeq || scope !== homeCacheScope.value) return;
     summary.value = next;
     writeHomeSummaryCache(scope, next);

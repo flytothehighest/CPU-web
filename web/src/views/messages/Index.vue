@@ -11,7 +11,7 @@
         <el-button text :loading="markingAll" :disabled="markingAll" @click="readAll">全部标为已读</el-button>
       </div>
       <nav class="mobile-message-modes" aria-label="消息中心主要功能">
-        <button data-cpu-button="option"
+        <button v-if="!auth.forumHidden" data-cpu-button="option"
           type="button"
           :class="{ active: tab === 'private' }"
           :aria-current="tab === 'private' ? 'page' : undefined"
@@ -34,7 +34,7 @@
     </div>
     <nav v-if="tab !== 'private' && tab !== 'settings'" class="mobile-notice-filters" aria-label="通知分类">
       <button data-cpu-button="option"
-        v-for="item in mobileNoticeTabs"
+        v-for="item in visibleNoticeTabs"
         :key="item.name"
         type="button"
         :class="{ active: tab === item.name }"
@@ -51,7 +51,7 @@
       </el-empty>
     </div>
     <el-tabs v-else v-model="tab" class="cpu-card messages-tabs" :class="{ 'is-private': tab === 'private' }">
-      <el-tab-pane name="private" lazy>
+      <el-tab-pane v-if="!auth.forumHidden" name="private" lazy>
         <template #label>
           <span class="private-tab-label">
             私聊
@@ -63,13 +63,13 @@
       <el-tab-pane label="全部" name="all">
         <MessageList :list="filteredMessages('')" @read="onRead" @open="openNotification" />
       </el-tab-pane>
-      <el-tab-pane label="回复 / 提及" name="reply">
+      <el-tab-pane v-if="!auth.forumHidden" label="回复 / 提及" name="reply">
         <MessageList :list="filteredMessages('reply')" @read="onRead" @open="openNotification" />
       </el-tab-pane>
-      <el-tab-pane label="点赞" name="like">
+      <el-tab-pane v-if="!auth.forumHidden" label="点赞" name="like">
         <MessageList :list="filteredMessages('like')" @read="onRead" @open="openNotification" />
       </el-tab-pane>
-      <el-tab-pane label="系统 / 站务" name="system">
+      <el-tab-pane v-if="!auth.forumHidden" label="系统 / 站务" name="system">
         <MessageList :list="filteredMessages('system')" @read="onRead" @open="openNotification" />
       </el-tab-pane>
       <el-tab-pane label="小工具" name="service-tool">
@@ -226,7 +226,7 @@
                   <span>绑定 QQ</span>
                   <b>{{ qqBotProfile?.binding?.qqId || "未绑定" }}</b>
                 </div>
-                <div>
+                <div v-if="!auth.forumHidden">
                   <span>QQ 投稿</span>
                   <b>{{ qqPostingText }}</b>
                 </div>
@@ -291,8 +291,8 @@
             </template>
           </div>
           <el-divider />
-          <h4>订阅偏好</h4>
-          <div class="switches">
+          <h4 v-if="!auth.forumHidden">订阅偏好</h4>
+          <div v-if="!auth.forumHidden" class="switches">
             <label class="switch-item">
               <span>收到回复时</span>
               <el-switch v-model="settings.subscribeReply" />
@@ -423,6 +423,8 @@ const mobileNoticeTabs: Array<{ name: NoticeTab; label: string }> = [
   { name: "lost-found", label: "失物招领" },
 ];
 const tab = ref(normalizeMessageTab(route.query.tab));
+const visibleNoticeTabs = computed(() => mobileNoticeTabs.filter((item) =>
+  !auth.forumHidden || !["reply", "like", "system"].includes(item.name)));
 const list = ref<any[]>([]);
 const settings = ref<any>(null);
 const qqBotProfile = ref<QqBotProfile | null>(null);
@@ -657,7 +659,12 @@ async function readAll() {
   if (disposed || !unreadCount.value || markingAll.value) return;
   markingAll.value = true;
   try {
-    await messageApi.readAll({ suppressErrorMessage: true });
+    if (auth.forumHidden) {
+      await Promise.all(list.value.filter((notice) => !notice.readAt)
+        .map((notice) => messageApi.read(notice.id, { suppressErrorMessage: true })));
+    } else {
+      await messageApi.readAll({ suppressErrorMessage: true });
+    }
     if (disposed) return;
     list.value.forEach((n) => (n.readAt = new Date().toISOString()));
     ElMessage.success("已全部已读");
@@ -1110,6 +1117,7 @@ function formatNoticeTime(value?: string) {
 
 function normalizeMessageTab(value: unknown) {
   const tabName = typeof value === "string" ? value : "all";
+  if (auth.forumHidden && ["private", "reply", "like", "system"].includes(tabName)) return "all";
   return messageTabs.has(tabName) ? tabName : "all";
 }
 

@@ -20,14 +20,27 @@ if (rawArgs[0] !== WORKER_FLAG) {
   process.exit(0);
 }
 
-const [root, statusDir, id, requestedAt, rawOperatorId] = rawArgs.slice(1);
+const [root, statusDir, id, requestedAt, rawOperatorId, rawAllowSchemaExpand] = rawArgs.slice(1);
 const operatorId = Number(rawOperatorId);
+const allowSchemaExpand = rawAllowSchemaExpand === "1" ? "1" : "0";
 const startedAt = new Date().toISOString();
 const statusPath = path.join(statusDir || "", "status.json");
 const lockPath = path.join(statusDir || "", "deploy.lock");
 const logPath = path.join(statusDir || "", "deploy.log");
+const deployTimeoutSeconds = (() => {
+  const parsed = Number(process.env.ADMIN_DEPLOY_TIMEOUT_SECONDS || "1800");
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1800;
+})();
+const killGraceMs = (() => {
+  const parsed = Number(process.env.ADMIN_DEPLOY_KILL_GRACE_MS || "10000");
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : 10000;
+})();
 let logFd = null;
 let finished = false;
+let child = null;
+let watchdog = null;
+let forceKillTimer = null;
+let timedOut = false;
 
 function writeStatus(state) {
   mkdirSync(statusDir, { recursive: true, mode: 0o700 });
@@ -56,6 +69,8 @@ function currentCommit() {
 function finish(phase, exitCode, message) {
   if (finished) return;
   finished = true;
+  if (watchdog) clearTimeout(watchdog);
+  if (forceKillTimer) clearTimeout(forceKillTimer);
   const deployedCommit = currentCommit();
   try {
     appendLog(`[admin-deploy] ${message}${deployedCommit ? ` (${deployedCommit.slice(0, 12)})` : ""}`);
@@ -78,8 +93,35 @@ function finish(phase, exitCode, message) {
   process.exitCode = phase === "success" ? 0 : 1;
 }
 
+function signalChildProcessGroup(signal) {
+  if (!child?.pid) return;
+  try {
+    if (process.platform === "win32") child.kill(signal);
+    else process.kill(-child.pid, signal);
+  } catch (error) {
+    if (error?.code !== "ESRCH") appendLog(`[admin-deploy] 无法向部署进程组发送 ${signal}：${error.message}`);
+  }
+}
+
+function stopDeployment(reason) {
+  if (finished || timedOut) return;
+  timedOut = true;
+  appendLog(`[admin-deploy] ${reason}，正在终止部署进程组`);
+  signalChildProcessGroup("SIGTERM");
+  forceKillTimer = setTimeout(() => signalChildProcessGroup("SIGKILL"), killGraceMs);
+  forceKillTimer.unref();
+}
+
 try {
-  if (!root || !statusDir || !id || !requestedAt || !Number.isInteger(operatorId) || operatorId <= 0) {
+  if (
+    !root
+    || !statusDir
+    || !id
+    || !requestedAt
+    || !Number.isInteger(operatorId)
+    || operatorId <= 0
+    || rawAllowSchemaExpand !== "1"
+  ) {
     throw new Error("runner 参数不完整");
   }
   const deployScript = path.join(root, "deploy.sh");
@@ -91,6 +133,7 @@ try {
   logFd = openSync(logPath, "w", 0o600);
   appendLog(`[admin-deploy] ${startedAt} 管理员 #${operatorId} 发起更新部署`);
   appendLog(`[admin-deploy] 执行固定命令: bash deploy.sh update`);
+  appendLog(`[admin-deploy] 管理员 #${operatorId} 已确认仅执行向后兼容的扩展迁移`);
   writeStatus({
     id,
     phase: "running",
@@ -104,14 +147,26 @@ try {
     message: "正在拉取代码并执行增量部署",
   });
 
-  const child = spawn(bashPath, [deployScript, "update"], {
+  child = spawn(bashPath, [deployScript, "update"], {
     cwd: root,
-    env: { ...process.env, CPU_WEB_ADMIN_DEPLOY: "1", DEPLOY_BUILD_MODE: "ci" },
+    env: {
+      ...process.env,
+      CPU_WEB_ADMIN_DEPLOY: "1",
+      DEPLOY_BUILD_MODE: "ci",
+      DEPLOY_ALLOW_SCHEMA_EXPAND: allowSchemaExpand,
+    },
+    detached: process.platform !== "win32",
     stdio: ["ignore", logFd, logFd],
   });
+  watchdog = setTimeout(
+    () => stopDeployment(`部署执行超过 ${deployTimeoutSeconds} 秒`),
+    deployTimeoutSeconds * 1000,
+  );
+  watchdog.unref();
   child.once("error", (error) => finish("failed", 1, `部署命令启动失败：${error.message}`));
   child.once("close", (code, signal) => {
-    if (code === 0) finish("success", 0, "更新部署完成");
+    if (timedOut) finish("failed", 124, `部署执行超过 ${deployTimeoutSeconds} 秒，已终止并释放部署锁`);
+    else if (code === 0) finish("success", 0, "更新部署完成");
     else finish("failed", Number.isInteger(code) ? code : 1, `更新部署失败${signal ? `（${signal}）` : ""}`);
   });
 } catch (error) {

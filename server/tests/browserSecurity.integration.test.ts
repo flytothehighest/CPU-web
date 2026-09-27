@@ -26,10 +26,19 @@ function cookiePair(setCookie: string, name: string) {
 
 test("browser auth uses encrypted HttpOnly session and enforces CSRF", async (t) => {
   const { browserSessionMiddleware, requestOriginAndCsrfProtection } = await import("../src/middleware/browserSession");
-  const { issueBrowserSession, browserSessionStorageKey } = await import("../src/services/browserSession");
+  const {
+    issueBrowserSession,
+    browserSessionStorageKey,
+    revokeBrowserSession,
+    updateBrowserSession,
+  } = await import("../src/services/browserSession");
   const { securityHeaders } = await import("../src/middleware/securityHeaders");
   const { getEphemeralValue } = await import("../src/services/cache");
   const app = express();
+  let releaseDelayedUpdate = () => {};
+  let markDelayedUpdateLoaded = () => {};
+  const delayedUpdateLoaded = new Promise<void>((resolve) => { markDelayedUpdateLoaded = resolve; });
+  const delayedUpdateGate = new Promise<void>((resolve) => { releaseDelayedUpdate = resolve; });
   app.set("trust proxy", true);
   app.use(securityHeaders, express.json(), browserSessionMiddleware, requestOriginAndCsrfProtection);
   app.post("/login", async (_req, res) => {
@@ -47,6 +56,17 @@ test("browser auth uses encrypted HttpOnly session and enforces CSRF", async (t)
     res.json({ ok: true });
   });
   app.post("/write", (_req, res) => res.json({ ok: true }));
+  app.post("/delayed-session-update", async (req, res) => {
+    markDelayedUpdateLoaded();
+    await delayedUpdateGate;
+    const updated = await updateBrowserSession(req, res, { jwxtToken: "late-jwxt-token" });
+    res.json({ updated });
+  });
+  app.post("/logout", async (req, res) => {
+    await revokeBrowserSession(req, res);
+    res.json({ ok: true });
+  });
+  app.get("/session-state", (req, res) => res.json({ authenticated: Boolean(req.browserSession) }));
   app.use((error: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     res.status(Number(error?.status || 500)).json({ error: String(error?.message || "error") });
   });
@@ -107,6 +127,27 @@ test("browser auth uses encrypted HttpOnly session and enforces CSRF", async (t)
     },
   });
   assert.equal(accepted.status, 200);
+
+  const sessionHeaders = {
+    Origin: origin,
+    Cookie: `${sessionCookie}; ${csrfCookie}`,
+    "X-CPU-Auth-Mode": "cookie",
+    "X-CSRF-Token": csrf,
+  };
+  const delayedUpdate = fetch(`${origin}/delayed-session-update`, {
+    method: "POST",
+    headers: sessionHeaders,
+  });
+  await delayedUpdateLoaded;
+  const logout = await fetch(`${origin}/logout`, { method: "POST", headers: sessionHeaders });
+  assert.equal(logout.status, 200);
+  releaseDelayedUpdate();
+  assert.deepEqual(await (await delayedUpdate).json(), { updated: false });
+  assert.equal(await getEphemeralValue(browserSessionStorageKey(sessionId)), null);
+  const afterLogout = await fetch(`${origin}/session-state`, {
+    headers: { Cookie: `${sessionCookie}; ${csrfCookie}`, "X-CPU-Auth-Mode": "cookie" },
+  });
+  assert.deepEqual(await afterLogout.json(), { authenticated: false });
   const contentSecurityPolicy = accepted.headers.get("content-security-policy") || "";
   assert.match(contentSecurityPolicy, /require-trusted-types-for 'script'/);
   assert.match(contentSecurityPolicy, /trusted-types default dompurify vue/);

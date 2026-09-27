@@ -43,9 +43,11 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("CPUHasSeenWelcomeV3") private var hasSeenWelcome = false
     private let debugMockSchedule: Bool
+    private let debugAssistant: Bool
 
     init() {
 #if DEBUG
+        self.debugAssistant = ProcessInfo.processInfo.environment["CPU_DEBUG_ASSISTANT"] == "1"
         let useMockSchedule = ProcessInfo.processInfo.environment["CPU_DEBUG_MOCK_SCHEDULE"] == "1"
         self.debugMockSchedule = useMockSchedule
         if useMockSchedule {
@@ -57,6 +59,7 @@ struct ContentView: View {
             _scheduleStore = StateObject(wrappedValue: NativeScheduleStore())
         }
 #else
+        self.debugAssistant = false
         self.debugMockSchedule = false
         _scheduleStore = StateObject(wrappedValue: NativeScheduleStore())
 #endif
@@ -158,7 +161,14 @@ struct ContentView: View {
     /// surface keeps the tab bar from flashing first.
     @ViewBuilder
     private var rootView: some View {
-        if debugMockSchedule {
+        if debugAssistant {
+            NativeAssistantView(session: webSession) { _ in }
+                .task {
+                    _ = webSession.makeWebView()
+                    _ = await webSession.waitForAuthState(timeout: .seconds(10))
+                    await webSession.assistantModel.loadHistory(using: webSession)
+                }
+        } else if debugMockSchedule {
             NativeScheduleView(store: scheduleStore)
                 .task {
                     guard scheduleStore.result == nil else { return }

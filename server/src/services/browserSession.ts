@@ -17,6 +17,8 @@ export type BrowserSession = {
 };
 
 const SESSION_PREFIX = buildRedisKey("auth", "browser-session");
+const SESSION_REVOCATION_PREFIX = buildRedisKey("auth", "browser-session-revoked");
+const SESSION_REVOCATION_TTL_MS = 5 * 60 * 1000;
 const TOUCH_INTERVAL_MS = 5 * 60 * 1000;
 
 export const BROWSER_SESSION_COOKIE = isDev ? "cpu-session" : "__Host-cpu-session";
@@ -28,6 +30,10 @@ function sessionHash(id: string) {
 
 export function browserSessionStorageKey(id: string) {
   return `${SESSION_PREFIX}:${sessionHash(id)}`;
+}
+
+function browserSessionRevocationKey(id: string) {
+  return `${SESSION_REVOCATION_PREFIX}:${sessionHash(id)}`;
 }
 
 function parseCookies(req: Request) {
@@ -167,6 +173,11 @@ export async function updateBrowserSession(
   const current = req.browserSession;
   const id = req.browserSessionId;
   if (!current || !id) return false;
+  const storageKey = browserSessionStorageKey(id);
+  const revocationKey = browserSessionRevocationKey(id);
+  // A request can retain an in-memory session snapshot while another request
+  // logs out. Never let that stale request recreate the deleted session.
+  if (await getEphemeralValue(revocationKey) || !await getEphemeralValue(storageKey)) return false;
   const next: BrowserSession = {
     ...current,
     ...patch,
@@ -176,6 +187,11 @@ export async function updateBrowserSession(
     delete next.jwxtToken;
   }
   const saved = await saveSession(id, next);
+  // Close the race where logout lands between the first check and save.
+  if (saved && await getEphemeralValue(revocationKey)) {
+    await deleteEphemeralValue(storageKey);
+    return false;
+  }
   if (saved) {
     req.browserSession = next;
     setSessionCookies(res, id, next);
@@ -185,7 +201,12 @@ export async function updateBrowserSession(
 
 export async function revokeBrowserSession(req: Request, res: Response) {
   const id = req.browserSessionId || browserSessionId(req);
-  if (id) await deleteEphemeralValue(browserSessionStorageKey(id));
+  if (id) {
+    // Keep a short-lived shared tombstone so delayed authentication, token
+    // refresh, or education requests cannot restore this exact session ID.
+    await setEphemeralValue(browserSessionRevocationKey(id), "1", SESSION_REVOCATION_TTL_MS);
+    await deleteEphemeralValue(browserSessionStorageKey(id));
+  }
   const expired = { ...sessionCookieOptions(0, true), maxAge: 0 };
   res.clearCookie(BROWSER_SESSION_COOKIE, expired);
   res.clearCookie(CSRF_COOKIE, { ...sessionCookieOptions(0, false), maxAge: 0 });

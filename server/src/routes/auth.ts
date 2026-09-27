@@ -5,13 +5,13 @@ import { signToken } from "../utils/jwt";
 import { hashPassword, verifyPassword } from "../utils/password";
 import { Errors, ok } from "../utils/response";
 import { validate } from "../middleware/validate";
-import { beginLogin, submitLogin } from "../services/jwxtTransport";
+import { beginLogin, logout as logoutJwxt, submitLogin } from "../services/jwxtTransport";
 import { releaseExpiredMutes } from "../services/userModeration";
 import { isDev } from "../config";
 import { detectLoginClient, loginClientUsage } from "../utils/loginClient";
 import { buildSelfUser } from "../utils/publicUser";
 import { recordAdminDailyLogin } from "../services/adminStats";
-import { isCookieAuthRequest, issueBrowserSession, revokeBrowserSession } from "../services/browserSession";
+import { isCookieAuthRequest, issueBrowserSession, revokeBrowserSession, updateBrowserSession } from "../services/browserSession";
 import { scheduleWidgetSessions } from "../services/scheduleWidgetSession";
 import { nicknameSetupRequired, normalizeNicknameSubmission, scheduleNicknameReview } from "../services/nicknameReview";
 
@@ -238,11 +238,23 @@ authRouter.post(
       await recordAdminDailyLogin(user.id, user.lastLoginAt ?? new Date(), client.analyticsClient).catch((error) => {
         console.warn("[admin-stats] failed to record sso login", error);
       });
-      await scheduleWidgetSessions.recordLogin(user.id, studentId, r.token).catch(() => {
-        console.warn("[schedule-widget] 登录成功，小组件会话同步暂时失败");
-      });
       if (isCookieAuthRequest(req)) {
-        await issueBrowserSession(res, { siteToken, jwxtToken: r.token, persistent: remember });
+        let sessionEstablished = true;
+        if (req.browserSession) {
+          // Background recovery must stay on the existing browser session.
+          // If that session was logged out while the school request was in
+          // flight, its revocation tombstone makes this update fail closed.
+          sessionEstablished = await updateBrowserSession(req, res, { siteToken, jwxtToken: r.token });
+        } else {
+          await issueBrowserSession(res, { siteToken, jwxtToken: r.token, persistent: remember });
+        }
+        if (!sessionEstablished) {
+          void logoutJwxt(r.token).catch(() => false);
+          return ok(res, { ok: false, error: "登录会话已取消" });
+        }
+        await scheduleWidgetSessions.recordLogin(user.id, studentId, r.token).catch(() => {
+          console.warn("[schedule-widget] 登录成功，小组件会话同步暂时失败");
+        });
         ok(res, {
           ok: true,
           sessionAuthenticated: true,
@@ -251,6 +263,9 @@ authRouter.post(
           needNickname: nicknameSetupRequired(user),
         });
       } else {
+        await scheduleWidgetSessions.recordLogin(user.id, studentId, r.token).catch(() => {
+          console.warn("[schedule-widget] 登录成功，小组件会话同步暂时失败");
+        });
         ok(res, {
           ok: true,
           siteToken,
@@ -265,7 +280,11 @@ authRouter.post(
 
 authRouter.post("/logout", async (req, res, next) => {
   try {
+    const jwxtToken = req.browserSession?.jwxtToken || String(req.headers["x-jwxt-token"] || "").trim();
+    // Revoke the browser session first. The school-side logout can involve a
+    // slow remote request and must not leave the site session usable meanwhile.
     await revokeBrowserSession(req, res);
+    if (jwxtToken) await logoutJwxt(jwxtToken).catch(() => false);
     ok(res, { ok: true });
   } catch (error) {
     next(error);

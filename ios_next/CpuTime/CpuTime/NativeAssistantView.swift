@@ -10,6 +10,12 @@ final class NativeAssistantModel: ObservableObject {
     @Published var errorMessage = ""
     @Published private(set) var conversations: [NativeAssistantConversation] = []
     @Published private(set) var historyLoaded = false
+    @Published private(set) var historyLoading = false
+    @Published private(set) var historyError = ""
+    @Published private(set) var retryText = ""
+    private var historyGeneration = 0
+    private var syncTask: Task<Void, Never>?
+    private var pendingDeletes: Set<String> = []
 
     private(set) var activeConversationID = ""
     private var requestGeneration = 0
@@ -30,8 +36,14 @@ final class NativeAssistantModel: ObservableObject {
         let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isLoading else { return }
 
+        guard text.utf16.count <= 500 else {
+            errorMessage = "每条消息最多 500 字，请缩短后发送。"
+            return
+        }
+        retryText = ""
         input = ""
-        let history = messages.suffix(60).map {
+        historyGeneration += 1
+        let history = messages.filter { !$0.streaming && !$0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.suffix(60).map {
             [
                 "role": $0.role.rawValue,
                 "content": String($0.content.prefix(4000)),
@@ -60,20 +72,16 @@ final class NativeAssistantModel: ObservableObject {
                     message: text,
                     history: history,
                     onDelta: { [weak self] delta in
-                        Task { @MainActor [weak self] in
                             guard let self, generation == self.requestGeneration,
                                   let index = self.messages.firstIndex(where: { $0.id == assistantID }) else { return }
                             self.messages[index].content += delta
                             self.messages[index].streaming = true
                             self.messages[index].streamStatus = "正在生成回答…"
-                        }
                     },
                     onStatus: { [weak self] status in
-                        Task { @MainActor [weak self] in
                             guard let self, generation == self.requestGeneration,
                                   let index = self.messages.firstIndex(where: { $0.id == assistantID }) else { return }
                             self.messages[index].streamStatus = status
-                        }
                     }
                 )
                 guard generation == self.requestGeneration,
@@ -106,7 +114,8 @@ final class NativeAssistantModel: ObservableObject {
                     self.messages.removeAll { $0.id == assistantID }
                 }
                 self.persistActiveConversation(using: session, syncCloud: false)
-                self.errorMessage = (error as? LocalizedError)?.errorDescription ?? "拾间 AI 暂时不可用，请重试。"
+                self.retryText = text
+                self.errorMessage = (error as? LocalizedError)?.errorDescription ?? "网络连接中断，请检查网络后重试。"
             }
             if generation == self.requestGeneration {
                 self.isLoading = false
@@ -115,8 +124,19 @@ final class NativeAssistantModel: ObservableObject {
         }
     }
 
+    func retry(using session: HybridWebViewStore) {
+        guard !retryText.isEmpty, !isLoading else { return }
+        let text = retryText
+        if let index = messages.lastIndex(where: { $0.role == .user && $0.content == text }) {
+            messages.removeSubrange(index...)
+        }
+        send(text, using: session)
+    }
+
     func startNewConversation(using session: HybridWebViewStore) {
         cancelStream(using: session)
+        historyGeneration += 1
+        retryText = ""
         messages.removeAll()
         input = ""
         errorMessage = ""
@@ -127,16 +147,21 @@ final class NativeAssistantModel: ObservableObject {
     /// must leave the shared stream alive so it can finish in the background.
     func stop(using session: HybridWebViewStore) {
         cancelStream(using: session)
-        if let index = messages.lastIndex(where: { $0.role == .assistant }),
-           !messages[index].content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            messages[index].streaming = false
-            messages[index].streamStatus = "已停止生成，可重新提问"
-            persistActiveConversation(using: session, syncCloud: false)
+        if let index = messages.lastIndex(where: { $0.role == .assistant }) {
+            if messages[index].content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                messages.remove(at: index)
+            } else {
+                messages[index].streaming = false
+                messages[index].streamStatus = "已停止生成，可重新提问"
+            }
         }
+        persistActiveConversation(using: session, syncCloud: true)
     }
 
     func openConversation(_ conversation: NativeAssistantConversation, using session: HybridWebViewStore) {
         cancelStream(using: session)
+        historyGeneration += 1
+        retryText = ""
         activeConversationID = conversation.id
         messages = conversation.messages.map(NativeAssistantMessage.init)
         messageSequence = messages.map(\.id).max() ?? 0
@@ -145,19 +170,21 @@ final class NativeAssistantModel: ObservableObject {
     }
 
     func deleteConversation(_ conversation: NativeAssistantConversation, using session: HybridWebViewStore) {
+        historyGeneration += 1
+        pendingDeletes.insert(conversation.id)
         conversations.removeAll { $0.id == conversation.id }
         saveLocalHistory(using: session)
-        if activeConversationID == conversation.id {
-            startNewConversation(using: session)
-        }
-        guard session.isLoggedIn else { return }
-        Task { @MainActor in
-            try? await session.deleteNativeAssistantConversation(id: conversation.id)
-        }
+        if activeConversationID == conversation.id { startNewConversation(using: session) }
+        syncHistory(using: session)
     }
 
     func accountDidChange(using session: HybridWebViewStore) {
         accountChangeTask?.cancel()
+        if session.authState.ready, !session.authState.account.isEmpty,
+           session.authState.account != confirmedAccount {
+            applyConfirmedAccountChange(using: session)
+            return
+        }
         // WKWebView can publish a transient empty or unauthenticated report
         // while restoring cookies after a route change. Confirm the state after
         // a short quiet period before clearing a conversation or its stream.
@@ -197,6 +224,14 @@ final class NativeAssistantModel: ObservableObject {
             return
         }
         cancelStream(using: session)
+        historyGeneration += 1
+        syncTask?.cancel()
+        syncTask = nil
+        input = ""
+        errorMessage = ""
+        retryText = ""
+        historyError = ""
+        pendingDeletes.removeAll()
         messages.removeAll()
         conversations.removeAll()
         activeConversationID = ""
@@ -209,33 +244,75 @@ final class NativeAssistantModel: ObservableObject {
     }
 
     func loadHistory(using session: HybridWebViewStore) async {
-        guard !historyLoaded else { return }
-        if session.authState.ready, !session.authState.account.isEmpty {
-            confirmedAccount = session.authState.account.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !historyLoading, session.authState.ready, session.isLoggedIn,
+              !session.authState.account.isEmpty else { return }
+        let account = session.authState.account
+        confirmedAccount = account
+        if !historyLoaded {
+            pendingDeletes = Set(UserDefaults.standard.stringArray(forKey: historyStorageKey(using: session) + ":deletions") ?? [])
+            conversations = loadLocalHistory(using: session).filter { !pendingDeletes.contains($0.id) }
+            historyLoaded = true
         }
-        historyLoaded = true
-        let local = loadLocalHistory(using: session)
-        conversations = local
-        if let active = local.first {
-            activeConversationID = active.id
-            messages = active.messages.map(NativeAssistantMessage.init)
-            messageSequence = messages.map(\.id).max() ?? 0
+        // Loading history must never replace a live answer or a newly opened draft.
+        let generation = historyGeneration
+        historyLoading = true
+        defer {
+            historyLoading = false
+            if session.authState.account != account {
+                Task { await self.loadHistory(using: session) }
+            }
         }
-        guard session.isLoggedIn else { return }
         do {
             let cloud = try await session.listNativeAssistantConversations()
-            let merged = mergeConversations(local: conversations, cloud: cloud)
-            conversations = merged
+            guard session.authState.account == account, confirmedAccount == account,
+                  generation == historyGeneration else { return }
+            conversations = mergeConversations(local: conversations, cloud: cloud)
+                .filter { !pendingDeletes.contains($0.id) }
             saveLocalHistory(using: session)
-            if let active = merged.first(where: { $0.id == activeConversationID }) {
+            if generation == historyGeneration, !isLoading, !activeConversationID.isEmpty,
+               let active = conversations.first(where: { $0.id == activeConversationID }) {
                 messages = active.messages.map(NativeAssistantMessage.init)
                 messageSequence = messages.map(\.id).max() ?? 0
-            } else if messages.isEmpty, let active = merged.first {
-                openConversation(active, using: session)
             }
+            historyError = ""
+            syncHistory(using: session)
         } catch {
-            // Keep local history available while offline and retry next time.
-            historyLoaded = false
+            guard session.authState.account == account else { return }
+            historyError = "历史同步失败，已保留本机记录。请重试。"
+        }
+    }
+
+    private func syncHistory(using session: HybridWebViewStore) {
+        guard session.isLoggedIn, !confirmedAccount.isEmpty else { return }
+        let account = confirmedAccount
+        let previous = syncTask
+        let deletions = pendingDeletes
+        let records = conversations
+        syncTask = Task { @MainActor [weak self, weak session] in
+            await previous?.value
+            guard let self, let session, !Task.isCancelled,
+                  session.authState.account == account, self.confirmedAccount == account else { return }
+            do {
+                for id in deletions {
+                    try Task.checkCancellation()
+                    guard session.authState.account == account else { return }
+                    try await session.deleteNativeAssistantConversation(id: id)
+                    guard session.authState.account == account else { return }
+                    self.pendingDeletes.remove(id)
+                    self.saveLocalHistory(using: session)
+                }
+                for record in records where !record.messages.isEmpty {
+                    try Task.checkCancellation()
+                    guard session.authState.account == account else { return }
+                    if self.pendingDeletes.contains(record.id) { continue }
+                    _ = try await session.saveNativeAssistantConversation(record)
+                }
+                if session.authState.account == account { self.historyError = "" }
+            } catch {
+                if !Task.isCancelled, session.authState.account == account {
+                    self.historyError = "历史同步失败，已保留本机记录。请重试。"
+                }
+            }
         }
     }
 
@@ -277,15 +354,11 @@ final class NativeAssistantModel: ObservableObject {
         }
         conversations.sort { $0.updatedAt > $1.updatedAt }
         saveLocalHistory(using: session)
-        guard syncCloud, session.isLoggedIn,
-              let conversation = conversations.first(where: { $0.id == activeConversationID }) else { return }
-        Task { @MainActor in
-            _ = try? await session.saveNativeAssistantConversation(conversation)
-        }
+        if syncCloud { syncHistory(using: session) }
     }
 
     private func historyStorageKey(using session: HybridWebViewStore) -> String {
-        let account = session.authState.account.trimmingCharacters(in: .whitespacesAndNewlines)
+        let account = confirmedAccount
         return "native-assistant-history:v1:\(account.isEmpty ? "default" : account)"
     }
 
@@ -296,7 +369,8 @@ final class NativeAssistantModel: ObservableObject {
     }
 
     private func saveLocalHistory(using session: HybridWebViewStore) {
-        guard let data = try? JSONEncoder().encode(conversations) else { return }
+        guard !confirmedAccount.isEmpty, let data = try? JSONEncoder().encode(conversations) else { return }
+        UserDefaults.standard.set(Array(pendingDeletes), forKey: historyStorageKey(using: session) + ":deletions")
         UserDefaults.standard.set(data, forKey: historyStorageKey(using: session))
     }
 
@@ -321,7 +395,8 @@ struct NativeAssistantView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var composerFocused = false
-    @State private var composerHeight: CGFloat = 42
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var followsLatest = true
     @State private var historyPresented = false
 
     private let suggestions = ["宿舍电费在哪里查？", "怎么打开药苑之声？", "AI 额度怎么计算？"]
@@ -351,7 +426,8 @@ struct NativeAssistantView: View {
             .toolbar {
                 ToolbarItemGroup(placement: .topBarLeading) {
                     Button {
-                        historyPresented = true
+                        composerFocused = false
+                    historyPresented = true
                     } label: {
                         Image(systemName: "clock.arrow.circlepath")
                     }
@@ -369,11 +445,6 @@ struct NativeAssistantView: View {
                 }
             }
             .tint(.cpuBrand)
-            .alert("拾间 AI", isPresented: errorAlertBinding) {
-                Button("知道了", role: .cancel) { assistant.errorMessage = "" }
-            } message: {
-                Text(assistant.errorMessage)
-            }
             .sheet(isPresented: $historyPresented) {
                 historySheet
                     .preferredColorScheme(session.pageColorScheme)
@@ -383,8 +454,8 @@ struct NativeAssistantView: View {
         .task {
             await assistant.loadHistory(using: session)
         }
-        .onChange(of: session.authState) { _, _ in
-            assistant.accountDidChange(using: session)
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await assistant.loadHistory(using: session) } }
         }
     }
 
@@ -408,7 +479,7 @@ struct NativeAssistantView: View {
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 3)
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                VStack(spacing: 8) {
                     ForEach(suggestions, id: \.self) { suggestion in
                         Button { assistant.send(suggestion, using: session) } label: {
                             Text(suggestion)
@@ -440,7 +511,12 @@ struct NativeAssistantView: View {
 
     private var historySheet: some View {
         NavigationStack {
-            Group {
+            VStack(spacing: 0) {
+                if assistant.historyLoading { ProgressView("正在同步历史…").padding() }
+                if !assistant.historyError.isEmpty {
+                    Text(assistant.historyError).font(.caption).foregroundStyle(.secondary).padding(.horizontal)
+                    Button("重试同步") { Task { await assistant.loadHistory(using: session) } }.padding(.bottom, 8)
+                }
                 if assistant.conversations.isEmpty {
                     ContentUnavailableView(
                         "暂无历史对话",
@@ -483,6 +559,7 @@ struct NativeAssistantView: View {
                     .listStyle(.plain)
                 }
             }
+            .task { await assistant.loadHistory(using: session) }
             .navigationTitle("历史对话")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -504,34 +581,37 @@ struct NativeAssistantView: View {
                         messageView(message)
                             .id(message.id)
                     }
-                    if assistant.isLoading {
-                        HStack(spacing: 7) {
-                            ProgressView().controlSize(.small).tint(.cpuBrand)
-                            Text("正在生成回答…")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.horizontal, 4)
-                        .id("loading")
-                    }
+                    Color.clear.frame(height: 1).id("bottom")
+                        .onAppear { followsLatest = true }
+
                 }
                 .frame(maxWidth: 700, alignment: .leading)
                 .padding(.horizontal, 18)
                 .padding(.vertical, 16)
             }
             .scrollDismissesKeyboard(.interactively)
+            .simultaneousGesture(DragGesture().onChanged { _ in followsLatest = false })
+            .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
+            .onChange(of: assistant.isLoading) { _, loading in
+                if !loading, followsLatest { proxy.scrollTo("bottom", anchor: .bottom) }
+            }
             .onChange(of: assistant.messages.count) { _, _ in
-                withAnimation(.easeOut(duration: 0.22)) {
-                    if let last = assistant.messages.last { proxy.scrollTo(last.id, anchor: .bottom) }
-                }
+                followsLatest = true
+                proxy.scrollTo("bottom", anchor: .bottom)
             }
             .onChange(of: assistant.messages.last?.content) { _, _ in
-                guard assistant.isLoading, let last = assistant.messages.last else { return }
-                withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(last.id, anchor: .bottom) }
+                guard assistant.isLoading, followsLatest else { return }
+                proxy.scrollTo("bottom", anchor: .bottom)
             }
-            .onChange(of: assistant.isLoading) { _, loading in
-                guard loading else { return }
-                withAnimation(.easeOut(duration: 0.22)) { proxy.scrollTo("loading", anchor: .bottom) }
+            .onChange(of: composerFocused) { _, focused in
+                if focused { proxy.scrollTo("bottom", anchor: .bottom) }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if !followsLatest {
+                    Button { followsLatest = true; proxy.scrollTo("bottom", anchor: .bottom) } label: {
+                        Image(systemName: "arrow.down").padding(12).background(.regularMaterial, in: Circle())
+                    }.accessibilityLabel("滚动到最新消息").padding()
+                }
             }
         }
     }
@@ -544,28 +624,25 @@ struct NativeAssistantView: View {
                     .font(.body)
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.leading)
-                    .frame(maxWidth: 340, alignment: .leading)
                     .padding(.horizontal, 13)
                     .padding(.vertical, 10)
                     .background(Color.cpuBrand)
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             } else {
+                HStack(spacing: 5) {
+                    Image(systemName: "sparkles").foregroundStyle(Color.cpuBrand)
+                    Text("拾间 AI").foregroundStyle(.secondary)
+                }.font(.caption.weight(.medium))
                 HStack(alignment: .bottom, spacing: 2) {
-                    Text(markdown(message.content))
+                    Text(message.streaming ? AttributedString(message.content) : markdown(message.content))
                         .font(.body)
                         .foregroundStyle(.primary)
                         .frame(maxWidth: 620, alignment: .leading)
                         .textSelection(.enabled)
-                    if message.streaming {
-                        Text("▌")
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(Color.cpuBrand)
-                            .transition(.opacity)
-                    }
                 }
-                if message.streaming {
+                if message.streaming || !message.streamStatus.isEmpty {
                     HStack(spacing: 6) {
-                        ProgressView().controlSize(.mini).tint(.cpuBrand)
+                        if message.streaming { ProgressView().controlSize(.mini).tint(.cpuBrand) }
                         Text(message.streamStatus.isEmpty ? "正在生成回答…" : message.streamStatus)
                             .font(.caption2)
                             .foregroundStyle(.secondary)
@@ -670,64 +747,55 @@ struct NativeAssistantView: View {
     }
 
     private var composer: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            ZStack(alignment: .topLeading) {
-                NativeAssistantTextEditor(
-                    text: $assistant.input,
-                    isFocused: $composerFocused,
-                    onSubmit: { assistant.send(assistant.input, using: session) },
-                    onHeightChange: { height in
-                        guard abs(composerHeight - height) > 0.5 else { return }
-                        composerHeight = height
+        VStack(spacing: 8) {
+            if !assistant.errorMessage.isEmpty {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "exclamationmark.circle").foregroundStyle(.orange)
+                    Text(assistant.errorMessage).font(.caption).frame(maxWidth: .infinity, alignment: .leading)
+                    if !assistant.retryText.isEmpty {
+                        Button("重试") { assistant.retry(using: session) }.font(.subheadline.weight(.semibold))
                     }
-                )
-                .frame(maxWidth: .infinity)
-                .frame(height: composerHeight, alignment: .topLeading)
-                if assistant.input.isEmpty {
-                    Text("给拾间 AI 发消息")
-                        .font(.body)
-                        .foregroundStyle(.tertiary)
-                        .padding(.leading, 13)
-                        .padding(.top, 10)
-                        .allowsHitTesting(false)
+                    Button { assistant.errorMessage = "" } label: { Image(systemName: "xmark") }
+                        .accessibilityLabel("关闭错误提示")
+                }
+                .padding(.horizontal, 4)
+            }
+            HStack(alignment: .bottom, spacing: 8) {
+                ZStack(alignment: .topLeading) {
+                    NativeAssistantTextEditor(text: $assistant.input, isFocused: $composerFocused,
+                        onSubmit: { assistant.send(assistant.input, using: session) })
+                    if assistant.input.isEmpty {
+                        Text("给拾间 AI 发消息").font(.body).foregroundStyle(.tertiary)
+                            .padding(.leading, 12).padding(.top, 10).allowsHitTesting(false)
+                    }
+                }
+                .background(Color(uiColor: .tertiarySystemFill), in: RoundedRectangle(cornerRadius: 18))
+                .overlay { RoundedRectangle(cornerRadius: 18).stroke(composerFocused ? Color.cpuBrand : Color(uiColor: .separator).opacity(0.4), lineWidth: 1) }
+                Button {
+                    if assistant.isLoading { assistant.stop(using: session) }
+                    else { assistant.send(assistant.input, using: session) }
+                } label: {
+                    Image(systemName: assistant.isLoading ? "stop.fill" : "arrow.up")
+                        .font(.system(size: 17, weight: .semibold)).frame(width: 44, height: 44)
+                        .foregroundStyle(.white).background(Color.cpuBrand, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .disabled(!assistant.isLoading && assistant.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .opacity(!assistant.isLoading && assistant.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.45 : 1)
+                .accessibilityLabel(assistant.isLoading ? "停止生成" : "发送")
+            }
+            if composerFocused {
+                HStack {
+                    Text("\(assistant.input.utf16.count)/500").font(.caption2).foregroundStyle(.secondary)
+                    Spacer()
+                    Button { composerFocused = false } label: { Image(systemName: "keyboard.chevron.compact.down") }
+                        .accessibilityLabel("收起键盘")
                 }
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: composerHeight, alignment: .topLeading)
-            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .background(Color(uiColor: .tertiarySystemFill))
-            .overlay {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(composerFocused ? Color.cpuBrand : Color(uiColor: .separator).opacity(0.65), lineWidth: composerFocused ? 1.5 : 1)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .animation(.easeOut(duration: 0.14), value: composerHeight)
-
-            Button {
-                if assistant.isLoading {
-                    assistant.stop(using: session)
-                } else {
-                    assistant.send(assistant.input, using: session)
-                }
-            } label: {
-                Image(systemName: assistant.isLoading ? "stop.fill" : "arrow.up")
-                    .font(.system(size: 16, weight: .bold))
-                    .frame(width: 42, height: 42)
-                    .foregroundStyle(assistant.isLoading ? Color.cpuBrand : .white)
-                    .background(assistant.isLoading ? Color.cpuBrand.opacity(0.12) : Color.cpuBrand)
-                    .overlay {
-                        Circle().stroke(Color.cpuBrand.opacity(assistant.isLoading ? 0.45 : 0), lineWidth: 1)
-                    }
-                    .clipShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .disabled(!assistant.isLoading && assistant.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .opacity(!assistant.isLoading && assistant.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.45 : 1)
-            .accessibilityLabel(assistant.isLoading ? "停止生成" : "发送")
         }
-        .padding(.horizontal, 14)
-        .padding(.top, 9)
-        .padding(.bottom, 8)
+        .frame(maxWidth: 700)
+        .padding(.horizontal, 16).padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
         .background(.bar)
         .overlay(alignment: .top) { Divider() }
     }
@@ -752,7 +820,7 @@ struct NativeAssistantView: View {
     }
 
     private func markdown(_ value: String) -> AttributedString {
-        (try? AttributedString(markdown: value)) ?? AttributedString(value)
+        (try? AttributedString(markdown: value, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(value)
     }
 
     private func resourceURL(_ value: String) -> URL? {
@@ -772,147 +840,58 @@ struct NativeAssistantView: View {
     }
 }
 
-/// UITextView gives the composer a real intrinsic content height. SwiftUI's
-/// multiline TextField reports the configured line limit as its ideal height
-/// on newer iOS versions, which makes the empty field jump to five lines as
-/// soon as it receives text.
-private final class NativeAssistantMeasuringTextView: UITextView {
-    var onLayout: ((UITextView) -> Void)?
-    private var lastSize: CGSize = .zero
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        let size = bounds.size
-        guard abs(size.width - lastSize.width) > 0.5 || abs(size.height - lastSize.height) > 0.5 else {
-            return
-        }
-        lastSize = size
-        onLayout?(self)
-    }
-}
-
+/// Size from SwiftUI's proposed width, without publishing measurements back
+/// into layout. This avoids a UIKit/SwiftUI layout feedback loop while typing.
 private struct NativeAssistantTextEditor: UIViewRepresentable {
     @Binding var text: String
     @Binding var isFocused: Bool
     let onSubmit: () -> Void
-    let onHeightChange: (CGFloat) -> Void
 
-    private let minHeight: CGFloat = 42
-    private let maxHeight: CGFloat = 122
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(parent: self)
-    }
+    func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
 
     func makeUIView(context: Context) -> UITextView {
-        let view = NativeAssistantMeasuringTextView(frame: .zero)
+        let view = UITextView()
         view.delegate = context.coordinator
         view.backgroundColor = .clear
         view.font = UIFont.preferredFont(forTextStyle: .body)
         view.adjustsFontForContentSizeCategory = true
         view.textColor = .label
         view.tintColor = UIColor(Color.cpuBrand)
-        view.isEditable = true
-        view.isSelectable = true
-        view.autocapitalizationType = .sentences
-        view.autocorrectionType = .yes
-        view.returnKeyType = .send
-        view.enablesReturnKeyAutomatically = false
-        view.textContainerInset = UIEdgeInsets(top: 9, left: 13, bottom: 9, right: 13)
+        view.textContainerInset = UIEdgeInsets(top: 10, left: 12, bottom: 10, right: 12)
         view.textContainer.lineFragmentPadding = 0
-        // Character wrapping keeps Chinese text and long unbroken words from
-        // scrolling sideways inside the composer on narrow iPhone widths.
         view.textContainer.lineBreakMode = .byCharWrapping
-        view.isScrollEnabled = false
-        view.showsVerticalScrollIndicator = false
-        view.showsHorizontalScrollIndicator = false
+        view.isScrollEnabled = true
+        view.returnKeyType = .send
         view.keyboardDismissMode = .interactive
         view.accessibilityLabel = "给拾间 AI 发消息"
-        view.accessibilityHint = "输入问题后按发送键"
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        view.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        view.onLayout = { [weak coordinator = context.coordinator] textView in
-            coordinator?.parent.updateHeight(for: textView)
-        }
         return view
     }
 
     func updateUIView(_ view: UITextView, context: Context) {
         context.coordinator.parent = self
-        if view.text != text {
-            view.text = text
-        }
-        view.accessibilityValue = text
-        if isFocused, !view.isFirstResponder {
-            view.becomeFirstResponder()
-        } else if !isFocused, view.isFirstResponder {
-            view.resignFirstResponder()
-        }
-        view.layoutIfNeeded()
-        updateHeight(for: view)
+        if view.text != text { view.text = text }
+        view.font = UIFont.preferredFont(forTextStyle: .body)
+        if isFocused, !view.isFirstResponder { view.becomeFirstResponder() }
+        else if !isFocused, view.isFirstResponder { view.resignFirstResponder() }
     }
 
-    private func updateHeight(for view: UITextView) {
-        guard view.bounds.width > 0 else { return }
-        let expectedText = text
-        guard !text.isEmpty else {
-            view.isScrollEnabled = false
-            DispatchQueue.main.async {
-                // Ignore a queued measurement from text that was submitted in
-                // the meantime; otherwise the composer can grow again after
-                // send() has already reset it to one line.
-                guard view.text == expectedText else { return }
-                onHeightChange(minHeight)
-            }
-            return
-        }
-        view.isScrollEnabled = false
-        // Measure the laid-out glyphs instead of relying on sizeThatFits. A
-        // UITextView embedded in a flexible SwiftUI row can otherwise report
-        // its single-line width while its bounds are being negotiated, which
-        // clips long questions instead of growing the composer.
-        let insets = view.textContainerInset
-        let availableWidth = max(1, view.bounds.width - insets.left - insets.right)
-        view.textContainer.size = CGSize(width: availableWidth, height: .greatestFiniteMagnitude)
-        view.layoutManager.ensureLayout(for: view.textContainer)
-        let usedRect = view.layoutManager.usedRect(for: view.textContainer)
-        let fitting = ceil(usedRect.height + insets.top + insets.bottom)
-        let height = min(max(fitting, minHeight), maxHeight)
-        view.isScrollEnabled = fitting > maxHeight + 0.5
-        DispatchQueue.main.async {
-            guard view.text == expectedText else { return }
-            onHeightChange(height)
-        }
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
+        guard let width = proposal.width, width > 0 else { return nil }
+        let line = uiView.font?.lineHeight ?? 22
+        let height = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
+        return CGSize(width: width, height: min(max(height, line + 20), min(180, line * 5 + 20)))
     }
 
     final class Coordinator: NSObject, UITextViewDelegate {
         var parent: NativeAssistantTextEditor
-
-        init(parent: NativeAssistantTextEditor) {
-            self.parent = parent
-        }
-
-        func textViewDidChange(_ textView: UITextView) {
-            parent.text = textView.text
-            parent.updateHeight(for: textView)
-        }
-
-        func textViewDidBeginEditing(_ textView: UITextView) {
-            parent.isFocused = true
-        }
-
-        func textViewDidEndEditing(_ textView: UITextView) {
-            parent.isFocused = false
-        }
-
-        func textView(
-            _ textView: UITextView,
-            shouldChangeTextIn range: NSRange,
-            replacementText replacement: String
-        ) -> Bool {
-            guard replacement == "\n" else { return true }
-            parent.onSubmit()
-            return false
+        init(parent: NativeAssistantTextEditor) { self.parent = parent }
+        func textViewDidChange(_ view: UITextView) { parent.text = view.text }
+        func textViewDidBeginEditing(_ view: UITextView) { parent.isFocused = true }
+        func textViewDidEndEditing(_ view: UITextView) { parent.isFocused = false }
+        func textView(_ view: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+            if text == "\n", view.markedTextRange == nil { parent.onSubmit(); return false }
+            return true
         }
     }
 }
@@ -968,7 +947,7 @@ struct NativeAssistantMessage: Identifiable {
         NativeAssistantStoredMessage(
             id: id,
             role: NativeAssistantStoredMessage.Role(rawValue: role.rawValue) ?? .assistant,
-            content: content,
+            content: String(content.prefix(4000)),
             actions: actions,
             suggestions: suggestions,
             images: images,

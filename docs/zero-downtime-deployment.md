@@ -31,10 +31,16 @@
 | `DEPLOY_VERIFY_URL` | `https://cputime.cn`，用于验证公网切换 |
 | `DEPLOY_INTERNAL_ORIGIN` | `https://cputime.cn`，VoiceHub 调用主站的稳定入口，不能指向会退役的实例端口 |
 | `DEPLOY_DRAIN_SECONDS` | 每阶段默认等 120 秒；超时保留实例，而非强制关闭连接 |
+| `DEPLOY_CI_FETCH_TIMEOUT_SECONDS` | 单次制品分支拉取默认最多 90 秒；超时终止完整 Git 进程组并重试，不再永久占用部署锁 |
+| `DEPLOY_CI_GIT_LOW_SPEED_LIMIT` / `DEPLOY_CI_GIT_LOW_SPEED_SECONDS` | Git HTTP 连续 30 秒低于 10 KiB/s 时中止本次拉取，并进入受限重试 |
+| `DEPLOY_ARTIFACT_URL` | 制品分支拉取失败后的 Release 备用地址；默认使用已验证可达的 GitHub 镜像 Release |
+| `DEPLOY_ARTIFACT_RELEASE_TIMEOUT_SECONDS` | Release 单次下载总时限，默认 1200 秒；下载文件保留并在重试或下次部署时续传 |
+| `DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_LIMIT` / `DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_SECONDS` | Release 连续 90 秒低于 1 KiB/s 才判定停滞；正常慢速下载不会被误杀，并显示实时进度 |
+| `ADMIN_DEPLOY_TIMEOUT_SECONDS` | 后台部署 runner 默认最多运行 1800 秒；超时先终止部署进程组，10 秒后仍未退出则强制结束并释放锁 |
 
 默认在站点配置和其所在目录下的绝对路径 include 中寻找唯一的主站代理文件。间接 upstream、多个匹配文件、外部配置或不明确的匹配会停止更新，需明确指定 `DEPLOY_NGINX_CONFIG`。检测到配置被其他操作修改时不覆盖。不要同时通过宝塔或另一个工具修改同一代理配置。
 
-若同一旧端口服务于多个文件中的 location，应使用 `DEPLOY_NGINX_CONFIGS` 列出所有相关文件，不能只选择首页所在的代理。所有配置写入完成并通过 `nginx -t` 后才 reload；中断或写入失败时可恢复部分已切换文件。回滚前先检查整组配置，发现外部编辑则保留实例、停止恢复，避免覆盖未知修改。
+若同一旧端口服务于多个文件中的 location，首次接管应使用 `DEPLOY_NGINX_CONFIGS` 列出所有相关文件，不能只选择首页所在的代理。后续部署会从活动状态中复用并重新验证这组路径，无需后台任务再次注入变量。所有配置写入完成并通过 `nginx -t` 后才 reload；中断或写入失败时可恢复部分已切换文件。回滚前先检查整组配置，发现外部编辑则保留实例、停止恢复，避免覆盖未知修改。
 
 Nginx 不能配置非零 `worker_shutdown_timeout` 强制终止旧连接；检测到该设置时更新会停止。保留 Nginx 默认的优雅退出行为。
 
@@ -73,6 +79,8 @@ DEPLOY_ALLOW_SCHEMA_EXPAND=1 bash deploy.sh update
 ```
 
 该开关是迁移兼容性的人工确认，不是自动验证证明。删除/重命名字段、收紧约束、重写数据等需要分阶段发布或安排维护窗口。数据库写入不随文件回退自动撤销。
+
+管理后台的“更新并部署”会在弹窗中要求超级管理员作出同样的一次性确认，并把授权只传给本次 detached runner。授权会写入脱敏部署日志，但会从候选服务和 PM2 运行环境中移除；后台不接受自定义命令或持久化该开关。
 
 `DEPLOY_UPDATE_MODE=maintenance` 仅保留给尚未接管蓝绿的旧安装，明确允许短暂中断；已有蓝绿状态时拒绝混用旧式运行目录更新。维护更新同样只发布精确 SHA 的 GitHub 制品，制品缺失时失败关闭；只有明确授权的应急场景显式设置 `DEPLOY_BUILD_MODE=local` 才会在生产机编译。
 

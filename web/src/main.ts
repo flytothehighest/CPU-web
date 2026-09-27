@@ -1,4 +1,4 @@
-import { createApp } from "vue";
+import { createApp, watch } from "vue";
 import { createPinia } from "pinia";
 import App from "./App.vue";
 import { preloadEducationViews, preloadPrimaryViews, router } from "./router";
@@ -23,6 +23,8 @@ import { hideWechatToolbarBestEffort, isWechatBrowser } from "./utils/wechatBrid
 import { buildEntryModuleSignature } from "./utils/entryModuleSignature";
 import { pruneForumViewCache } from "./utils/forumCache";
 import { sweepPageViewCaches } from "./utils/viewCache";
+import { isForumDestination } from "./utils/nativeForumVisibility";
+import { useMessageStore } from "./stores/message";
 
 import "element-plus/dist/index.css";
 import "element-plus/theme-chalk/dark/css-vars.css";
@@ -453,6 +455,13 @@ const appearanceStore = useAppearanceStore();
 appearanceStore.hydrate();
 installNativeAppearanceBridge(appearanceStore);
 useAuthStore().hydrate();
+watch(() => useAuthStore().user?.id, () => {
+  useMessageStore().setNotices([]);
+  if (useAuthStore().forumHidden && (isForumDestination(router.currentRoute.value.path)
+    || ["/messages", "/home"].includes(router.currentRoute.value.path))) {
+    void router.replace("/home/services");
+  }
+}, { flush: "sync" });
 installIosNextScheduleBridge(router);
 installJwxtDataPrewarmTriggers();
 // 站点功能开关：尽早拉一次，不阻塞挂载（导航默认乐观显示，拿到结果后自动收敛）

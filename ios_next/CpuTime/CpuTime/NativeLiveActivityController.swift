@@ -25,7 +25,9 @@ final class NativeLiveActivityController: ObservableObject {
     static let shared = NativeLiveActivityController()
     static let enabledKey = "scheduleLiveActivityEnabled"
     static let leadMinutesKey = "scheduleLiveActivityLeadMinutes"
-    private var defaults: UserDefaults { UserDefaults(suiteName: NextWidgetConfiguration.appGroup)! }
+    private let defaults: UserDefaults
+    let hasSharedStorage: Bool
+    @Published private(set) var recoveryMessage: String?
     static func normalizedLead(_ value: Int?) -> Int {
         guard let value, (0...60).contains(value) else { return 15 }
         return value <= 15 ? 15 : value <= 30 ? 30 : 60
@@ -35,7 +37,7 @@ final class NativeLiveActivityController: ObservableObject {
     var timingMode: Attributes.TimingMode { Attributes.TimingMode(rawValue: defaults.string(forKey: "cpu.liveActivity.mode") ?? "whole") ?? .whole }
     func setLeadMinutes(_ value: Int) { defaults.set(Self.normalizedLead(value), forKey: Self.leadMinutesKey); reconfigure() }
     func setTimingMode(_ value: Attributes.TimingMode) { defaults.set(value.rawValue, forKey: "cpu.liveActivity.mode"); reconfigure() }
-    var isEnabled: Bool { defaults.object(forKey: Self.enabledKey) as? Bool ?? true }
+    var isEnabled: Bool { hasSharedStorage && (defaults.object(forKey: Self.enabledKey) as? Bool ?? true) }
     @Published private(set) var status: Status = .waiting
     @Published private(set) var isPreviewActive = false
     @Published var broadcastStatus = "等待学校作息及频道。"
@@ -88,7 +90,10 @@ final class NativeLiveActivityController: ObservableObject {
     }
     private(set) var timing: TimingConfig?
     func installTiming(_ value: TimingConfig) {
-        guard value.protocolVersion == 2, TimeZone(identifier: value.timezone) != nil else { return }
+        guard value.protocolVersion == 2, TimeZone(identifier: value.timezone) != nil else {
+            recoveryMessage = "学校作息配置无效，已保留本机课表，请联网刷新。"
+            return
+        }
         timing = value
         broadcastWindows = value.windows
         if let data = try? JSONEncoder().encode(value) { defaults.set(data, forKey: "cpu.liveActivity.timing.v2") }
@@ -136,9 +141,24 @@ final class NativeLiveActivityController: ObservableObject {
         var signature: String { segments.map { "\($0.period):\($0.startAt.timeIntervalSince1970):\($0.endAt.timeIntervalSince1970)" }.joined(separator: ",") }
     }
     private var currentActivity: Activity<Attributes>? { Activity<Attributes>.activities.first { $0.activityState == .active || $0.activityState == .stale } }
-    init(now: @escaping () -> Date = { .now }) {
+    init(now: @escaping () -> Date = { .now }, sharedDefaults: UserDefaults? = UserDefaults(suiteName: NextWidgetConfiguration.appGroup)) {
         self.now = now
-        if let data = defaults.data(forKey: "cpu.liveActivity.timing.v2") { timing = try? JSONDecoder().decode(TimingConfig.self, from: data); broadcastWindows = timing?.windows ?? [] }
+        self.defaults = sharedDefaults ?? .standard
+        self.hasSharedStorage = sharedDefaults != nil
+        if sharedDefaults == nil {
+            recoveryMessage = "共享存储暂不可用，课表仍可使用；请重新打开 App 后重试实时活动。"
+        }
+        if let data = defaults.data(forKey: "cpu.liveActivity.timing.v2") {
+            if data.count <= 512 * 1024,
+               let cached = try? JSONDecoder().decode(TimingConfig.self, from: data),
+               cached.protocolVersion == 2, TimeZone(identifier: cached.timezone) != nil {
+                timing = cached
+                broadcastWindows = cached.windows
+            } else {
+                defaults.removeObject(forKey: "cpu.liveActivity.timing.v2")
+                recoveryMessage = "旧作息缓存无效，已使用本机课表，联网后将重新同步。"
+            }
+        }
         if !isEnabled { status = .disabled }
     }
     private func persist() {
@@ -431,13 +451,36 @@ final class NativeLiveActivityController: ObservableObject {
         }
         if let data = try? JSONEncoder().encode(records) { defaults.set(data, forKey: Attributes.broadcastCoursesKey) }
     }
+    static func validPeriods(_ values: [NativeSchedulePeriod]) -> [NativeSchedulePeriod] {
+        func minutes(_ value: String) -> Int? {
+            let parts = value.split(separator: ":", omittingEmptySubsequences: false)
+            guard parts.count == 2, let h = Int(parts[0]), let m = Int(parts[1]),
+                  (0...23).contains(h), (0...59).contains(m) else { return nil }
+            return h * 60 + m
+        }
+        var seen = Set<Int>()
+        return values.filter { period in
+            guard (1...48).contains(period.number), let start = minutes(period.startTime),
+                  let end = minutes(period.endTime), start < end else { return false }
+            return seen.insert(period.number).inserted
+        }.sorted { $0.number < $1.number }
+    }
+
     private func expand(_ snapshot: NativeScheduleSnapshot) -> [Occurrence] {
         guard let data = snapshot.data, let calendar = snapshot.calendar else { return [] }
         var dateCalendar = Calendar(identifier: .gregorian)
-        dateCalendar.timeZone = TimeZone(identifier: timing?.timezone ?? "Asia/Shanghai")!
-        let periods = timing?.periods.map { NativeSchedulePeriod(number: $0.id, startTime: $0.start, endTime: $0.end) } ?? snapshot.periods
+        dateCalendar.timeZone = TimeZone(identifier: timing?.timezone ?? "Asia/Shanghai")
+            ?? TimeZone(secondsFromGMT: 8 * 3600) ?? .gmt
+        let rawPeriods = timing?.periods.map { NativeSchedulePeriod(number: $0.id, startTime: $0.start, endTime: $0.end) } ?? snapshot.periods
+        // Legacy caches may contain duplicate IDs. Keep the first valid period,
+        // matching the order of the school's timetable, without a dictionary trap.
+        let periods = Self.validPeriods(rawPeriods)
+        if periods.count != rawPeriods.count {
+            recoveryMessage = "已忽略重复或无效的作息节次，请联网刷新课表。"
+        }
         guard !periods.isEmpty else { coverageStatus = "缺少学校作息表"; return [] }
-        let byNumber = Dictionary(uniqueKeysWithValues: periods.map { ($0.number, $0) })
+        var byNumber: [Int: NativeSchedulePeriod] = [:]
+        for period in periods { byNumber[period.number] = period }
         var result: [Occurrence] = []
         unsupported = []
         busyIntervals = []
