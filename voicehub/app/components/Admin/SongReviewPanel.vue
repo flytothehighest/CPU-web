@@ -110,6 +110,9 @@ dialog.review-dialog[open] { margin: auto; display: flex; flex-direction: column
 .review-dialog-header, .review-dialog-footer { flex: 0 0 auto; padding: 16px 20px; margin: 0; }
 .review-dialog-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; border-bottom: 1px solid #dbe5d5; }
 .review-dialog-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 20px 20px; overflow-wrap: anywhere; }
+.review-dialog-header h3, .review-dialog-body p { color: #263c2c; }
+.review-dialog-body p { font-size: 15px; line-height: 1.65; }
+.review-dialog-body a { color: #2f6b42; }
 .review-dialog-footer { border-top: 1px solid #dbe5d5; }
 .review-dialog::backdrop { background: rgb(0 0 0 / 65%); }
 </style>
