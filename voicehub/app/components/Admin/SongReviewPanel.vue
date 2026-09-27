@@ -14,7 +14,8 @@
     </div>
     <p v-if="error" role="alert" class="text-sm text-red-300">{{ error }}</p>
     <p role="status" aria-live="polite" class="text-sm text-zinc-300">{{ progress || `待审 ${pendingIds.length} 首 · AI暂无法确认 ${uncertainCount} 首` }}</p>
-    <dialog ref="dialog" class="review-dialog rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 p-5" aria-label="歌曲审核详情" @close="active = null">
+    <Teleport to="body">
+    <dialog v-if="active" ref="dialog" class="review-dialog rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100 p-5" aria-label="歌曲审核详情" @close="active = null">
       <template v-if="active">
         <div class="review-dialog-header flex items-start justify-between gap-3">
           <h3 class="text-lg font-bold">{{ active.title }} · {{ active.artist }}</h3>
@@ -33,6 +34,7 @@
         </div>
       </template>
     </dialog>
+    </Teleport>
   </section>
 </template>
 
@@ -104,7 +106,7 @@ defineExpose({ open, refresh })
 .review-button:focus-visible { outline: 2px solid #60a5fa; outline-offset: 3px; }
 .review-button:disabled { opacity: .45; cursor: not-allowed; }
 .review-dialog { position: fixed; inset: 0; margin: auto; width: min(640px, calc(100vw - 32px)); max-width: calc(100vw - 32px); max-height: calc(100dvh - 32px); overflow: hidden; box-sizing: border-box; padding: 0; border-radius: 16px; border: 1px solid #c6d4bf; background: #fffdf8; color: #263c2c; }
-.review-dialog[open] { display: flex; flex-direction: column; }
+dialog.review-dialog[open] { margin: auto; display: flex; flex-direction: column; }
 .review-dialog-header, .review-dialog-footer { flex: 0 0 auto; padding: 16px 20px; margin: 0; }
 .review-dialog-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; border-bottom: 1px solid #dbe5d5; }
 .review-dialog-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 20px 20px; overflow-wrap: anywhere; }

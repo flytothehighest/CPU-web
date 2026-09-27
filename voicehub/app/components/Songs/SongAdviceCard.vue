@@ -49,7 +49,7 @@ function closeAdvice() { dialog.value?.close() }
 .song-advice-status { flex: 1 1 150px; min-width: 0; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
 .advice-open, .advice-close { min-height: 44px; padding: 8px 12px; border: 1px solid #426a49; border-radius: 8px; background: #fff; color: #284f32; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
 .song-advice-dialog { position: fixed; inset: 0; box-sizing: border-box; width: min(620px, calc(100vw - 32px)); max-width: calc(100vw - 32px); max-height: calc(100dvh - 32px); margin: auto; padding: 0; border: 1px solid #c6d4bf; border-radius: 16px; background: #fffdf8; color: #263c2c; text-align: left; box-shadow: 0 16px 60px rgb(20 40 24 / 25%); overflow: hidden; }
-.song-advice-dialog[open] { display: flex; flex-direction: column; }
+dialog.song-advice-dialog[open] { margin: auto; display: flex; flex-direction: column; }
 .song-advice-dialog::backdrop { background: rgb(15 28 19 / 48%); }
 .advice-dialog-header { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 24px; border-bottom: 1px solid #dbe5d5; }
 .advice-dialog-header h3 { margin: 0; font-size: 20px; font-weight: 700; line-height: 1.4; }
