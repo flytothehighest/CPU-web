@@ -23,6 +23,9 @@ jobs:
           distribution: temurin
           java-version: "17"
       - uses: android-actions/setup-android@v3
+        with:
+          # cmdline-tools 16 no longer ships the legacy 'tools' package the action installs by default.
+          packages: platform-tools
       - uses: gradle/actions/setup-gradle@v4
       - name: Verify update handoff and build release APK
         working-directory: android
