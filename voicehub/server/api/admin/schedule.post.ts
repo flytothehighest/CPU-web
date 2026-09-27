@@ -1,3 +1,4 @@
+import { getSongReviewConfig, requireSchedulableSongs } from '~~/server/services/songReviewService'
 import { db } from '~/drizzle/db'
 import { playTimes, schedules, songs, users, votes, songReplayRequests } from '~/drizzle/schema'
 import { and, asc, count, desc, eq, gte, lte } from 'drizzle-orm'
@@ -48,7 +49,9 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    await db.transaction(async (tx) => {
+    const reviewConfig = await getSongReviewConfig()
+    const schedule = await db.transaction(async (tx) => {
+      await requireSchedulableSongs(tx, [body.songId], reviewConfig)
       // 检查是否已经为该歌曲创建过排期，如果有则删除旧的排期
       const existingScheduleResult = await tx
         .select()
@@ -150,6 +153,7 @@ export default defineEventHandler(async (event) => {
             )
           )
       }
+      return schedule
     })
 
     // 清除相关缓存
@@ -310,7 +314,7 @@ export default defineEventHandler(async (event) => {
   } catch (error: any) {
     console.error('创建排期失败:', error)
     throw createError({
-      statusCode: 500,
+      statusCode: error.statusCode || 500,
       message: error.message || '创建排期失败'
     })
   }

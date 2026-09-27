@@ -173,6 +173,38 @@ struct NativeLiveActivityChecks {
         precondition(live.count == 1 && live[0].id == retainedID, "unchanged reservations survive rolling checks")
         rolling.reset()
         await settle()
+        // Reproduce upgrade-cache traps through the production initializer and expand path.
+        let damaged = NativeLiveActivityController.TimingConfig(protocolVersion: 2,
+            scheduleId: config.scheduleId, scheduleVersion: config.scheduleVersion, timezone: "invalid/legacy-zone",
+            periods: config.periods + [config.periods[0]], issuedAt: config.issuedAt,
+            usableUntil: config.usableUntil, broadcastUntil: config.broadcastUntil, windows: config.windows)
+        defaults.set(try JSONEncoder().encode(damaged), forKey: "cpu.liveActivity.timing.v2")
+        let recovered = NativeLiveActivityController(now: { start.addingTimeInterval(-900) })
+        precondition(recovered.timing == nil && recovered.recoveryMessage != nil)
+        recovered.accept(fixture(account: "recovered"))
+        await settle()
+        recovered.reset()
+        await settle()
+        let duplicate = NativeLiveActivityController.TimingConfig(protocolVersion: 2,
+            scheduleId: config.scheduleId, scheduleVersion: config.scheduleVersion, timezone: config.timezone,
+            periods: config.periods + [config.periods[0], .init(id: 4, name: "bad", start: "99:99", end: "00:00")],
+            issuedAt: config.issuedAt, usableUntil: config.usableUntil, broadcastUntil: config.broadcastUntil, windows: config.windows)
+        defaults.set(try JSONEncoder().encode(duplicate), forKey: "cpu.liveActivity.timing.v2")
+        let deduplicated = NativeLiveActivityController(now: { start.addingTimeInterval(-900) })
+        deduplicated.accept(fixture(account: "deduplicated"))
+        precondition(deduplicated.remoteStartWindows().count == 2)
+        precondition(deduplicated.recoveryMessage != nil)
+        deduplicated.reset()
+        await settle()
+        let noGroup = NativeLiveActivityController(now: { start }, sharedDefaults: nil)
+        precondition(!noGroup.hasSharedStorage && !noGroup.isEnabled && noGroup.recoveryMessage != nil)
+        let valid = NativeLiveActivityController.validPeriods([
+            .init(number: 1, startTime: "bad", endTime: "bad"),
+            .init(number: 1, startTime: "08:00", endTime: "08:45"),
+            .init(number: 1, startTime: "09:00", endTime: "09:45"),
+            .init(number: -1, startTime: "08:00", endTime: "08:45")])
+        precondition(valid.count == 1 && valid[0].startTime == "08:00")
+        print("Upgrade cache recovery: invalid timezone, duplicate/invalid periods and missing App Group passed")
         print("Live Activity v2 timeline, identity, conflict, reservation, dismissal and privacy checks passed")
     }
     @MainActor static var live: [Activity<ScheduleLiveActivityAttributes>] { Activity<ScheduleLiveActivityAttributes>.activities.filter { $0.activityState != .ended && $0.activityState != .dismissed } }

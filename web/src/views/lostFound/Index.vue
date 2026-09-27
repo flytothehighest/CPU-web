@@ -236,7 +236,7 @@
         <div v-else-if="detail.contact" class="private-contact"><small>仅发布者和失物招领管理员可见的原始联系方式</small><strong>{{ detail.contact }}</strong></div>
         <div class="detail-actions cpu-button-row">
           <el-button v-if="detail.status === 'active' && !detail.mine" type="primary" @click="openClaim">{{ detail.kind === 'found' ? '这是我的，提交认领' : '我找到了，联系失主' }}</el-button>
-          <el-button v-if="canDirectMessageDetail" plain @click="openDirectChat">私聊发布者</el-button>
+          <el-button v-if="canDirectMessageDetail && !auth.forumHidden" plain @click="openDirectChat">私聊发布者</el-button>
           <el-button v-if="detail.mine && detail.status === 'active'" type="success" plain @click="setItemStatus('claimed')">标记已认领</el-button>
           <el-button v-if="detail.mine && detail.status === 'active'" plain @click="setItemStatus('closed')">关闭信息</el-button>
           <el-button v-if="detail.mine && detail.status !== 'active'" plain @click="setItemStatus('active')">重新开放</el-button>

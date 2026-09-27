@@ -379,9 +379,16 @@ async function acquireDeploymentLock(statusDir: string) {
   throw new DeploymentAlreadyRunningError("部署锁正在被占用，请稍后重试");
 }
 
-export async function startAdminDeploymentUpdate(input: { operatorId: number; confirmation: string }) {
+export async function startAdminDeploymentUpdate(input: {
+  operatorId: number;
+  confirmation: string;
+  allowSchemaExpand: boolean;
+}) {
   if (input.confirmation !== DEPLOY_CONFIRMATION) {
     throw new DeploymentUnavailableError("部署确认信息不正确");
+  }
+  if (input.allowSchemaExpand !== true) {
+    throw new DeploymentUnavailableError("必须确认本次数据库变更仅包含向后兼容的扩展迁移");
   }
   const context = await resolveDeploymentContext();
   if (!context.available || !context.root || !context.statusDir || !context.runnerPath) {
@@ -414,12 +421,16 @@ export async function startAdminDeploymentUpdate(input: { operatorId: number; co
       id,
       now,
       String(input.operatorId),
+      "1",
     ], {
       cwd: context.root,
       detached: true,
       stdio: "ignore",
       windowsHide: true,
-      env: deploymentChildEnvironment(process.env),
+      env: {
+        ...deploymentChildEnvironment(process.env),
+        DEPLOY_ALLOW_SCHEMA_EXPAND: "1",
+      },
     });
     await new Promise<void>((resolve, reject) => {
       child.once("spawn", resolve);

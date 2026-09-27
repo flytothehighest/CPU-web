@@ -12,7 +12,7 @@ export type AiServiceConfig = {
   assistantContextMaxCharsPerMessage: number;
 };
 
-export type AiServiceScene = "assistant" | "learning-assistant" | "smart-post" | "text-review" | "qq-group-ad" | "image-review" | "video-review";
+export type AiServiceScene = "assistant" | "learning-assistant" | "smart-post" | "song-review" | "text-review" | "qq-group-ad" | "image-review" | "video-review";
 export type AiServiceFallbackRoute = {
   serviceId: string;
   model: string;
@@ -37,6 +37,11 @@ export type SiteConfig = {
   assistantServiceId: string;
   learningAssistantServiceId: string;
   smartPostServiceId: string;
+  songReviewEnabled: boolean;
+  songReviewServiceId: string;
+  songReviewModel: string;
+  songReviewFallbackModels: string;
+  songReviewRules: string;
   smartPostEnabled: boolean;
   smartPostModel: string;
   smartPostFallbackModels: string;
@@ -335,6 +340,45 @@ export type IosClientStats = {
     lastSeenAt: string;
     user: { id: number; nickname: string; username: string } | null;
   }[];
+};
+
+export type DesktopInstallOutcome = "failed" | "retried" | "elevated";
+
+/** `failed` is the subset of `count` the installer could not recover from. */
+export type DesktopInstallGroupCount = { key: string; count: number; failed: number };
+
+export type DesktopInstallReportItem = {
+  id: string;
+  appVersion: string;
+  previousVersion: string | null;
+  osRelease: string;
+  windows: string;
+  arch: "x64" | "arm64" | "ia32";
+  mode: "install" | "upgrade" | "auto-update";
+  elevated: boolean;
+  outcome: DesktopInstallOutcome;
+  stage: string;
+  errorCode: string | null;
+  fileName: string | null;
+  message: string | null;
+  antivirus: string[];
+  retries: number;
+  durationMs: number;
+  createdAt: string;
+};
+
+export type DesktopInstallReports = {
+  range: IosClientStatsRange;
+  totals: { allTime: number };
+  reports: number;
+  byOutcome: Record<DesktopInstallOutcome, number>;
+  byErrorCode: DesktopInstallGroupCount[];
+  byStage: DesktopInstallGroupCount[];
+  byAntivirus: DesktopInstallGroupCount[];
+  byAppVersion: DesktopInstallGroupCount[];
+  byWindows: DesktopInstallGroupCount[];
+  trend: { dates: string[]; failed: number[]; recovered: number[] };
+  recent: DesktopInstallReportItem[];
 };
 
 export type CloudUsageRange = "today" | "7d" | "30d";
@@ -1078,7 +1122,7 @@ export const adminApi = {
   startDeploymentUpdate: () =>
     request.post<AdminDeploymentStatus>(
       "/admin/deployment/update",
-      { confirmation: "UPDATE_AND_DEPLOY" },
+      { confirmation: "UPDATE_AND_DEPLOY", allowSchemaExpand: true },
       { preserveResponseCache: true },
     ),
   jwxtAgents: (options?: RequestOptions) =>
@@ -1180,6 +1224,8 @@ export const adminApi = {
     request.get<IosClientStats>("/admin/ios-clients", { range }, { cacheTtlMs: 0, ...options }),
   iosClientDiagnostic: (id: string) =>
     request.get<IosClientDiagnosticDetail>(`/admin/ios-clients/diagnostics/${encodeURIComponent(id)}`, undefined, { cacheTtlMs: 0 }),
+  desktopInstallReports: (range: IosClientStatsRange, options?: RequestOptions) =>
+    request.get<DesktopInstallReports>("/admin/desktop-install-reports", { range }, { cacheTtlMs: 0, ...options }),
   cloudUsage: (range: CloudUsageRange, refresh = false, options?: RequestOptions) =>
     request.get<CloudUsageSummary>("/admin/cloud-usage", { range, refresh: refresh ? "1" : "0" }, { timeout: 120000, cacheTtlMs: 0, ...options }),
   updateMediaStorageConfig: (patch: {
@@ -1263,6 +1309,11 @@ export const adminApi = {
     assistantServiceId?: string;
     learningAssistantServiceId?: string;
     smartPostServiceId?: string;
+    songReviewEnabled?: boolean;
+    songReviewServiceId?: string;
+    songReviewModel?: string;
+    songReviewFallbackModels?: string;
+    songReviewRules?: string;
     smartPostEnabled?: boolean;
     smartPostModel?: string;
     smartPostFallbackModels?: string;

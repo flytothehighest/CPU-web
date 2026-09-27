@@ -11,7 +11,7 @@
           <span>{{ entry.label }}</span>
         </button>
       </nav>
-      <p v-if="nativeForumRestricted" class="forum-access-note">
+      <p v-if="nativeForumRestricted && !auth.forumHidden" class="forum-access-note">
         <el-icon aria-hidden="true"><Lock /></el-icon>
         <span>论坛仅限连接内网后使用</span>
       </p>
@@ -116,6 +116,7 @@ import { isNativeForumIntranetOnlyAccount, shouldHideNativeYaodaCanFly } from "@
 import { forumCacheScope, readForumLatestFeed, writeForumLatestFeed } from "@/utils/forumCache";
 import { clearForumListRestoreState, readForumListRestoreState, writeForumListRestoreState } from "@/utils/forumListRestore";
 import { readHomeSummaryCache, writeHomeSummaryCache } from "@/utils/homeCache";
+import { isForumDestination } from "@/utils/nativeForumVisibility";
 
 type MobileHomeFeedStream = Exclude<HomeFeedStream, "all">;
 type HomeFeedRestoreState = {
@@ -171,6 +172,7 @@ const activeFeedLink = computed(() => activeFeedStream.value === "market" ? "/fo
 const activeFeedLinkLabel = computed(() => activeFeedStream.value === "market" ? "进入二手" : "进入论坛");
 const nativeForumRestricted = computed(() => isNativeForumIntranetOnlyAccount(auth.user?.username));
 const visibleServices = computed(() => (summary.value?.services || [])
+  .filter((service) => !auth.forumHidden || !isForumDestination(String(service?.url || "")))
   .filter((service) => !(
     shouldHideNativeYaodaCanFly(auth.isLoggedIn, auth.user?.username)
     && String(service?.url || "").includes("/services/tools/yaoda-can-fly")
@@ -179,7 +181,8 @@ const visibleServices = computed(() => (summary.value?.services || [])
 const quickEntries = computed(() => {
   if (!showForumContent.value) {
     return [
-      { icon: Notification, label: "公告", to: "/announcements" },
+      ...(auth.forumHidden ? [{ icon: Search, label: "搜索", to: "/search/results?scope=services" }]
+        : [{ icon: Notification, label: "公告", to: "/announcements" }]),
       { icon: Search, label: "失物", to: "/lost-found" },
       { icon: School, label: "教务", to: "/jwxt" },
       { icon: Service, label: "服务", to: "/services" },
@@ -258,7 +261,7 @@ async function loadHomeScope() {
     const state = feedStates[stream];
     const restoredPage = stream === "forum" ? pendingRestoreState?.forumPage : pendingRestoreState?.marketPage;
     state.page = Math.max(1, Number(restoredPage || (pendingRestoreState?.stream === stream ? pendingRestoreState.page : 1) || 1));
-    const cachedFeed = readForumLatestFeed(forumCacheScope(auth.user), stream);
+    const cachedFeed = showForumContent.value ? readForumLatestFeed(forumCacheScope(auth.user), stream) : null;
     state.list = cachedFeed?.list.slice(0, state.page * feedPageSize) || [];
     state.total = cachedFeed?.total || state.list.length;
     state.loaded = false;
@@ -267,7 +270,7 @@ async function loadHomeScope() {
     state.error = "";
     state.loadMoreError = "";
   }
-  if (!feedStates.forum.list.length && cached?.latestTopics?.length) {
+  if (showForumContent.value && !feedStates.forum.list.length && cached?.latestTopics?.length) {
     feedStates.forum.list = (cached.latestTopics as Topic[])
       .filter((topic) => topic.board?.type !== "market")
       .slice(0, feedPageSize);
@@ -317,10 +320,10 @@ async function loadSummary(options: { scope?: string; fallback?: HomeSummary | n
   loading.value = !summary.value;
   homeError.value = "";
   try {
-    const result = await homeApi.summary({ suppressErrorMessage: true, cacheTtlMs: 0 });
+    const result = await homeApi.summary({ suppressErrorMessage: true, cacheTtlMs: 0 }, auth.forumHidden);
     if (disposed || sequence !== loadSequence || scope !== homeCacheScope.value) return;
     summary.value = result;
-    if (!feedStates.forum.list.length && !feedStates.forum.loaded) {
+    if (showForumContent.value && !feedStates.forum.list.length && !feedStates.forum.loaded) {
       feedStates.forum.list = ((result.latestTopics || []) as Topic[])
         .filter((topic) => topic.board?.type !== "market")
         .slice(0, feedPageSize);

@@ -265,6 +265,7 @@
                   </span>
                   <span v-else-if="song.isReplay" title="重播歌曲" class="replay-tag"> 重播 </span>
                 </h3>
+                <SongAdviceCard v-if="isMySong(song) && reviewAdvice[song.id] && !song.played" :advice="reviewAdvice[song.id]" :busy="reviewActing.includes(song.id)" :error="reviewActionErrors[song.id]" @action="handleReviewAdvice(song.id, $event)" />
                 <div class="song-meta">
                   <span
                     :title="
@@ -411,6 +412,8 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { useSongReviewAdvice } from '~/composables/useSongReviewAdvice'
 import { useAuth } from '~/composables/useAuth'
 import { useAudioPlayer } from '~/composables/useAudioPlayer'
 import { useMusicSources } from '~/composables/useMusicSources'
@@ -421,6 +424,7 @@ import Icon from '~/components/UI/Icon.vue'
 import Pagination from '~/components/UI/Common/Pagination.vue'
 import MarqueeText from '~/components/UI/MarqueeText.vue'
 import ConfirmDialog from '~/components/UI/ConfirmDialog.vue'
+import SongAdviceCard from '~/components/Songs/SongAdviceCard.vue'
 import SongCommentsModal from '~/components/Songs/SongCommentsModal.vue'
 import { convertToHttps } from '~/utils/url'
 import { isBilibiliSong } from '~/utils/bilibiliSource'
@@ -469,6 +473,11 @@ const auth = useAuth()
 const { enableReplayRequests } = useSiteConfig()
 const isAuthenticated = computed(() => auth && auth.isAuthenticated && auth.isAuthenticated.value)
 const currentUserId = computed(() => auth?.user?.value?.id || null)
+const { advice: reviewAdvice, refresh: refreshReviewAdvice, act: actOnReviewAdvice, acting: reviewActing, actionErrors: reviewActionErrors } = useSongReviewAdvice(currentUserId)
+const handleReviewAdvice = async (songId, action) => {
+  if (await actOnReviewAdvice(reviewAdvice.value[songId], action)) emit('refresh')
+}
+watch(() => props.songs, () => { if (import.meta.client) refreshReviewAdvice() })
 const isAdminUser = computed(() => {
   const role = auth?.user?.value?.role
   return props.isAdmin || ['SUPER_ADMIN', 'ADMIN', 'SONG_ADMIN'].includes(role)
@@ -476,6 +485,14 @@ const isAdminUser = computed(() => {
 
 // 焦点状态管理
 const focusedSongId = ref(null)
+const adviceRoute = useRoute()
+let adviceLinkHandled = false
+watch([() => props.songs, currentUserId], () => {
+  const target = Number(adviceRoute.query.reviewSong)
+  if (adviceLinkHandled || !target || !currentUserId.value) return
+  const song = props.songs.find(s => s.id === target && s.requesterId === currentUserId.value)
+  if (song) { activeTab.value = 'mine'; searchQuery.value = song.title; focusedSongId.value = target; adviceLinkHandled = true }
+}, { immediate: true })
 
 // 处理歌曲卡片焦点切换
 const handleSongCardClick = (song) => {

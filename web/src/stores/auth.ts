@@ -2,10 +2,11 @@ import { defineStore } from "pinia";
 import { useSiteStore } from "./site";
 import { authApi, type UserInfo, type RegisterPayload } from "@/api/auth";
 import { clearToken, COOKIE_SESSION_MARKER, getToken, hasAuthPresence, setToken } from "@/api/request";
-import { jwxtApi, getJwxtToken, setJwxtToken, clearJwxtToken, JWXT_COOKIE_SESSION_MARKER } from "@/api/jwxt";
+import { jwxtApi, setJwxtToken, clearJwxtToken, JWXT_COOKIE_SESSION_MARKER } from "@/api/jwxt";
 import { clearCreds, saveCreds } from "@/utils/credCrypto";
 import { encryptAgentLoginCredentials } from "@/utils/agentCredentialCrypto";
 import { withMediaRevision } from "@/utils/cdnMedia";
+import { shouldHideHarmonyForum } from "@/utils/clientInfo";
 import { clearJwxtDataCaches, purgeLegacySensitiveJwxtCaches } from "@/utils/jwxtCache";
 import {
   academicIdentityLabel,
@@ -22,6 +23,7 @@ import {
 const DATA_AUTH_KEY_PREFIX = "cpu-data-auth-agreement-v1";
 
 let autoSsoLoginInFlight: Promise<boolean> | null = null;
+let pendingSsoLoginAbortController: AbortController | null = null;
 
 function isAcademicDataUnavailableError(error: unknown) {
   const candidate = error as {
@@ -36,6 +38,10 @@ function isAcademicDataUnavailableError(error: unknown) {
 
 function clearJustLoggedOutMarker() {
   try { sessionStorage.removeItem("cpu-just-logged-out"); } catch { /* ignore */ }
+}
+
+function justLoggedOutThisSession() {
+  try { return sessionStorage.getItem("cpu-just-logged-out") === "1"; } catch { return false; }
 }
 
 function dataAuthKey(username: string) {
@@ -99,11 +105,13 @@ export const useAuthStore = defineStore("auth", {
     isVoiceHubSuperAdmin: (s) => s.user?.role === "admin" || s.user?.voiceHubRole === "super_admin",
     isLostFoundAdmin: (s) => s.user?.role === "admin" || s.user?.role === "mod" || !!s.user?.lostFoundRole,
     isLostFoundSuperAdmin: (s) => s.user?.role === "admin" || s.user?.lostFoundRole === "super_admin",
-    canAccessModuleAdmin: (s) => s.user?.role === "admin"
+    canAccessModuleAdmin: (s) => !shouldHideHarmonyForum(s.user?.username) && (s.user?.role === "admin"
       || s.user?.role === "mod"
       || s.user?.voiceHubRole === "super_admin"
-      || !!s.user?.lostFoundRole,
-    canAccessForum: (state) => !useSiteStore().features.forumLoginRequired || !!state.user,
+      || !!s.user?.lostFoundRole),
+    forumHidden: (state) => shouldHideHarmonyForum(state.user?.username),
+    canAccessForum: (state) => !shouldHideHarmonyForum(state.user?.username)
+      && (!useSiteStore().features.forumLoginRequired || !!state.user),
     needSetupNickname: (s) => !!s.user
       && (!s.user.nickname || s.user.nickname.trim() === "")
       && !(["checking", "manual_pending"].includes(s.user.nicknameReview?.status || "") && s.user.nicknameReview?.pendingNickname?.trim()),
@@ -286,6 +294,8 @@ export const useAuthStore = defineStore("auth", {
     async ssoLogin(username: string, password: string, captcha: string | undefined, remember: boolean, options?: { silent?: boolean }): Promise<boolean> {
       if (this._pendingSsoLogin) return this._pendingSsoLogin;
       const requestSessionVersion = this.sessionVersion;
+      const abortController = new AbortController();
+      pendingSsoLoginAbortController = abortController;
       const task = (async () => {
         this.ssoLoading = true;
         this.ssoError = "";
@@ -311,6 +321,7 @@ export const useAuthStore = defineStore("auth", {
           // A school SSO login can need several redirects on a slow mobile
           // connection. Let the user wait for the actual outcome.
           timeout: 95_000,
+          signal: abortController.signal,
         };
         const loginPayload = credentialPublicKey
           ? {
@@ -366,6 +377,7 @@ export const useAuthStore = defineStore("auth", {
         // the JWXT store only pauses background recovery until data is available.
         return true;
         } catch (error) {
+          if (this.sessionVersion !== requestSessionVersion) return false;
           this.ssoError = (error instanceof Error ? error.message : "") || "登录暂时失败，请稍后再试。";
           return false;
         } finally {
@@ -376,12 +388,14 @@ export const useAuthStore = defineStore("auth", {
       try {
         return await task;
       } finally {
+        if (pendingSsoLoginAbortController === abortController) pendingSsoLoginAbortController = null;
         if (this._pendingSsoLogin === task) this._pendingSsoLogin = null;
       }
     },
 
     /** Background recovery shares one school SSO submission. */
     async tryAutoSsoLogin(options?: { silent?: boolean }): Promise<boolean> {
+      if (justLoggedOutThisSession()) return false;
       if (this.academicIdentityUnavailable && this.user?.studentSso) return false;
       if (autoSsoLoginInFlight) return autoSsoLoginInFlight;
       const task = (async () => {
@@ -494,16 +508,13 @@ export const useAuthStore = defineStore("auth", {
     },
 
     async logout() {
-      // Start server-side revocation while the browser cookie/JWXT marker is
-      // still available, but invalidate local state immediately. This makes
-      // logout responsive and prevents late probes or SSO requests restoring
-      // the session the user just ended.
+      // The server revokes the site and education sessions as one operation.
+      // Invalidate local state immediately so late probes cannot repopulate it.
       const siteLogoutTask = authApi.logout().catch(() => undefined);
-      const jwxtLogoutTask = getJwxtToken()
-        ? jwxtApi.logout().catch(() => undefined)
-        : Promise.resolve();
+      pendingSsoLoginAbortController?.abort();
+      pendingSsoLoginAbortController = null;
       this.sessionVersion += 1;
-      clearToken(); this.token = ""; this.user = null; this.dataAuthAgreed = false; this.ready = false;
+      clearToken(); this.token = ""; this.user = null; this.dataAuthAgreed = false; this.ready = true;
       this._pendingFetchMe = null;
       this._pendingSsoBegin = null;
       this._pendingSsoLogin = null;
@@ -513,13 +524,12 @@ export const useAuthStore = defineStore("auth", {
       clearJwxtToken();
       clearJwxtDataCaches();
       this.clearAcademicIdentity();
-      // 主动退出 → 设一个本会话级标记，避免回到 /login 时被 onMounted 立即自动重登；
-      // 但**保留** credCrypto 里"记住的密码"——这样关闭浏览器再打开还能自动登录，
-      // 符合"记住此账号"checkbox 的字面承诺。
-      // 真正想擦凭据请去 /jwxt 点"忘记账号"。
-      // 主动退出后，本次浏览器会话不再自动使用“记住密码”重登；凭据本身仍保留。
+      // Explicit logout must also disable saved-credential recovery. Keeping
+      // the encrypted password here makes the next bootstrap log straight
+      // back in, which is indistinguishable from a failed logout.
+      clearCreds();
       try { sessionStorage.setItem("cpu-just-logged-out", "1"); } catch { /* ignore */ }
-      await Promise.all([siteLogoutTask, jwxtLogoutTask]);
+      await siteLogoutTask;
     },
 
     expireSession() {

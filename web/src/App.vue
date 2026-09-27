@@ -39,6 +39,7 @@
       </template>
     </el-dialog>
     <el-dialog
+      v-if="!auth.forumHidden"
       v-model="strongNoticeOpen"
       title="站务强提醒"
       width="420"
@@ -78,6 +79,7 @@
       </template>
     </el-dialog>
     <el-dialog
+      v-if="!auth.forumHidden"
       v-model="directNoticeOpen"
       title="收到新私信"
       width="420"
@@ -117,7 +119,7 @@
     >
       <div v-if="inAppTipMode === 'follow'" class="in-app-tip">
         <p><b>推荐关注拾小间微信服务号</b></p>
-        <p>可接收已开启的站内通知，并从服务号菜单直接进入课表、教务、论坛等功能。</p>
+        <p>{{ auth.forumHidden ? '可接收已开启的站内通知，并从服务号菜单进入课表与教务。' : '可接收已开启的站内通知，并从服务号菜单直接进入课表、教务、论坛等功能。' }}</p>
         <p class="muted">请在微信顶部搜索服务号 ID“cputimecn”，也可以搜索名称“拾小间”，进入公众号结果并关注。以后从服务号菜单打开本站，将作为微信客户端使用，不再主动弹出安装提示。</p>
       </div>
       <div v-else-if="inAppTipMode === 'bind'" class="in-app-tip">

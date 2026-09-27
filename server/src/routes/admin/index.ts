@@ -116,6 +116,7 @@ import {
 } from "../../services/webStaticSwitch";
 import { getCloudUsageSummary, type CloudUsageRange } from "../../services/cloudUsage";
 import { getIosClientDiagnostic, getIosClientStats, parseIosClientStatsRange } from "../../services/iosClientStats";
+import { getDesktopInstallReports, parseDesktopInstallReportRange } from "../../services/desktopInstallReports";
 import { migrateLegacyDataAvatars } from "../../services/userAvatarStorage";
 import { qqBotAdminRouter } from "./qqbot";
 import { backfillAdminDailyLoginsFromLastLogin, getChinaDayRange, listAdminDailyLoginSeries } from "../../services/adminStats";
@@ -156,6 +157,7 @@ adminRouter.use("/profile-reviews", modOrAbove, profileReviewAdminRouter);
 adminRouter.use("/account-verifications", modOrAbove, accountVerificationAdminRouter);
 const deploymentUpdateSchema = z.object({
   confirmation: z.literal("UPDATE_AND_DEPLOY"),
+  allowSchemaExpand: z.literal(true),
 });
 
 adminRouter.get("/deployment", adminOnly, async (_req, res, next) => {
@@ -175,6 +177,7 @@ adminRouter.post(
       ok(res, await startAdminDeploymentUpdate({
         operatorId: req.user!.userId,
         confirmation: req.body.confirmation,
+        allowSchemaExpand: req.body.allowSchemaExpand,
       }));
     } catch (error) {
       if (error instanceof DeploymentAlreadyRunningError) {
@@ -2360,6 +2363,14 @@ adminRouter.get("/ios-clients/diagnostics/:id", adminOnly, async (req, res, next
   }
 });
 
+adminRouter.get("/desktop-install-reports", adminOnly, async (req, res, next) => {
+  try {
+    ok(res, await getDesktopInstallReports(parseDesktopInstallReportRange(req.query.range)));
+  } catch (e) {
+    next(e);
+  }
+});
+
 adminRouter.get("/media-storage/web-static", adminOnly, async (_req, res, next) => {
   try {
     ok(res, await getWebStaticSwitchStatus());
@@ -2590,6 +2601,11 @@ const siteConfigPatchSchema = z.object({
   assistantServiceId: z.string().trim().max(48).optional(),
   learningAssistantServiceId: z.string().trim().max(48).optional(),
   smartPostServiceId: z.string().trim().max(48).optional(),
+  songReviewEnabled: z.boolean().optional(),
+  songReviewServiceId: z.string().trim().max(48).optional(),
+  songReviewModel: z.string().trim().min(1).max(80).optional(),
+  songReviewFallbackModels: z.string().trim().max(400).optional(),
+  songReviewRules: z.string().trim().min(1).max(6000).optional(),
   smartPostEnabled: z.boolean().optional(),
   smartPostModel: z.string().trim().min(1).max(200).optional(),
   smartPostFallbackModels: z.string().trim().max(400).optional(),
@@ -2682,6 +2698,11 @@ adminRouter.patch("/site-config", adminOnly, validate(siteConfigPatchSchema), as
       req.body.assistantServiceId !== undefined ||
       req.body.learningAssistantServiceId !== undefined ||
       req.body.smartPostServiceId !== undefined ||
+      req.body.songReviewEnabled !== undefined ||
+      req.body.songReviewServiceId !== undefined ||
+      req.body.songReviewModel !== undefined ||
+      req.body.songReviewFallbackModels !== undefined ||
+      req.body.songReviewRules !== undefined ||
       req.body.smartPostEnabled !== undefined ||
       req.body.smartPostModel !== undefined ||
       req.body.smartPostFallbackModels !== undefined ||

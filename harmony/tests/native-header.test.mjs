@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 const require = createRequire(new URL('../../web/package.json', import.meta.url));
 const { transformSync } = require('esbuild');
+const policy = readFileSync(new URL('../../web/src/utils/nativeForumVisibility.ts', import.meta.url), 'utf8');
 const source = readFileSync(new URL('../bridge/header.ts', import.meta.url), 'utf8');
 function setup() {
   const routes = [], notifications = [], frames = [], subscribers = [];
@@ -16,9 +17,14 @@ function setup() {
   const host = {history:{state:{}},CPUHarmony:{headerChanged:p=>notifications.push(JSON.parse(p))}};
   const doc = {body:{},querySelector:s=>s.includes('button')?{click:()=>more++}:hasHeader?{}:null};
   const context = vm.createContext({module:{exports:{}},window:host,document:doc,
-    require:()=>({liveApp:()=>({config:{globalProperties:{$router:router,$pinia:{_s:stores}}}})}),
+    URL,
+    require:(name)=> name.includes('nativeForumVisibility') ? policyApi
+      : ({liveApp:()=>({config:{globalProperties:{$router:router,$pinia:{_s:stores}}}})}),
     requestAnimationFrame:cb=>frames.push(cb),MutationObserver:class {constructor(cb){mutation=cb;}observe(){}},
   });
+  const policyModule = { exports: {} };
+  vm.runInNewContext(transformSync(policy,{loader:'ts',format:'cjs'}).code,{module:policyModule,URL});
+  const policyApi = policyModule.exports;
   vm.runInContext(transformSync(source,{loader:'ts',format:'cjs'}).code,context);
   return {api:context.module.exports,router,stores,host,doc,routes,notifications,subscribers,
     more:()=>more,back:()=>back,route:()=>routeChanged(),mutate:()=>mutation(),hide:()=>hasHeader=false,
@@ -54,4 +60,19 @@ test('startup readiness follows the painted app marker, including pages with the
   h.doc.body.dataset = { cpuAppReady: '1' }; h.hide(); h.mutate(); h.flush();
   assert.equal(h.notifications.at(-1).contentReady, true);
   assert.equal(h.notifications.at(-1).visible, false);
+});
+
+test('restricted Harmony header never exposes forum titles or stale private unread badges', () => {
+  const h = setup();
+  h.stores.get('auth').forumHidden = true;
+  h.router.currentRoute.value = { path: '/forum/topic/9', meta: { title: 'Secret topic' } };
+  const state = h.api.readHeaderState(h.router, h.stores, h.doc);
+  assert.equal(state.path, '/home');
+  assert.equal(state.title, '药大拾间');
+  assert.equal(state.unread, 0);
+  assert.equal(state.directUnread, 0);
+  h.api.runHeaderAction('messages', '/home', h.router, h.stores);
+  assert.equal(h.routes.at(-1), '/messages');
+  h.router.currentRoute.value = { path: '/home/services' };
+  assert.equal(h.api.readHeaderState(h.router, h.stores, h.doc).back, false);
 });

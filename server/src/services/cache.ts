@@ -59,6 +59,7 @@ const CACHE_ENVELOPE_VERSION = 1;
 const LOCAL_VERSION_TTL_MS = 1_000;
 const DURABLE_EPHEMERAL_PREFIXES = [
   buildRedisKey("auth", "browser-session") + ":",
+  buildRedisKey("auth", "browser-session-revoked") + ":",
   buildRedisKey("jwxt", "session") + ":",
   buildRedisKey("jwxt", "agent-session-replica") + ":",
   buildRedisKey("jwxt", "user-session") + ":",

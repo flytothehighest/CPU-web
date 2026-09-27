@@ -109,6 +109,8 @@
       </div>
     </div>
 
+    <SongReviewPanel ref="songReviewPanel" :songs="songs" :selected="selectedSongs" @updated="songReviews = $event" />
+
     <!-- 歌曲表格 -->
     <div
       class="bg-zinc-900/10 border border-zinc-800/40 rounded-xl overflow-hidden shadow-2xl relative"
@@ -270,6 +272,9 @@
             >
               {{ getStatusText(song) }}
             </span>
+            <button class="block mx-auto mt-2 px-2 py-2 min-h-[44px] rounded-lg border border-zinc-600 text-xs text-zinc-200 focus-visible:outline focus-visible:outline-blue-400" @click.stop="songReviewPanel?.open(song)">
+              {{ songReviews[song.id]?.confirmedAt ? '用户已确认' : reviewLabels[songReviews[song.id]?.status] || '待审核' }} · 查看
+            </button>
           </div>
 
           <div
@@ -758,6 +763,7 @@
 <script setup>
 import { computed, onMounted, ref, watch, onUnmounted } from 'vue'
 import ConfirmDialog from '~/components/UI/ConfirmDialog.vue'
+import SongReviewPanel from '~/components/Admin/SongReviewPanel.vue'
 import VotersModal from '~/components/Admin/VotersModal.vue'
 import SongDownloadDialog from '~/components/Admin/SongDownloadDialog.vue'
 import Pagination from '~/components/UI/Common/Pagination.vue'
@@ -790,6 +796,9 @@ import { validateUrl, convertToHttps } from '~/utils/url'
 
 // 响应式数据
 const { showToast: showNotification } = useToast()
+const songReviewPanel = ref(null)
+const songReviews = ref({})
+const reviewLabels = { pending: '待审核', checking: '审核中', approved: '审核通过', rejected: '审核不通过', uncertain: 'AI暂无法确认', error: '调用失败' }
 const loading = ref(false)
 const searchQuery = ref('')
 const statusFilter = ref('all')
@@ -806,7 +815,13 @@ const statusOptions = [
   { label: '全部状态', value: 'all' },
   { label: '待排期', value: 'pending' },
   { label: '已排期', value: 'scheduled' },
-  { label: '已播放', value: 'played' }
+  { label: '已播放', value: 'played' },
+  { label: '待审核', value: 'review-pending' },
+  { label: 'AI暂无法确认', value: 'review-uncertain' },
+  { label: '审核不通过', value: 'review-rejected' },
+  { label: '审核通过', value: 'review-approved' },
+  { label: '待用户确认', value: 'review-awaiting' },
+  { label: '用户已确认', value: 'review-confirmed' }
 ]
 
 const sortOptions = [
@@ -923,6 +938,12 @@ const filteredSongs = computed(() => {
   if (statusFilter.value !== 'all') {
     filtered = filtered.filter((song) => {
       switch (statusFilter.value) {
+        case 'review-pending': return !songReviews.value[song.id] || ['pending', 'checking'].includes(songReviews.value[song.id]?.status)
+        case 'review-uncertain': return ['uncertain', 'error'].includes(songReviews.value[song.id]?.status)
+        case 'review-rejected': return songReviews.value[song.id]?.status === 'rejected'
+        case 'review-approved': return songReviews.value[song.id]?.status === 'approved'
+        case 'review-awaiting': return ['rejected', 'uncertain'].includes(songReviews.value[song.id]?.status) && !songReviews.value[song.id]?.confirmedAt
+        case 'review-confirmed': return Boolean(songReviews.value[song.id]?.confirmedAt)
         case 'pending':
           // 待排期：未播放且未排期
           return !song.played && !song.scheduled
@@ -1062,6 +1083,7 @@ const refreshSongs = async (bypassCache = false) => {
     await songsService.fetchSongs(false, undefined, false, bypassCache)
     songs.value = songsService.songs.value || []
     selectedSongs.value = []
+    await songReviewPanel.value?.refresh()
   } catch (error) {
     console.error('刷新歌曲失败:', error)
   } finally {

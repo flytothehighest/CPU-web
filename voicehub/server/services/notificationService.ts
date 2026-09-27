@@ -16,6 +16,7 @@ type MainSiteNotification = {
   type: string
   songId?: number
   level?: 'strong' | 'normal' | 'weak'
+  deliveryKey?: string
 }
 
 function cpuWebOrigin() {
@@ -69,7 +70,8 @@ async function sendMainSiteNotifications(items: MainSiteNotification[]) {
       content: item.content,
       type: item.type,
       ...(item.songId ? { songId: item.songId } : {}),
-      ...(item.level ? { level: item.level } : {})
+      ...(item.level ? { level: item.level } : {}),
+      ...(item.deliveryKey ? { deliveryKey: item.deliveryKey } : {})
     }]
   })
 
@@ -159,6 +161,14 @@ export async function createSongSelectedNotification(
     content += ` 播出时段：${schedule[0].playTimeName}${range ? `（${range}）` : ''}。`
   }
   return sendMainSiteNotifications([{ voiceHubUserId: userId, title: '歌曲已入选', content, type: 'SONG_SELECTED', songId, level: 'strong' }])
+}
+
+export async function createSongReviewAdviceNotification(input: { userId: number; songId: number; title: string; reason: string; deliveryKey: string }) {
+  return sendMainSiteNotifications([{
+    voiceHubUserId: input.userId, songId: input.songId, deliveryKey: input.deliveryKey,
+    title: '歌曲投稿需要再次确认', type: 'SONG_REVIEW_ADVICE', level: 'strong',
+    content: `你投稿的《${input.title}》大概率不会被接受。${input.reason.slice(0, 1000)} 请查看选曲建议，选择“仍要投稿”或“撤回投稿”。通知送达后24小时未确认将自动撤回；确认后进入待排期流程，但不保证播出。`
+  }])
 }
 
 export async function createSongCommentNotification(params: {

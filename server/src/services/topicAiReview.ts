@@ -119,7 +119,7 @@ export function shouldRunAiReview() {
 }
 
 type AiReviewLogContext = {
-  kind: "topic" | "reply" | "direct-message" | "nickname" | "profile" | "topic-edit" | "smart-post";
+  kind: "topic" | "reply" | "direct-message" | "nickname" | "profile" | "topic-edit" | "song-review" | "smart-post";
   targetId?: number | null;
   targetLabel?: string | null;
   createdById?: number | null;

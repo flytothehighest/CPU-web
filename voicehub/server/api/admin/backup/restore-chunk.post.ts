@@ -1,3 +1,4 @@
+import { getSongReviewConfig, requireSchedulableSongs } from '~~/server/services/songReviewService'
 import { createError, defineEventHandler, readBody } from 'h3'
 import { db } from '~/drizzle/db'
 import {
@@ -659,7 +660,8 @@ export default defineEventHandler(async (event) => {
               if (!ptExists) validPlayTimeId = null
             }
 
-            const scheduleData: any = {
+            if (!record.played) await requireSchedulableSongs(tx, [validSongId], await getSongReviewConfig())
+                        const scheduleData: any = {
               songId: validSongId,
               playDate: new Date(record.playDate),
               playTimeId: validPlayTimeId,

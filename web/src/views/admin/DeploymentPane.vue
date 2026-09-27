@@ -194,11 +194,11 @@ async function refreshNow() {
 
 async function startDeployment() {
   const confirmed = await ElMessageBox.confirm(
-    "将立即拉取 origin/main，并按变更执行数据库迁移、构建和 PM2 重载。部署期间站点可能短暂断开，确认继续？",
+    "将立即拉取 origin/main 并执行蓝绿部署。若包含数据库变更，你同时确认它们已审查为向后兼容的扩展迁移；删除或重命名字段、收紧约束等不兼容变更不得继续。确认授权本次部署？",
     "更新并部署主站",
     {
       type: "warning",
-      confirmButtonText: "确认更新部署",
+      confirmButtonText: "已审查，授权部署",
       cancelButtonText: "取消",
       distinguishCancelAndClose: true,
     },

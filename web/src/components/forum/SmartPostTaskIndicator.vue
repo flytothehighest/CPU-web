@@ -1,7 +1,7 @@
 <template>
   <transition name="smart-post-task">
     <aside
-      v-if="smartPost.task && smartPost.status"
+      v-if="!auth.forumHidden && smartPost.task && smartPost.status"
       class="smart-post-task-card"
       :class="[`is-${smartPost.status.state}`, { 'is-collapsed': !expanded }]"
     >
@@ -80,10 +80,10 @@ const collapsedLabel = computed(() => `智慧发帖：${collapsedTitle.value}，
 const workflowLabel = computed(() => smartPost.status?.operation === "format" ? "单轮排版任务" : "三轮后台任务");
 
 watch(
-  () => [auth.ready, auth.user?.id] as const,
-  ([ready, userId]) => {
+  () => [auth.ready, auth.user?.id, auth.forumHidden] as const,
+  ([ready, userId, hidden]) => {
     if (!ready) return;
-    if (userId) smartPost.resume(userId);
+    if (userId && !hidden) smartPost.resume(userId);
     else smartPost.clearForLogout();
   },
   { immediate: true },

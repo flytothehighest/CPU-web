@@ -354,6 +354,9 @@ private struct LiveActivitySettingsSection: View {
                     NativeLiveActivityController.shared.setEnabled(value)
                 }
             ))
+            if let message = controller.recoveryMessage {
+                Text(message).font(.footnote).foregroundStyle(.secondary)
+            }
             if enabled {
                 Picker("课前提醒", selection: Binding(get: { controller.leadMinutes }, set: { controller.setLeadMinutes($0) })) {
                     Text("15 分钟").tag(15)

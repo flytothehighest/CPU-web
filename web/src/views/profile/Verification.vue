@@ -156,7 +156,7 @@
       <ol class="process-list">
         <li><span>1</span><div><b>填写公开说明</b><p>认证名称由申请人填写，最终以审核通过内容为准。</p></div></li>
         <li><span>2</span><div><b>管理员核验</b><p>结合公开资料、作品、组织渠道或联系人确认账号身份。</p></div></li>
-        <li><span>3</span><div><b>展示认证标记</b><p>结果通过站内通知送达，论坛和个人主页同步显示。</p></div></li>
+        <li><span>3</span><div><b>展示认证标记</b><p>{{ auth.forumHidden ? '审核结果与认证标记可在个人资料中查看。' : '结果通过站内通知送达，论坛和个人主页同步显示。' }}</p></div></li>
       </ol>
     </section>
 
@@ -288,7 +288,8 @@ async function submitApplication() {
 async function removeVerification() {
   if (!snapshot.value?.verification || removing.value) return;
   const confirmed = await ElMessageBox.confirm(
-    "解除后，论坛和个人主页将立即不再显示认证标记。之后仍可重新申请，确认解除当前拾间认证？",
+    auth.forumHidden ? "解除后，个人资料将不再显示认证标记。之后仍可重新申请，确认解除当前拾间认证？"
+      : "解除后，论坛和个人主页将立即不再显示认证标记。之后仍可重新申请，确认解除当前拾间认证？",
     "解除拾间认证",
     { confirmButtonText: "确认解除", cancelButtonText: "取消", type: "warning" },
   ).then(() => true).catch(() => false);

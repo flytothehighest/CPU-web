@@ -903,6 +903,7 @@ const isLastDateVisible = ref(true)
 
 // 数据
 const songs = ref([])
+const eligibleSongIds = ref(new Set())
 const publicSchedules = ref([])
 const localScheduledSongs = ref([])
 const replayRequests = ref([])
@@ -1027,6 +1028,7 @@ const allUnscheduledSongs = computed(() => {
   if (!sourceData) return []
 
   let unscheduledSongs = sourceData.filter((song) => {
+    if (!eligibleSongIds.value.has(song.id)) return false
     // 检查是否已在当前显示的排期列表中（当前日期、当前时段）
     const isScheduledInCurrentView = localScheduledSongs.value.some(
       (s) => (s.song && s.song.id === song.id) || s.songId === song.id
@@ -1443,6 +1445,9 @@ const rejectReplayRequest = async (songId) => {
 const loadData = async () => {
   loading.value = true
   try {
+    eligibleSongIds.value = new Set()
+    const reviewState = await $fetch('/api/admin/songs/reviews')
+    eligibleSongIds.value = new Set(reviewState.reviews.filter(r => r.eligibleForScheduling).map(r => r.songId))
     // 并行加载数据
     await Promise.all([
       songsService.fetchSongs(false, undefined, false, true),

@@ -1,6 +1,8 @@
+import { getSongReviewConfig } from '~~/server/services/songReviewService'
+import { songReviewFingerprint } from '~~/server/utils/song-review-policy'
 import { db } from '~/drizzle/db'
-import { songs, users } from '~/drizzle/schema'
-import { eq, or } from 'drizzle-orm'
+import { songs, users, schedules } from '~/drizzle/schema'
+import { and, eq, or } from 'drizzle-orm'
 import { cacheService } from '~~/server/services/cacheService'
 
 export default defineEventHandler(async (event) => {
@@ -98,11 +100,16 @@ export default defineEventHandler(async (event) => {
     }
 
     // 更新歌曲
-    const updatedSongResult = await db
-      .update(songs)
-      .set(updateData)
-      .where(eq(songs.id, songId))
-      .returning()
+    const reviewConfig = await getSongReviewConfig()
+    const updatedSongResult = await db.transaction(async tx => {
+      const [before] = await tx.select().from(songs).where(eq(songs.id, songId)).for('update')
+      const updated = await tx.update(songs).set(updateData).where(eq(songs.id, songId)).returning()
+      if (reviewConfig.enabled && before && updated[0] && songReviewFingerprint(before) !== songReviewFingerprint(updated[0])) {
+        await tx.update(schedules).set({ isDraft: true, publishedAt: null, updatedAt: new Date() })
+          .where(and(eq(schedules.songId, songId), eq(schedules.played, false)))
+      }
+      return updated
+    })
 
     if (updatedSongResult.length === 0) {
       throw createError({
@@ -139,6 +146,7 @@ export default defineEventHandler(async (event) => {
     // 清除歌曲相关缓存
     try {
       await cacheService.clearSongsCache()
+      await cacheService.clearSchedulesCache()
       console.log('[Cache] 歌曲缓存已清除（更新歌曲）')
     } catch (cacheError) {
       console.error('[Cache] 清除歌曲缓存失败:', cacheError)

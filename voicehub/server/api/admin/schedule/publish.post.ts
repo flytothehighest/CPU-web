@@ -1,3 +1,4 @@
+import { getSongReviewConfig, requireSchedulableSongs } from '~~/server/services/songReviewService'
 import { db } from '~/drizzle/db'
 import { playTimes, schedules, songs, users, votes, songReplayRequests } from '~/drizzle/schema'
 import { and, asc, count, eq } from 'drizzle-orm'
@@ -73,15 +74,13 @@ export default defineEventHandler(async (event) => {
     // 更新草稿为已发布状态
     const publishedAt = new Date(getBeijingTimestamp())
 
-    const publishResult = await db
-      .update(schedules)
-      .set({
-        isDraft: false,
-        publishedAt: publishedAt,
-        updatedAt: publishedAt
-      })
-      .where(eq(schedules.id, body.scheduleId))
-      .returning()
+    const reviewConfig = await getSongReviewConfig()
+    const publishResult = await db.transaction(async tx => {
+      await requireSchedulableSongs(tx, [draft.songId], reviewConfig)
+      return tx.update(schedules).set({ isDraft: false, publishedAt, updatedAt: publishedAt })
+        .where(and(eq(schedules.id, body.scheduleId), eq(schedules.songId, draft.songId), eq(schedules.isDraft, true)))
+        .returning()
+    })
 
     const publishedSchedule = publishResult[0]
 
@@ -284,7 +283,7 @@ export default defineEventHandler(async (event) => {
   } catch (error: any) {
     console.error('发布排期失败:', error)
     throw createError({
-      statusCode: 500,
+      statusCode: error.statusCode || 500,
       message: error.message || '发布排期失败'
     })
   }

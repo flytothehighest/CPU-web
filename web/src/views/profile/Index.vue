@@ -22,8 +22,8 @@
         <span class="identity-tags">
           <el-tag v-if="user?.vipActive" class="vip-tag" type="warning" effect="dark">VIP</el-tag>
           <el-tag v-if="user?.role === 'admin'" size="small" type="danger">管理员</el-tag>
-          <el-tag v-else-if="user?.role === 'mod'" size="small">论坛管理员</el-tag>
-          <el-tag v-if="user?.reputationLevel" size="small" type="warning" effect="plain">
+          <el-tag v-else-if="user?.role === 'mod' && !auth.forumHidden" size="small">论坛管理员</el-tag>
+          <el-tag v-if="user?.reputationLevel && !auth.forumHidden" size="small" type="warning" effect="plain">
             Lv.{{ user.reputationLevel.level }} {{ user.reputationLevel.name }}
           </el-tag>
         </span>
@@ -36,9 +36,9 @@
       <ul class="kv">
         <li><span>院系</span><span>{{ user?.college || "—" }}</span></li>
         <li><span>入学</span><span>{{ user?.enrollYear || "—" }}</span></li>
-        <li><span>发帖</span><span>{{ user?.postCount }}</span></li>
-        <li><span>回复</span><span>{{ user?.replyCount }}</span></li>
-        <li><span>声望</span><span>{{ user?.reputation }}</span></li>
+        <li v-if="!auth.forumHidden"><span>发帖</span><span>{{ user?.postCount }}</span></li>
+        <li v-if="!auth.forumHidden"><span>回复</span><span>{{ user?.replyCount }}</span></li>
+        <li v-if="!auth.forumHidden"><span>声望</span><span>{{ user?.reputation }}</span></li>
         <li v-if="!commerceHidden && (user?.sponsorAmount ?? 0) > 0"><span>赞助</span><span class="sponsor-total">¥{{ formatMoney(user?.sponsorAmount) }}</span></li>
       </ul>
       <div class="profile-actions cpu-button-row">
@@ -129,7 +129,7 @@
       <div class="assistant-quota-title">
         <div>
           <h3 class="cpu-section-title">拾间 AI 额度</h3>
-          <p v-if="assistantQuota">Lv.{{ assistantQuota.level }} {{ assistantQuota.levelName }} · 每日重置</p>
+          <p v-if="assistantQuota"><template v-if="!auth.forumHidden">Lv.{{ assistantQuota.level }} {{ assistantQuota.levelName }} · </template>每日重置</p>
           <p v-else>今日对话额度与 AI 点数</p>
         </div>
       </div>
@@ -305,7 +305,7 @@
       </template>
     </el-dialog>
 
-    <div class="cpu-card trust-card" v-if="user">
+    <div class="cpu-card trust-card" v-if="user && !auth.forumHidden">
       <div class="trust-head">
         <div class="trust-copy">
           <h3 class="cpu-section-title">信誉与匿名</h3>
@@ -396,7 +396,7 @@
       </div>
     </div>
 
-    <div class="cpu-card">
+    <div v-if="!auth.forumHidden" class="cpu-card">
       <h3 class="cpu-section-title">我发布的帖子</h3>
       <el-skeleton v-if="!profileSnapshotReady" :rows="2" animated />
       <el-empty v-else-if="!myTopics.length" description="还没有发过帖子" />
@@ -672,8 +672,8 @@ async function loadProfilePage() {
     await handleSponsorReturnFromQuery();
 
     const [topicResult, boardResult] = await Promise.allSettled([
-      request.get<any[]>(`/user/${auth.user.id}/topics`, undefined, { suppressErrorMessage: true }),
-      boardApi.list({ suppressErrorMessage: true }),
+      auth.forumHidden ? Promise.resolve([]) : request.get<any[]>(`/user/${auth.user.id}/topics`, undefined, { suppressErrorMessage: true }),
+      auth.forumHidden ? Promise.resolve([]) : boardApi.list({ suppressErrorMessage: true }),
     ]);
     if (seq !== profileLoadSeq) return;
     if (topicResult.status === "fulfilled") myTopics.value = topicResult.value;
@@ -779,8 +779,8 @@ function restoreProfileCache() {
   if (!profileCacheKey.value) return false;
   const cached = readViewCache(profileCacheKey.value, isProfileViewCache);
   if (!cached) return false;
-  myTopics.value = cached.topics;
-  boards.value = cached.boards;
+  myTopics.value = auth.forumHidden ? [] : cached.topics;
+  boards.value = auth.forumHidden ? [] : cached.boards;
   Object.assign(sponsorOptions, cached.sponsorOptions);
   sponsorOptionsCached.value = true;
   profileSnapshotReady.value = true;

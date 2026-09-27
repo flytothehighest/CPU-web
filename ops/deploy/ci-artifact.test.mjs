@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
@@ -70,4 +70,92 @@ test('auto and ci build sources fail closed without the exact artifact; only exp
   assert.doesNotMatch(local.stdout, /download/u)
   assert.match(local.stdout, /protected local compilation/u)
   assert.equal(run('unknown', '0').status, 37)
+})
+
+test('artifact transport fetch is non-interactive and bounded by a hard timeout', { skip: process.platform === 'win32' }, () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'cpu-artifact-fetch-test-'))
+  try {
+    const bin = path.join(root, 'bin')
+    const record = path.join(root, 'git-call.txt')
+    mkdirSync(bin)
+    const fakeGit = path.join(bin, 'git')
+    writeFileSync(fakeGit, `#!/usr/bin/env bash\nprintf '%s\\n' "$GIT_TERMINAL_PROMPT|$*" > "$RECORD"\nsleep 30\n`)
+    chmodSync(fakeGit, 0o755)
+    const script = `set -u
+      log() { echo "log: $*"; }
+      warn() { echo "warn: $*" >&2; }
+      DEPLOY_CI_FETCH_TIMEOUT_SECONDS=1
+      DEPLOY_CI_GIT_LOW_SPEED_LIMIT=10240
+      DEPLOY_CI_GIT_LOW_SPEED_SECONDS=30
+      DEPLOY_ARTIFACT_GIT_SOURCE=refs/heads/deploy-artifacts
+      DEPLOY_ARTIFACT_GIT_REF=refs/remotes/origin/deploy-artifacts
+      ${shellFunction('fetch_ci_artifact_transport')}
+      fetch_ci_artifact_transport 2`
+    const startedAt = Date.now()
+    let result
+    try {
+      execFileSync('bash', ['-c', script], {
+        env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, RECORD: record },
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: 5_000,
+      })
+      assert.fail('fetch unexpectedly succeeded')
+    } catch (error) {
+      result = error
+    }
+    assert.ok(Date.now() - startedAt < 4_000, 'fetch did not stop within the hard timeout')
+    assert.equal(result.status, 124)
+    assert.match(String(result.stderr), /timed out after 1s/u)
+    const invocation = readFileSync(record, 'utf8')
+    assert.match(invocation, /^0\|/u)
+    assert.match(invocation, /maintenance\.auto=false/u)
+    assert.match(invocation, /http\.lowSpeedLimit=10240/u)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('release artifact transport resumes partial downloads and keeps a hard total timeout', { skip: process.platform === 'win32' }, () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'cpu-artifact-release-test-'))
+  try {
+    const bin = path.join(root, 'bin')
+    const record = path.join(root, 'curl-call.txt')
+    const destination = path.join(root, 'bundle.part')
+    mkdirSync(bin)
+    const fakeCurl = path.join(bin, 'curl')
+    writeFileSync(fakeCurl, `#!/usr/bin/env bash\nprintf '%s\\n' "$*" > "$RECORD"\n[ "\${SLOW:-0}" = 1 ] && sleep 30\nprintf 'tail' >> "$DESTINATION"\n`)
+    chmodSync(fakeCurl, 0o755)
+    writeFileSync(destination, 'partial')
+    const script = `set -u
+      log() { echo "log: $*"; }
+      warn() { echo "warn: $*" >&2; }
+      DEPLOY_ARTIFACT_URL=https://example.test/cpu-web-linux-deploy.tar.gz
+      DEPLOY_ARTIFACT_RELEASE_TIMEOUT_SECONDS="$FETCH_TIMEOUT"
+      DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_LIMIT=1024
+      DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_SECONDS=90
+      ${shellFunction('fetch_ci_artifact_release_transport')}
+      fetch_ci_artifact_release_transport ${'b'.repeat(40)} 3 "$DESTINATION"`
+    execFileSync('bash', ['-c', script], {
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, RECORD: record, DESTINATION: destination, FETCH_TIMEOUT: '7' },
+      encoding: 'utf8',
+    })
+    assert.equal(readFileSync(destination, 'utf8'), 'partialtail')
+    const invocation = readFileSync(record, 'utf8')
+    assert.match(invocation, /--continue-at -/u)
+    assert.match(invocation, /--speed-limit 1024 --speed-time 90/u)
+    assert.match(invocation, /cpu-web-linux-deploy\.tar\.gz\?commit=b{40}/u)
+
+    writeFileSync(destination, 'partial')
+    const startedAt = Date.now()
+    assert.throws(() => execFileSync('bash', ['-c', script], {
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, RECORD: record, DESTINATION: destination, FETCH_TIMEOUT: '1', SLOW: '1' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 5_000,
+    }), error => error.status === 124)
+    assert.ok(Date.now() - startedAt < 4_000, 'release fetch did not stop within the hard timeout')
+    assert.equal(readFileSync(destination, 'utf8'), 'partial')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })
