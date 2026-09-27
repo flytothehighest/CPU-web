@@ -7,7 +7,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { atomicWrite, cutover, probe, replaceConfig, replaceUpstream, runtimeEnvironment } from './blue-green-core.mjs'
-import { linkSharedDirectory, configSnapshots, restoreConfigs, findProxyConfig, publishWebAssets, verifyWeb } from './blue-green.mjs'
+import { linkSharedDirectory, configSnapshots, restoreConfigs, findProxyConfig, resolveProxyConfigs, publishWebAssets, verifyWeb } from './blue-green.mjs'
 
 const listen = server => new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(server.address().port)))
 const close = server => new Promise(resolve => server.close(resolve))
@@ -102,6 +102,25 @@ test('proxy discovery refuses ambiguity and respects an explicit include', async
     await writeFile(site, `include ${include};\nproxy_pass http://127.0.0.1:23333;`)
     await assert.rejects(findProxyConfig(site, 23333), /found 2/)
   }
+})
+
+test('proxy selection reuses every verified config from the active deployment state', async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'cpu-proxy-active-state-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const site = path.join(root, 'site.conf')
+  const main = path.join(root, 'main.conf')
+  const qqbot = path.join(root, 'qqbot.conf')
+  await writeFile(site, `include ${main};\ninclude ${qqbot};`)
+  await writeFile(main, 'proxy_pass http://127.0.0.1:23434;')
+  await writeFile(qqbot, 'proxy_pass http://127.0.0.1:23434;')
+  if (process.platform !== 'win32') await assert.rejects(findProxyConfig(site, 23434), /found 2/)
+  assert.deepEqual(await resolveProxyConfigs(site, 23434, {
+    previous: { configs: [{ nginxConfig: main }, { nginxConfig: qqbot }] },
+  }), [main, qqbot])
+  await writeFile(qqbot, 'proxy_pass http://127.0.0.1:19999;')
+  await assert.rejects(resolveProxyConfigs(site, 23434, {
+    previous: { configs: [{ nginxConfig: main }, { nginxConfig: qqbot }] },
+  }), /No literal/)
 })
 
 test('shared uploads preserve archived samples and live contents', { skip: process.platform === 'win32' }, async t => {

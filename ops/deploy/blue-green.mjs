@@ -110,6 +110,32 @@ export async function findProxyConfig(site, port, explicit) {
   return matches[0]
 }
 
+export async function resolveProxyConfigs(site, port, { explicit, explicitSet, previous } = {}) {
+  let selected
+  if (explicitSet) {
+    selected = JSON.parse(explicitSet)
+    if (!Array.isArray(selected) || !selected.length || selected.some(file => typeof file !== 'string' || !path.isAbsolute(file))) {
+      throw new Error('DEPLOY_NGINX_CONFIGS must be a nonempty JSON array of absolute paths')
+    }
+  } else if (explicit) {
+    selected = [explicit]
+  } else if (Array.isArray(previous?.configs) && previous.configs.length) {
+    selected = previous.configs.map(item => item?.nginxConfig)
+    if (selected.some(file => typeof file !== 'string' || !path.isAbsolute(file))) {
+      throw new Error('Active deployment state contains invalid nginx configuration paths')
+    }
+    log(`Reusing ${selected.length} nginx proxy configs from the active deployment state`)
+  } else if (typeof previous?.nginxConfig === 'string' && path.isAbsolute(previous.nginxConfig)) {
+    selected = [previous.nginxConfig]
+    log('Reusing the nginx proxy config from the active deployment state')
+  } else {
+    return [await findProxyConfig(site, port)]
+  }
+  const resolved = await Promise.all(selected.map(file => findProxyConfig(site, port, file)))
+  if (new Set(resolved).size !== resolved.length) throw new Error('Duplicate nginx configuration paths')
+  return resolved
+}
+
 export async function configSnapshots(candidate, from, to) {
   const files = candidate.configs || [{ nginxConfig: candidate.nginxConfig, configBackup: candidate.configBackup }]
   return Promise.all(files.map(async item => {
@@ -301,12 +327,11 @@ export async function deploy() {
   }) : null
   let nginxConfigs = []
   if (serverChanged || voiceChanged) {
-    if (process.env.DEPLOY_NGINX_CONFIGS) {
-      const selected = JSON.parse(process.env.DEPLOY_NGINX_CONFIGS)
-      if (!Array.isArray(selected) || !selected.length || selected.some(file => typeof file !== 'string' || !path.isAbsolute(file))) throw new Error('DEPLOY_NGINX_CONFIGS must be a nonempty JSON array of absolute paths')
-      nginxConfigs = await Promise.all(selected.map(file => findProxyConfig(siteConfig, previous.port, file)))
-      if (new Set(nginxConfigs).size !== nginxConfigs.length) throw new Error('Duplicate nginx configuration paths')
-    } else nginxConfigs = [await findProxyConfig(siteConfig, previous.port, process.env.DEPLOY_NGINX_CONFIG)]
+    nginxConfigs = await resolveProxyConfigs(siteConfig, previous.port, {
+      explicit: process.env.DEPLOY_NGINX_CONFIG,
+      explicitSet: process.env.DEPLOY_NGINX_CONFIGS,
+      previous,
+    })
   }
   const schemaChanged = [...changed].some(file => /^(server\/prisma\/|voicehub\/(drizzle\/|drizzle\.config|server\/database\/))/.test(file))
   if ((schemaChanged || force) && process.env.DEPLOY_ALLOW_SCHEMA_EXPAND !== '1') {
