@@ -188,16 +188,32 @@ jobs:
           fi
 
       - name: Download verified workflow artifact
-        if: steps.tip.outputs.current == 'true'
         uses: actions/download-artifact@v4
         with:
           name: cpu-web-linux-${{ github.sha }}
           path: deploy-artifact
 
       - name: Verify downloaded bundle checksum
-        if: steps.tip.outputs.current == 'true'
         working-directory: deploy-artifact
         run: sha256sum -c cpu-web-linux-deploy.tar.gz.sha256
+
+      - name: Publish commit-specific deployment asset
+        working-directory: deploy-artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if ! gh release view deploy-artifacts --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create deploy-artifacts --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --prerelease --latest=false --title "Automated Linux deployment artifacts" \
+              --notes "Verified production bundles, with immutable filenames bound to exact commit SHAs." \
+              || gh release view deploy-artifacts --repo "$GITHUB_REPOSITORY" >/dev/null
+          fi
+          asset="cpu-web-linux-$GITHUB_SHA.tar.gz"
+          cp cpu-web-linux-deploy.tar.gz "$asset"
+          sha256sum "$asset" > "$asset.sha256"
+          gh release upload deploy-artifacts "$asset" "$asset.sha256" --repo "$GITHUB_REPOSITORY" --clobber
 
       - name: Publish fast Git deployment transport
         if: steps.tip.outputs.current == 'true'

@@ -73,18 +73,18 @@ DEPLOY_MAIN_SERVICE_PAUSED=0
 DEPLOY_BUILD_MODE="${DEPLOY_BUILD_MODE:-auto}"
 DEPLOY_BUILD_NICE="${DEPLOY_BUILD_NICE:-10}"
 DEPLOY_NODE_HEAP_MB="${DEPLOY_NODE_HEAP_MB:-2304}"
-DEPLOY_CI_WAIT_SECONDS="${DEPLOY_CI_WAIT_SECONDS:-600}"
+DEPLOY_CI_WAIT_SECONDS="${DEPLOY_CI_WAIT_SECONDS:-3600}"
 DEPLOY_CI_POLL_SECONDS="${DEPLOY_CI_POLL_SECONDS:-15}"
-DEPLOY_CI_FETCH_TIMEOUT_SECONDS="${DEPLOY_CI_FETCH_TIMEOUT_SECONDS:-20}"
-DEPLOY_CI_GIT_LOW_SPEED_LIMIT="${DEPLOY_CI_GIT_LOW_SPEED_LIMIT:-10240}"
-DEPLOY_CI_GIT_LOW_SPEED_SECONDS="${DEPLOY_CI_GIT_LOW_SPEED_SECONDS:-30}"
-# 制品分支适合快速链路；生产网络较慢时回退到可续传的 Release 包。清单仍会校验精确提交 SHA。
-DEPLOY_ARTIFACT_URL="${DEPLOY_ARTIFACT_URL:-https://gh.noki.eu.org/https://github.com/sx120609/CPU-web/releases/download/deploy-artifacts/cpu-web-linux-deploy.tar.gz}"
-DEPLOY_ARTIFACT_FALLBACK_URL="${DEPLOY_ARTIFACT_FALLBACK_URL:-https://ghfast.top/https://github.com/sx120609/CPU-web/releases/download/deploy-artifacts/cpu-web-linux-deploy.tar.gz}"
-DEPLOY_ARTIFACT_PRIMARY_TIMEOUT_SECONDS="${DEPLOY_ARTIFACT_PRIMARY_TIMEOUT_SECONDS:-300}"
-DEPLOY_ARTIFACT_RELEASE_TIMEOUT_SECONDS="${DEPLOY_ARTIFACT_RELEASE_TIMEOUT_SECONDS:-1200}"
-DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_LIMIT="${DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_LIMIT:-1024}"
-DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_SECONDS="${DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_SECONDS:-90}"
+DEPLOY_CI_FETCH_TIMEOUT_SECONDS="${DEPLOY_CI_FETCH_TIMEOUT_SECONDS:-600}"
+DEPLOY_CI_GIT_LOW_SPEED_LIMIT="${DEPLOY_CI_GIT_LOW_SPEED_LIMIT:-1}"
+DEPLOY_CI_GIT_LOW_SPEED_SECONDS="${DEPLOY_CI_GIT_LOW_SPEED_SECONDS:-120}"
+# 优先下载按提交固定的可续传 Release 包，避免共享 latest 文件在镜像中命中旧缓存。
+DEPLOY_ARTIFACT_URL="${DEPLOY_ARTIFACT_URL:-https://gh.noki.eu.org/https://github.com/sx120609/CPU-web/releases/download/deploy-artifacts/cpu-web-linux-COMMIT_SHA.tar.gz}"
+DEPLOY_ARTIFACT_FALLBACK_URL="${DEPLOY_ARTIFACT_FALLBACK_URL:-https://ghfast.top/https://github.com/sx120609/CPU-web/releases/download/deploy-artifacts/cpu-web-linux-COMMIT_SHA.tar.gz}"
+DEPLOY_ARTIFACT_PRIMARY_TIMEOUT_SECONDS="${DEPLOY_ARTIFACT_PRIMARY_TIMEOUT_SECONDS:-1800}"
+DEPLOY_ARTIFACT_RELEASE_TIMEOUT_SECONDS="${DEPLOY_ARTIFACT_RELEASE_TIMEOUT_SECONDS:-1800}"
+DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_LIMIT="${DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_LIMIT:-1}"
+DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_SECONDS="${DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_SECONDS:-120}"
 DEPLOY_ARTIFACT_GIT_SOURCE="${DEPLOY_ARTIFACT_GIT_SOURCE:-refs/heads/deploy-artifacts}"
 DEPLOY_ARTIFACT_GIT_REF="${DEPLOY_ARTIFACT_GIT_REF:-refs/remotes/origin/deploy-artifacts}"
 DEPLOY_ARTIFACT_READY=0
@@ -1509,6 +1509,7 @@ fetch_ci_artifact_release_transport() {
   local destination="$3"
   local release_url="${4:-$DEPLOY_ARTIFACT_URL}"
   local release_timeout="${5:-$DEPLOY_ARTIFACT_RELEASE_TIMEOUT_SECONDS}"
+  release_url="${release_url//COMMIT_SHA/$commit}"
   local separator='?' release_status=0
   local -a resume_args=()
   [ -n "$release_url" ] || return 1
@@ -1522,7 +1523,7 @@ fetch_ci_artifact_release_transport() {
   log "Fetching resumable CI release artifact from $release_url (attempt $attempt, timeout ${release_timeout}s)"
   if timeout --signal=TERM --kill-after=5s "${release_timeout}s" \
     curl --fail --location \
-      --connect-timeout 15 \
+      --connect-timeout 30 \
       --retry 3 \
       --retry-all-errors \
       --retry-delay 3 \
@@ -1531,7 +1532,7 @@ fetch_ci_artifact_release_transport() {
       --progress-bar \
       -H 'Cache-Control: no-cache' \
       "${resume_args[@]}" \
-      "${release_url}${separator}commit=$commit" \
+      "${release_url}${separator}commit=$commit&attempt=$attempt" \
       -o "$destination"; then
     return 0
   else
@@ -1591,14 +1592,6 @@ download_ci_artifact() {
     rm -rf "$incoming_dir"
     mkdir -p "$extract_dir"
     transport_ready=0
-    if fetch_ci_artifact_transport "$attempt"; then
-      if git show "$DEPLOY_ARTIFACT_GIT_REF:cpu-web-linux-deploy.tar.gz" \
-        > "$incoming_dir/bundle.tar.gz"; then
-        transport_ready=1
-      else
-        warn "CI artifact transport does not contain the expected bundle"
-      fi
-    fi
     if [ "$transport_ready" != "1" ] && [ -n "$DEPLOY_ARTIFACT_URL" ] && command -v curl >/dev/null 2>&1; then
       if [ -f "$release_download" ] && validate_bundle_archive "$release_download" >/dev/null 2>&1; then
         log "Using completed resumable CI release download"
@@ -1614,6 +1607,14 @@ download_ci_artifact() {
         transport_ready=1
       else
         warn "CI artifact release transport fetch failed"
+      fi
+    fi
+    if [ "$transport_ready" != "1" ] && fetch_ci_artifact_transport "$attempt"; then
+      if git show "$DEPLOY_ARTIFACT_GIT_REF:cpu-web-linux-deploy.tar.gz" \
+        > "$incoming_dir/bundle.tar.gz"; then
+        transport_ready=1
+      else
+        warn "CI artifact transport does not contain the expected bundle"
       fi
     fi
     if [ "$transport_ready" = "1" ]; then

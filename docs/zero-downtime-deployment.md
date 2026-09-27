@@ -31,14 +31,14 @@
 | `DEPLOY_VERIFY_URL` | `https://cputime.cn`，用于验证公网切换 |
 | `DEPLOY_INTERNAL_ORIGIN` | `https://cputime.cn`，VoiceHub 调用主站的稳定入口，不能指向会退役的实例端口 |
 | `DEPLOY_DRAIN_SECONDS` | 每阶段默认等 120 秒；超时保留实例，而非强制关闭连接 |
-| `DEPLOY_CI_FETCH_TIMEOUT_SECONDS` | 单次制品分支拉取默认最多 20 秒；超时终止完整 Git 进程组并切换到可续传的 Release 下载，不再永久占用部署锁 |
+| `DEPLOY_CI_FETCH_TIMEOUT_SECONDS` | HTTP下载不可用时才回退Git，单次默认最多600秒；只对长期停滞或超过总限时的进程终止，不永久占用部署锁 |
 | `DEPLOY_CI_GIT_LOW_SPEED_LIMIT` / `DEPLOY_CI_GIT_LOW_SPEED_SECONDS` | Git HTTP 连续 30 秒低于 10 KiB/s 时中止本次拉取，并进入受限重试 |
 | `DEPLOY_ARTIFACT_URL` | 制品分支拉取失败后的首选 Release 地址；默认使用生产机实测更快且支持断点续传的 `gh.noki.eu.org` 镜像 |
 | `DEPLOY_ARTIFACT_FALLBACK_URL` | 首选 Release 地址失败后的备用地址；默认回退到 `ghfast.top`，沿用同一分片继续下载 |
-| `DEPLOY_ARTIFACT_PRIMARY_TIMEOUT_SECONDS` | 首选 Release 镜像单次最多使用 300 秒；超时保留分片并自动切换备用地址 |
-| `DEPLOY_ARTIFACT_RELEASE_TIMEOUT_SECONDS` | Release 单次下载总时限，默认 1200 秒；下载文件保留并在重试或下次部署时续传 |
-| `DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_LIMIT` / `DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_SECONDS` | Release 连续 90 秒低于 1 KiB/s 才判定停滞；正常慢速下载不会被误杀，并显示实时进度 |
-| `ADMIN_DEPLOY_TIMEOUT_SECONDS` | 后台部署 runner 默认最多运行 1800 秒；超时先终止部署进程组，10 秒后仍未退出则强制结束并释放锁 |
+| `DEPLOY_ARTIFACT_PRIMARY_TIMEOUT_SECONDS` | 首选 Release 镜像单次最多使用1800秒；超时保留分片并自动切换备用地址 |
+| `DEPLOY_ARTIFACT_RELEASE_TIMEOUT_SECONDS` | Release 单次下载总时限，默认1800秒；下载文件保留并在重试或下次部署时续传 |
+| `DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_LIMIT` / `DEPLOY_ARTIFACT_RELEASE_LOW_SPEED_SECONDS` | Release连续120秒低于1字节/秒才判定停滞；正常慢速下载不会被误杀，并显示实时进度 |
+| `ADMIN_DEPLOY_TIMEOUT_SECONDS` | 后台部署 runner 默认最多运行 7200 秒；超时先终止部署进程组，10 秒后仍未退出则强制结束并释放锁 |
 
 默认在站点配置和其所在目录下的绝对路径 include 中寻找唯一的主站代理文件。间接 upstream、多个匹配文件、外部配置或不明确的匹配会停止更新，需明确指定 `DEPLOY_NGINX_CONFIG`。检测到配置被其他操作修改时不覆盖。不要同时通过宝塔或另一个工具修改同一代理配置。
 
@@ -91,3 +91,13 @@ DEPLOY_ALLOW_SCHEMA_EXPAND=1 bash deploy.sh update
 GitHub Actions 在 Ubuntu 24.04 / Node.js 24 下运行准备失败、配置冲突、错误 SHA、切换/回退失败、排空超时、前端热更新/回退及请求转交测试，并使用真实 Nginx 持续请求和正在传输的旧响应验证平滑 reload。测试不能代替生产接入验收；第一次生产接管仍需实际核对代理文件、稳定内部入口、资源容量和长连接状态。
 
 此流程消除的是正常部署停止唯一后端造成的空窗，不覆盖 CDN 停服、主机断电、数据库不兼容、外部网络故障等独立故障。
+
+
+### 慢速产物下载
+
+默认优先通过按提交固定的 `cpu-web-linux-COMMIT_SHA.tar.gz` Release 资产下载，再回退到 Git transport。每个 SHA 的资产独立发布，即使 main 已前进也能取得对应版本，不再依赖会被镜像缓存的共享文件名。
+
+- 单次 HTTP 下载默认允许 1800 秒；使用断点续传，只有连续120秒低于1字节/秒才判为停滞。
+- Git回退默认允许600秒，不再20秒终止传输。
+- 等待对应产物默认3600秒；后台部署任务总上限7200秒，可通过原有环境变量调整。
+- 仍保留完整SHA、包清单和组件哈希验证，不接受其他提交的包，不回退生产机编译。

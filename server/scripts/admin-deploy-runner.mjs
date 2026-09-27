@@ -28,8 +28,8 @@ const statusPath = path.join(statusDir || "", "status.json");
 const lockPath = path.join(statusDir || "", "deploy.lock");
 const logPath = path.join(statusDir || "", "deploy.log");
 const deployTimeoutSeconds = (() => {
-  const parsed = Number(process.env.ADMIN_DEPLOY_TIMEOUT_SECONDS || "1800");
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1800;
+  const parsed = Number(process.env.ADMIN_DEPLOY_TIMEOUT_SECONDS || "7200");
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 7200;
 })();
 const killGraceMs = (() => {
   const parsed = Number(process.env.ADMIN_DEPLOY_KILL_GRACE_MS || "10000");

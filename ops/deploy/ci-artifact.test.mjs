@@ -147,6 +147,14 @@ test('release artifact transport resumes partial downloads and keeps a hard tota
     assert.match(invocation, /mirror\.test\/cpu-web-linux-deploy\.tar\.gz\?commit=b{40}/u)
     assert.doesNotMatch(invocation, /unused\.test/u)
 
+    execFileSync('bash', ['-c', script], {
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, RECORD: record, DESTINATION: destination, FETCH_TIMEOUT: '7', RELEASE_URL: 'https://mirror.test/cpu-web-linux-COMMIT_SHA.tar.gz' },
+      encoding: 'utf8',
+    })
+    const pinnedInvocation = readFileSync(record, 'utf8')
+    assert.match(pinnedInvocation, /cpu-web-linux-b{40}\.tar\.gz\?commit=b{40}&attempt=3/u)
+    assert.doesNotMatch(pinnedInvocation, /COMMIT_SHA/u)
+
     writeFileSync(destination, 'partial')
     const startedAt = Date.now()
     assert.throws(() => execFileSync('bash', ['-c', script], {
@@ -162,15 +170,26 @@ test('release artifact transport resumes partial downloads and keeps a hard tota
 })
 
 test('release artifact download uses the fast mirror before the legacy fallback', () => {
-  assert.match(deploy, /DEPLOY_CI_FETCH_TIMEOUT_SECONDS="\$\{DEPLOY_CI_FETCH_TIMEOUT_SECONDS:-20\}"/u)
+  assert.match(deploy, /DEPLOY_CI_FETCH_TIMEOUT_SECONDS="\$\{DEPLOY_CI_FETCH_TIMEOUT_SECONDS:-600\}"/u)
   assert.match(deploy, /DEPLOY_ARTIFACT_URL="\$\{DEPLOY_ARTIFACT_URL:-https:\/\/gh\.noki\.eu\.org\//u)
   assert.match(deploy, /DEPLOY_ARTIFACT_FALLBACK_URL="\$\{DEPLOY_ARTIFACT_FALLBACK_URL:-https:\/\/ghfast\.top\//u)
-  assert.match(deploy, /DEPLOY_ARTIFACT_PRIMARY_TIMEOUT_SECONDS="\$\{DEPLOY_ARTIFACT_PRIMARY_TIMEOUT_SECONDS:-300\}"/u)
+  assert.match(deploy, /DEPLOY_ARTIFACT_PRIMARY_TIMEOUT_SECONDS="\$\{DEPLOY_ARTIFACT_PRIMARY_TIMEOUT_SECONDS:-1800\}"/u)
   const download = shellFunction('download_ci_artifact')
   const primary = download.indexOf('"$DEPLOY_ARTIFACT_URL"')
   const fallback = download.indexOf('"$DEPLOY_ARTIFACT_FALLBACK_URL"')
   assert.ok(primary >= 0)
   assert.ok(fallback > primary)
+  assert.ok(download.indexOf('fetch_ci_artifact_transport') > fallback, 'resumable HTTP must precede the non-resumable Git fetch')
+  assert.match(deploy, /cpu-web-linux-COMMIT_SHA\.tar\.gz/u)
   assert.match(download, /"\$DEPLOY_ARTIFACT_URL" "\$DEPLOY_ARTIFACT_PRIMARY_TIMEOUT_SECONDS"/u)
   assert.match(download, /"\$DEPLOY_ARTIFACT_FALLBACK_URL" "\$DEPLOY_ARTIFACT_RELEASE_TIMEOUT_SECONDS"/u)
+})
+
+
+test('every built SHA gets a commit-specific release asset, even after main advances', () => {
+  const workflow = readFileSync(new URL('../../.github/workflows/linux-deploy-artifact.yml', import.meta.url), 'utf8')
+  const step = workflow.split('- name: Publish commit-specific deployment asset')[1].split('- name: Publish fast Git deployment transport')[0]
+  assert.match(step, /asset="cpu-web-linux-\$GITHUB_SHA\.tar\.gz"/u)
+  assert.doesNotMatch(step, /if: steps\.tip/u)
+  assert.match(step, /gh release upload deploy-artifacts "\$asset" "\$asset\.sha256"/u)
 })
