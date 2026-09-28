@@ -8,6 +8,7 @@ export const SAFETY_PLATFORM_COLLEGE_ID = "1224316225859555329";
 const SAFETY_REQUEST_TIMEOUT_MS = 20_000;
 const SAFETY_MAX_REDIRECTS = 5;
 const SAFETY_MIN_ACTION_DELAY_MS = 5_000;
+const SAFETY_MIN_EXAM_DURATION_MS = 255_000;
 const SAFETY_SHORT_DURATION_RETRY_DELAY_MS = 10_000;
 const SAFETY_SHORT_DURATION_MAX_RETRIES = 6;
 const SAFETY_UNIT_ARTICLE_IDS: Record<string, string> = {
@@ -587,7 +588,11 @@ async function submitSafetyExam(
   if (missing.length) {
     throw new Error(`考试题库缺少 ${missing.length} 道题，已停止交卷，题目：${missing.join("、")}`);
   }
-  await waitForMinimumActionDelay(createdAt, options.minimumActionDelayMs);
+  // 上游平台按 50 题试卷校验约 250 秒答题时长；显式传入 0 仅用于测试/运维演练。
+  const examMinimumDelayMs = options.minimumActionDelayMs === 0
+    ? 0
+    : Math.max(options.minimumActionDelayMs, SAFETY_MIN_EXAM_DURATION_MS);
+  await waitForMinimumActionDelay(createdAt, examMinimumDelayMs);
   let payload: SafetyApiResponse | undefined;
   for (let attempt = 0; attempt <= SAFETY_SHORT_DURATION_MAX_RETRIES; attempt += 1) {
     payload = await safetyPostForm(
