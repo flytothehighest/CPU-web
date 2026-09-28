@@ -16,7 +16,8 @@ import android.webkit.WebChromeClient
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
-import androidx.activity.compose.setContent
+import androidx.compose.ui.platform.ComposeView
+import android.widget.FrameLayout
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -44,6 +45,8 @@ class MainActivity : ComponentActivity(), WebSessionHost {
     lateinit var widgets: WidgetSettings
         private set
     private lateinit var legacyBridge: CpuAndroidBridge
+    lateinit var nativeWebLayer: NativeWebLayer
+        private set
 
     var imagePreview by mutableStateOf<ImagePreviewRequest?>(null)
     var welcomeSeen by mutableStateOf(true)
@@ -136,7 +139,16 @@ class MainActivity : ComponentActivity(), WebSessionHost {
             }
         })
 
-        setContent {
+        val root = FrameLayout(this)
+        nativeWebLayer = NativeWebLayer(this)
+        val chrome = ComposeView(this)
+        root.addView(chrome, FrameLayout.LayoutParams(-1, -1))
+        root.addView(nativeWebLayer, FrameLayout.LayoutParams(0, 0))
+        setContentView(root)
+        nativeWebLayer.setAction(ComposeView(this).apply {
+            setContent { CpuTheme(appearance.mode) { NativePostAction(this@MainActivity) } }
+        })
+        chrome.setContent {
             CpuTheme(appearance.mode) {
                 AppRoot(this)
             }
@@ -208,6 +220,7 @@ class MainActivity : ComponentActivity(), WebSessionHost {
     override fun onDestroy() {
         fileCallback?.onReceiveValue(null)
         fileCallback = null
+        (web.webView.parent as? android.view.ViewGroup)?.removeView(web.webView)
         web.destroy()
         super.onDestroy()
     }

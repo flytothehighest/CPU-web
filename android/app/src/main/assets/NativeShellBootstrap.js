@@ -28,6 +28,15 @@
   style.id = 'cpu-android-native-shell';
   style.textContent = [
     'html[data-cpu-android-native] { --cpu-ios-bottom-clearance: 0px; }',
+    // The document is the scroll owner. The shared iOS styles make body an
+    // auto-height overflow:auto container; combined with overscroll:none it
+    // traps one-finger gestures in current Chromium even though body has no
+    // scroll range. Explicit modal locks below still own the body when open.
+    'html[data-cpu-android-native][data-cpu-ios-next] body { overflow: visible; }',
+    'html[data-cpu-android-native] body.el-popup-parent--hidden,',
+    'html[data-cpu-android-native] body.el-message-box-parent--hidden,',
+    'html[data-cpu-android-native] body.el-image-viewer-parent--hidden,',
+    'html[data-cpu-android-native] body.el-tour-parent--hidden { overflow: hidden; }',
     // The native shell supplies both bars. The Web top bar stays in the DOM so
     // its drawer and account actions remain reusable.
     'html[data-cpu-android-native] .layout-root > .topbar,',

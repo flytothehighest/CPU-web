@@ -13,11 +13,9 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.runtime.key
 import androidx.compose.ui.input.pointer.pointerInput
 import android.content.Context
 import android.view.View
-import android.view.ViewGroup
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -114,7 +112,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.graphics.toArgb
+import kotlin.math.roundToInt
 import androidx.core.view.WindowCompat
 import kotlinx.coroutines.launch
 
@@ -200,24 +201,14 @@ private fun ShellScaffold(activity: MainActivity) {
             )
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            WebHost(web, covered = onSchedule || gated)
+            NativeWebViewport(activity,
+                covered = onSchedule || gated || activity.imagePreview != null || web.failureMessage != null ||
+                    (!shell.isAuthResolved && activity.schedule.result == null),
+                showPost = tab == ShellTab.Home && web.currentPath.substringBefore('?').let { it == "/home" || it == "/" } && !imeVisible,
+            )
             if (!onSchedule && !gated) {
-                if (web.isLoading && !web.contentReady) {
-                    LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp).align(Alignment.TopCenter))
-                }
                 web.failureMessage?.let { message ->
                     ServiceUnavailable(message) { web.retry() }
-                }
-                if (tab == ShellTab.Home && web.currentPath.substringBefore('?').let { it == "/home" || it == "/" } &&
-                    web.failureMessage == null && !imeVisible) {
-                    ExtendedFloatingActionButton(
-                        onClick = { shell.openWeb("/post", ShellTab.Home) },
-                        icon = { Icon(Icons.Rounded.Edit, contentDescription = null) },
-                        text = { Text("投稿") },
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        contentColor = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
-                    )
                 }
             }
             ScheduleLayer(visible = onSchedule) { NativeScheduleScreen(activity) }
@@ -262,26 +253,35 @@ private fun ScheduleLayer(visible: Boolean, content: @Composable () -> Unit) {
     }
 }
 
-/** The shared WebView stays attached under every surface so its session keeps running. */
+/** Only reports layout; the page is a native sibling and receives no Compose pointer events. */
 @Composable
-private fun WebHost(web: WebSession, covered: Boolean) {
-    // Keyed by instance: a WebView replaced after a renderer crash gets a fresh host.
-    val webView = web.webView
-    key(webView) {
-        AndroidView(
-            factory = {
-                (webView.parent as? ViewGroup)?.removeView(webView)
-                webView.apply {
-                    layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                }
-            },
-            update = { view ->
-                view.importantForAccessibility = if (covered) View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-                else View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
-            },
-            modifier = Modifier.fillMaxSize(),
-        )
+private fun NativeWebViewport(activity: MainActivity, covered: Boolean, showPost: Boolean) {
+    val layer = activity.nativeWebLayer
+    val web = activity.web
+    val page = web.webView
+    val color = MaterialTheme.colorScheme.background.toArgb()
+    val loading = web.isLoading && !web.contentReady
+    SideEffect {
+        layer.bind(page)
+        layer.setBackgroundColor(color)
+        layer.showPage(!covered, loading, showPost)
     }
+    Box(Modifier.fillMaxSize().onGloballyPositioned { coordinates ->
+        val origin = coordinates.positionInRoot()
+        layer.place(origin.x.roundToInt(), origin.y.roundToInt(), coordinates.size.width, coordinates.size.height)
+        layer.showPage(!covered, loading, showPost)
+    })
+}
+
+@Composable
+fun NativePostAction(activity: MainActivity) {
+    ExtendedFloatingActionButton(
+        onClick = { activity.shell.openWeb("/post", ShellTab.Home) },
+        icon = { Icon(Icons.Rounded.Edit, contentDescription = null) },
+        text = { Text("投稿") },
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.primary,
+    )
 }
 
 /**

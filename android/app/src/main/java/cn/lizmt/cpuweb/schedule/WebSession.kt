@@ -86,7 +86,7 @@ class WebSession(
     private val legacyBridge: CpuAndroidBridge,
 ) {
     /** Replaced after a renderer crash: a WebView whose renderer died must never be reused. */
-    var webView by mutableStateOf(ShellWebView(context))
+    var webView by mutableStateOf(WebView(context))
         private set
 
     var currentPath by mutableStateOf("")
@@ -145,7 +145,7 @@ class WebSession(
     // region Setup
 
     private fun configure() {
-        WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
+        WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG || BuildConfig.WEB_DEBUG)
         webView.overScrollMode = View.OVER_SCROLL_NEVER
         webView.setBackgroundColor(Color.TRANSPARENT)
         val settings = webView.settings
@@ -700,7 +700,7 @@ class WebSession(
         val url = AppConfig.routeUrl(currentPath.ifEmpty { "/home" }) ?: AppConfig.startUrl
         legacyAttached = false
         nativeInterfaceAttached = false
-        webView = ShellWebView(context)
+        webView = WebView(context)
         configure()
         destroyDetached(dead)
         webView.loadUrl(url)
