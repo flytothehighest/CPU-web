@@ -29,6 +29,8 @@ import {
   refundCampusAssistantQuota,
   type CampusAssistantQuotaReservation,
 } from "../services/campusAssistantQuota";
+import { detectLoginClient } from "../utils/loginClient";
+import { isCampusAssistantDestination, shouldHideHarmonyAssistant } from "../utils/nativeAssistantAccess";
 
 export const searchRouter = Router();
 
@@ -83,6 +85,11 @@ searchRouter.get("/", async (req, res, next) => {
     const servicesOnly = req.query.scope === "services";
     const userId = req.user?.userId ?? null;
     const role = req.user?.role ?? null;
+    const assistantHidden = shouldHideHarmonyAssistant(
+      detectLoginClient(req).client,
+      Boolean(userId),
+      req.user?.studentId,
+    );
     const forumAccessEnabled = await resolveForumAccess(userId, role);
     const features = getFeatures();
     const assistantContext = {
@@ -173,12 +180,17 @@ searchRouter.get("/", async (req, res, next) => {
       services: mergeSearchServices([
         ...searchCampusAssistantActions(q, assistantContext).map(campusActionToSearchService),
         ...services.map(normalizeServiceCard),
-      ]).slice(0, 10),
+      ]).filter((service) => !assistantHidden || !isCampusAssistantDestination(service.url)).slice(0, 10),
     });
   } catch (e) { next(e); }
 });
 
-searchRouter.use("/assistant", authRequired);
+searchRouter.use("/assistant", authRequired, (req, _res, next) => {
+  if (shouldHideHarmonyAssistant(detectLoginClient(req).client, true, req.user?.studentId)) {
+    return next(Errors.forbidden("拾间AI在当前客户端不可用"));
+  }
+  next();
+});
 
 searchRouter.get("/assistant/quota", async (req, res, next) => {
   try {

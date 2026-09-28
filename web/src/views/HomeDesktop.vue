@@ -30,7 +30,7 @@
             <span class="action-label-full">发布内容</span>
             <span class="action-label-short">发布</span>
           </el-button>
-          <el-button v-if="site.features.assistantEntry" size="large" @click="$router.push('/search')">
+          <el-button v-if="assistantEntryVisible" size="large" @click="$router.push('/search')">
             <el-icon><ChatDotRound /></el-icon> 拾间AI
           </el-button>
         </div>
@@ -207,7 +207,7 @@ import { forumAdsApi, type ForumAd } from "@/api/forumAds";
 import { isForumDestination } from "@/utils/nativeForumVisibility";
 import { useAuthStore } from "@/stores/auth";
 import { useSiteStore } from "@/stores/site";
-import { isNativeForumIntranetOnlyAccount, shouldHideNativeYaodaCanFly } from "@/utils/clientInfo";
+import { isCampusAssistantDestination, isNativeForumIntranetOnlyAccount, shouldHideHarmonyAssistant, shouldHideNativeYaodaCanFly } from "@/utils/clientInfo";
 import { fmtRelative } from "@/utils/format";
 import {
   readHomeSummaryCache,
@@ -226,6 +226,7 @@ const hotAds = ref<ForumAd[]>([]);
 const hotPreview = computed(() => (summary.value?.hotTopics ?? []).slice(0, 3));
 const visibleServices = computed(() => (summary.value?.services ?? [])
   .filter((service) => !auth.forumHidden || !isForumDestination(String(service?.url || "")))
+  .filter((service) => assistantEntryVisible.value || !isCampusAssistantDestination(service?.url))
   .filter((service) => !(
   shouldHideNativeYaodaCanFly(auth.isLoggedIn, auth.user?.username)
   && String(service?.url || "").includes("/services/tools/yaoda-can-fly")
@@ -235,6 +236,8 @@ const hasServiceEntries = computed(() => showElectricEntry.value || visibleServi
 const showForumContent = computed(() => site.features.forum
   && auth.canAccessForum
   && !isNativeForumIntranetOnlyAccount(auth.user?.username));
+const assistantEntryVisible = computed(() => site.features.assistantEntry
+  && !shouldHideHarmonyAssistant(auth.isLoggedIn, auth.user?.username));
 const nativeForumRestricted = computed(() => isNativeForumIntranetOnlyAccount(auth.user?.username));
 const homeCacheScope = computed(() => {
   const identity = auth.user?.id ? `user-${auth.user.id}` : "guest";

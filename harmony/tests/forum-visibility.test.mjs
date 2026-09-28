@@ -63,6 +63,7 @@ test('Harmony direct entries leave no title or intranet toast while service noti
     CACHE_FIRST_EDUCATION_ROUTES: new Set(), FEATURE_GATED: {},
     firstRouteValue: value => value, LEGACY_FILE_COLLECTION_SUBMIT_PREFIX: '/legacy/',
     isNativeForumIntranetOnlyAccount: () => true, shouldHideNativeYaodaCanFly: () => false,
+    shouldHideHarmonyAssistant: () => false,
     isForumDestination: policy.isForumDestination, ElMessage: { info: text => messages.push(text) },
   });
   const route = (path, query = {}) => ({ path, fullPath: path, name: path === '/messages' ? 'messages' : 'topic',

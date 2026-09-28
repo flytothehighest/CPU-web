@@ -125,7 +125,7 @@
       </div>
     </div>
 
-    <div class="cpu-card assistant-quota-card">
+    <div v-if="assistantEntryVisible" class="cpu-card assistant-quota-card">
       <div class="assistant-quota-title">
         <div>
           <h3 class="cpu-section-title">拾间 AI 额度</h3>
@@ -150,7 +150,7 @@
         <el-button text type="primary" :loading="assistantQuotaLoading" @click="loadAssistantQuota">重试</el-button>
       </div>
 
-      <el-button v-if="site.features.assistantEntry" class="assistant-quota-open" text type="primary" aria-label="打开拾间 AI" @click="router.push('/search')">
+      <el-button class="assistant-quota-open" text type="primary" aria-label="打开拾间 AI" @click="router.push('/search')">
         <span class="assistant-quota-open-label">打开</span>
         <el-icon><ArrowRight /></el-icon>
       </el-button>
@@ -493,7 +493,7 @@ import { compressImageFile, normalizeImageUploadError } from "@/utils/imageUploa
 import { preloadAvatar } from "@/utils/avatarPreview";
 import { withMediaRevision } from "@/utils/cdnMedia";
 import { readViewCache, writeViewCache } from "@/utils/viewCache";
-import { hidesNativeCommerce } from "@/utils/clientInfo";
+import { hidesNativeCommerce, shouldHideHarmonyAssistant } from "@/utils/clientInfo";
 
 const commerceHidden = hidesNativeCommerce();
 
@@ -509,6 +509,8 @@ const appearance = useAppearanceStore();
 const route = useRoute();
 const router = useRouter();
 const user = computed(() => auth.user);
+const assistantHiddenForClient = computed(() => shouldHideHarmonyAssistant(auth.isLoggedIn, auth.user?.username));
+const assistantEntryVisible = computed(() => site.features.assistantEntry && !assistantHiddenForClient.value);
 const myTopics = ref<any[]>([]);
 const boards = ref<Board[]>([]);
 const editing = ref(false);
@@ -664,7 +666,7 @@ async function loadProfilePage() {
       profileSnapshotReady.value = true;
       return;
     }
-    void loadAssistantQuota();
+    if (!assistantHiddenForClient.value) void loadAssistantQuota();
     void loadWechatBinding({ silent: true });
     restoredFromCache = restoreProfileCache();
     if (!site.loaded) await site.fetch();

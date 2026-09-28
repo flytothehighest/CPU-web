@@ -176,7 +176,7 @@
 
     <transition name="assistant-widget">
       <aside
-        v-if="assistantWidgetOpen && showFloatingActions && site.features.assistantEntry"
+        v-if="assistantWidgetOpen && showFloatingActions && assistantEntryVisible"
         class="assistant-widget"
         role="dialog"
         aria-label="拾间AI"
@@ -232,7 +232,7 @@
     </button>
 
     <button data-cpu-button="surface"
-      v-if="showFloatingActions && site.features.assistantEntry"
+      v-if="showFloatingActions && assistantEntryVisible"
       type="button"
       class="assistant-fab"
       aria-label="打开拾间AI"
@@ -424,7 +424,7 @@ import { useSiteStore } from "@/stores/site";
 import { useAppearanceStore, type AppearanceMode } from "@/stores/appearance";
 import { iosRouteTransitionEnabled } from "@/router";
 import { freezeLeavingPage, releaseLeavingPage } from "@/utils/routeTransition";
-import { isAndroidNativeApp, isDesktopNativeApp, isFlutterNativeShell, isIosNextNativeShell, isLikelyIosDevice, hidesNativeCommerce } from "@/utils/clientInfo";
+import { isAndroidNativeApp, isCampusAssistantDestination, isDesktopNativeApp, isFlutterNativeShell, isIosNextNativeShell, isLikelyIosDevice, hidesNativeCommerce, shouldHideHarmonyAssistant } from "@/utils/clientInfo";
 import { APP_FILING_NUMBER, APP_FILING_URL, isRegisteredMobileApp } from "../../../shared/appFiling";
 
 const ShijianAssistant = defineAsyncComponent(() => import("@/views/search/Result.vue"));
@@ -502,6 +502,8 @@ const showFloatingActions = computed(() => (
   && route.path !== "/search"
   && route.path !== "/messages"
 ));
+const assistantEntryVisible = computed(() => site.features.assistantEntry
+  && !shouldHideHarmonyAssistant(auth.isLoggedIn, auth.user?.username));
 // 桌面客户端把这些工具做成了应用自己的标签页，站内再挂一个悬浮球就是重复入口
 const showToolsFab = computed(() => showFloatingActions.value && !isDesktopNativeApp());
 const desktopForumRouteNames = new Set(["forum", "forum-hot", "forum-latest", "board", "topic", "market"]);
@@ -533,6 +535,7 @@ function openForumPost() {
 
 // 两个面板占同一块位置，只能开一个
 const toggleAssistantWidget = () => {
+  if (!assistantEntryVisible.value) return;
   if (!assistantWidgetOpen.value) toolsWidgetOpen.value = false;
   assistantWidgetOpen.value = !assistantWidgetOpen.value;
 };
@@ -633,7 +636,7 @@ const drawerItems = computed(() => {
   for (const item of site.topNavigation.filter((candidate) => candidate.to !== "/download" && candidate.showInDrawer && navigationItemVisible(candidate))) {
     items.push({ id: `configured-${item.id}`, to: item.to, label: item.fullLabel || item.label, icon: navigationIconMap[item.icon], openInNewTab: item.openInNewTab });
   }
-  if (site.features.assistantEntry && !items.some((item) => item.to === "/search")) items.push({ id: "system-search", to: "/search", label: "拾间AI", icon: Search });
+  if (assistantEntryVisible.value && !items.some((item) => item.to === "/search")) items.push({ id: "system-search", to: "/search", label: "拾间AI", icon: Search });
   return items;
 });
 
@@ -641,7 +644,7 @@ function navigationItemVisible(item: TopNavigationItem) {
   if (auth.forumHidden && (isForumDestination(item.to) || item.requireForumAccess
     || ["forum", "market", "coursereview"].includes(item.feature || ""))) return false;
   if (!item.enabled) return false;
-  if (/^\/search(?:[?#]|$)/.test(item.to) && !site.features.assistantEntry) return false;
+  if (isCampusAssistantDestination(item.to) && !assistantEntryVisible.value) return false;
   if (/^\/(?:forum|market|coursereview)(?:[/?#]|$)/.test(item.to) && !auth.canAccessForum) return false;
   if (item.feature && !site.features[item.feature]) return false;
   if (item.requireForumAccess && !auth.canAccessForum) return false;
@@ -764,6 +767,10 @@ watch(() => route.fullPath, () => {
   editableFocused.value = false;
   editorFocused.value = false;
   syncViewportMetrics();
+});
+
+watch(assistantEntryVisible, (visible) => {
+  if (!visible) assistantWidgetOpen.value = false;
 });
 
 function handleViewportMetricsChange() {

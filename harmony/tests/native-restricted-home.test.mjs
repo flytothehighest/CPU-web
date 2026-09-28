@@ -33,3 +33,22 @@ test("the installed iOS shell receives a non-compose home path", () => {
   assert.match(nativeChrome, /return pathname == "\/home" \|\| pathname == "\/"/u);
   assert.doesNotMatch(nativeChrome, /pathname == "\/home\/services"/u);
 });
+
+test("restricted Harmony sessions expose no assistant entry or quota detail", () => {
+  const layout = read("web/src/layouts/MainLayout.vue");
+  const mobileHome = read("web/src/views/HomeMobile.vue");
+  const desktopHome = read("web/src/views/HomeDesktop.vue");
+  const profile = read("web/src/views/profile/Index.vue");
+  const router = read("web/src/router/index.ts");
+  const searchRoute = read("server/src/routes/search.ts");
+
+  assert.match(layout, /assistantEntryVisible[\s\S]*shouldHideHarmonyAssistant/u);
+  assert.match(layout, /v-if="showFloatingActions && assistantEntryVisible"/u);
+  assert.match(mobileHome, /assistantEntryVisible\.value \? \{ icon: MagicStick, label: "拾间AI"/u);
+  assert.match(desktopHome, /v-if="assistantEntryVisible"[\s\S]*拾间AI/u);
+  assert.match(profile, /v-if="assistantEntryVisible" class="cpu-card assistant-quota-card"/u);
+  assert.match(profile, /if \(!assistantHiddenForClient\.value\) void loadAssistantQuota\(\)/u);
+  assert.match(router, /to\.name === "search" && shouldHideHarmonyAssistant/u);
+  assert.match(searchRoute, /shouldHideHarmonyAssistant\(detectLoginClient\(req\)\.client, true, req\.user\?\.studentId\)/u);
+  assert.match(searchRoute, /filter\(\(service\) => !assistantHidden \|\| !isCampusAssistantDestination\(service\.url\)\)/u);
+});

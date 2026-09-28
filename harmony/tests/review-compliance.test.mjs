@@ -67,11 +67,18 @@ test('iOS and Harmony Web shells apply the account-specific forum and game polic
     assert.equal(api.isNativeForumIntranetOnlyAccount('2020240385', ua), false);
   }
 
+  const harmonyUa = 'CPUWebHarmonyApp/20 CPUTimeNative/1';
+  assert.equal(api.shouldHideHarmonyAssistant(false, null, harmonyUa), true);
+  assert.equal(api.shouldHideHarmonyAssistant(true, '2020240384', harmonyUa), true);
+  assert.equal(api.shouldHideHarmonyAssistant(true, '2020240385', harmonyUa), false);
+  assert.equal(api.shouldHideHarmonyAssistant(false, null, 'CPUWebIOSApp/1 CPUTimeNative/1'), false);
+  assert.equal(api.shouldHideHarmonyAssistant(true, '2020240384', 'Chrome'), false);
+
   assert.equal(api.shouldHideNativeYaodaCanFly(false, null, 'Chrome'), false);
   assert.equal(api.isNativeForumIntranetOnlyAccount('2020240384', 'CPUWebScheduleApp/38'), false);
 });
 
-function loadMainRouteGuard({ user = null, hideGame = false, restrictForum = false } = {}) {
+function loadMainRouteGuard({ user = null, hideGame = false, hideAssistant = false, restrictForum = false } = {}) {
   const routerSource = readFileSync(new URL('../../web/src/router/index.ts', import.meta.url), 'utf8');
   const source = routerSource.slice(routerSource.indexOf('router.beforeEach('));
   const messages = [];
@@ -87,6 +94,7 @@ function loadMainRouteGuard({ user = null, hideGame = false, restrictForum = fal
     firstRouteValue: (value) => value,
     LEGACY_FILE_COLLECTION_SUBMIT_PREFIX: '/legacy-file-collection/',
     shouldHideNativeYaodaCanFly: () => hideGame,
+    shouldHideHarmonyAssistant: () => hideAssistant,
     isNativeForumIntranetOnlyAccount: () => restrictForum,
     ElMessage: { info: (message) => messages.push(message) },
   });
@@ -118,6 +126,16 @@ test('hidden native game routes cannot be opened directly', async () => {
   const result = await guard(mainRoute('/services/tools/yaoda-can-fly', 'service-yaoda-can-fly'));
   assert.equal(result.name, 'services');
   assert.equal(result.replace, true);
+});
+
+test('Harmony guests and the restricted account cannot open assistant routes directly', async () => {
+  for (const user of [null, { username: '2020240384', role: 'user' }]) {
+    const { guard } = loadMainRouteGuard({ user, hideAssistant: true });
+    const result = await guard(mainRoute('/search', 'search'));
+    assert.equal(result.name, 'services');
+    assert.equal(result.replace, true);
+    assert.equal(await guard(mainRoute('/search/results', 'site-search')), true);
+  }
 });
 
 function submitHandler(file, name, globals) {

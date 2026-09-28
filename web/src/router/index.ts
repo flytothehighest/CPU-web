@@ -12,6 +12,7 @@ import {
   isLikelyIosDevice,
   isNativeForumIntranetOnlyAccount,
   isNativeScheduleShell,
+  shouldHideHarmonyAssistant,
   shouldHideNativeYaodaCanFly,
 } from "@/utils/clientInfo";
 import { preloadScheduleBackgroundAsset } from "@/utils/scheduleBackgroundStorage";
@@ -235,10 +236,6 @@ router.beforeEach(async (to) => {
     nativeShell.navigate(to.fullPath);
     return false;
   }
-  if (to.path === "/search" && isNativeScheduleShell() && typeof nativeShell?.openAssistant === "function") {
-    nativeShell.openAssistant();
-    return false;
-  }
   if (usesImmediateIosScroll()) {
     iosRouteTransitionEnabled.value = !iosHistoryTraversalPending && !isNativeTabNavigation();
     iosHistoryTraversalPending = false;
@@ -257,6 +254,14 @@ router.beforeEach(async (to) => {
   // HttpOnly Cookie 无法由前端直接读取；首次导航静默探测一次真实会话。
   // 游客的 401 不提示、不跳转，避免公开页面被错误抢到登录页。
   if (!auth.ready) await auth.fetchMe({ probe: true });
+
+  if (to.name === "search" && shouldHideHarmonyAssistant(Boolean(auth.user), auth.user?.username)) {
+    return { name: "services", replace: true };
+  }
+  if (to.path === "/search" && isNativeScheduleShell() && typeof nativeShell?.openAssistant === "function") {
+    nativeShell.openAssistant();
+    return false;
+  }
 
   if (auth.forumHidden && isForumDestination(to.path)) {
     return { name: "home", replace: true };

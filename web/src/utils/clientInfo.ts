@@ -133,6 +133,26 @@ export function shouldHideNativeYaodaCanFly(
     && (!isLoggedIn || String(username || "").trim() === NATIVE_FORUM_INTRANET_ONLY_USERNAME);
 }
 
+export function shouldHideHarmonyAssistant(
+  isLoggedIn: boolean,
+  username?: string | null,
+  ua = navigator.userAgent,
+) {
+  return isHarmonyNativeApp(ua)
+    && (!isLoggedIn || String(username || "").trim() === NATIVE_FORUM_INTRANET_ONLY_USERNAME);
+}
+
+export function isCampusAssistantDestination(destination?: string | null) {
+  try {
+    const path = decodeURIComponent(new URL(String(destination || ""), "https://cpu.local").pathname)
+      .replace(/\\/g, "/")
+      .replace(/\/+$/, "");
+    return path === "/search";
+  } catch {
+    return false;
+  }
+}
+
 export function shouldHideHarmonyForum(username?: string | null, ua = navigator.userAgent) {
   return hidesHarmonyForum(username, isHarmonyNativeApp(ua));
 }

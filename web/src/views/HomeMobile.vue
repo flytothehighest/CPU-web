@@ -112,7 +112,7 @@ import ForumFeedCard from "@/components/forum/ForumFeedCard.vue";
 import SiteSearchBar from "@/components/search/SiteSearchBar.vue";
 import { useAuthStore } from "@/stores/auth";
 import { useSiteStore } from "@/stores/site";
-import { isNativeForumIntranetOnlyAccount, shouldHideNativeYaodaCanFly } from "@/utils/clientInfo";
+import { isCampusAssistantDestination, isNativeForumIntranetOnlyAccount, shouldHideHarmonyAssistant, shouldHideNativeYaodaCanFly } from "@/utils/clientInfo";
 import { forumCacheScope, readForumLatestFeed, writeForumLatestFeed } from "@/utils/forumCache";
 import { clearForumListRestoreState, readForumListRestoreState, writeForumListRestoreState } from "@/utils/forumListRestore";
 import { readHomeSummaryCache, writeHomeSummaryCache } from "@/utils/homeCache";
@@ -171,8 +171,11 @@ const activeFeedEmptyText = computed(() => activeFeedStream.value === "market" ?
 const activeFeedLink = computed(() => activeFeedStream.value === "market" ? "/forum?channel=market" : "/forum");
 const activeFeedLinkLabel = computed(() => activeFeedStream.value === "market" ? "进入二手" : "进入论坛");
 const nativeForumRestricted = computed(() => isNativeForumIntranetOnlyAccount(auth.user?.username));
+const assistantEntryVisible = computed(() => site.features.assistantEntry
+  && !shouldHideHarmonyAssistant(auth.isLoggedIn, auth.user?.username));
 const visibleServices = computed(() => (summary.value?.services || [])
   .filter((service) => !auth.forumHidden || !isForumDestination(String(service?.url || "")))
+  .filter((service) => assistantEntryVisible.value || !isCampusAssistantDestination(service?.url))
   .filter((service) => !(
     shouldHideNativeYaodaCanFly(auth.isLoggedIn, auth.user?.username)
     && String(service?.url || "").includes("/services/tools/yaoda-can-fly")
@@ -193,7 +196,7 @@ const quickEntries = computed(() => {
     { icon: Notification, label: "公告", to: "/announcements" },
     site.features.market ? { icon: Sell, label: "二手", to: "/forum?channel=market" } : null,
     { icon: Service, label: "服务", to: "/services" },
-    site.features.assistantEntry ? { icon: MagicStick, label: "拾间AI", to: "/search" } : null,
+    assistantEntryVisible.value ? { icon: MagicStick, label: "拾间AI", to: "/search" } : null,
   ].filter(Boolean) as Array<{ icon: Component; label: string; to: string }>;
 });
 const homeCacheScope = computed(() => {
