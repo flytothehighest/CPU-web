@@ -86,7 +86,7 @@ class WebSession(
     private val legacyBridge: CpuAndroidBridge,
 ) {
     /** Replaced after a renderer crash: a WebView whose renderer died must never be reused. */
-    var webView by mutableStateOf(WebView(context))
+    var webView by mutableStateOf(ShellWebView(context))
         private set
 
     var currentPath by mutableStateOf("")
@@ -700,7 +700,7 @@ class WebSession(
         val url = AppConfig.routeUrl(currentPath.ifEmpty { "/home" }) ?: AppConfig.startUrl
         legacyAttached = false
         nativeInterfaceAttached = false
-        webView = WebView(context)
+        webView = ShellWebView(context)
         configure()
         destroyDetached(dead)
         webView.loadUrl(url)
