@@ -28,23 +28,23 @@ data class ScheduleColors(
 
 private val LightSchedule = ScheduleColors(
     dark = false,
-    page = Color(0xFFF3F3F9),
+    page = Color(0xFFF5F8FC),
     surface = Color.White,
-    softSurface = Color(0xFFE7E7ED),
-    cell = Color.White,
-    text = Color(0xFF151518),
-    secondary = Color(0xFF72727D),
-    accent = Color(0xFF3668D3),
+    softSurface = Color(0xFFE8EDF3),
+    cell = Color(0x99FFFFFF),
+    text = Color(0xFF172033),
+    secondary = Color(0xFF64748B),
+    accent = Color(0xFF2563EB),
     todayBorder = Color(0xFFDCE2F0),
     divider = Color(0xFFE2E4EA),
 )
 
 private val DarkSchedule = ScheduleColors(
     dark = true,
-    page = Color(0xFF000000),
-    surface = Color(0xFF303139),
-    softSurface = Color(0xFF25252B),
-    cell = Color(0xFF202023),
+    page = Color(0xFF101820),
+    surface = Color(0xFF202C36),
+    softSurface = Color(0xFF17232D),
+    cell = Color(0x662A3642),
     text = Color(0xFFF5F5F7),
     secondary = Color(0xFFA6A6B0),
     accent = Color(0xFF8DADFF),

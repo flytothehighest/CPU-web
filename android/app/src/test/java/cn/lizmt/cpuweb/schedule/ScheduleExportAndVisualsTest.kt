@@ -82,4 +82,24 @@ class ScheduleExportAndVisualsTest {
         assertEquals("green", normalizedScheduleTheme(" GREEN "))
         assertEquals(courseNameHash("药理学"), courseNameHash("  药理学 "))
     }
+
+    @Test
+    fun colorfulCoursesUseTheWebHueSpaceInsteadOfEightBuckets() {
+        val names = listOf("药理学", "药事管理", "药物化学", "有机化学", "分析化学", "物理化学", "生物化学", "药物分析", "药剂学", "药用植物学", "微生物学", "人体解剖学", "高等数学", "大学英语", "大学物理", "细胞生物学", "免疫学", "药物代谢动力学", "临床医学概论", "中药鉴定学")
+        val tones = names.map { scheduleCardTone(it, "color-glass", false) }
+        assertTrue(tones.map { it.fill }.distinct().size > 16)
+        names.forEach { name ->
+            val web = scheduleCourseTone(name, "color-glass", false)
+            val native = scheduleCardTone(name, "color-glass", false)
+            assertEquals(web.fill, native.fill)
+            assertEquals(web.border, native.border)
+        }
+    }
+
+    @Test
+    fun portraitWeekFitsElevenRowsWithoutTheOld48DpFloor() {
+        for (height in listOf(400f, 480f, 540f, 640f)) {
+            assertTrue(compactWeekRowHeight(height) * 11 + 46 <= height + 0.01f)
+        }
+    }
 }

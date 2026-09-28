@@ -55,12 +55,20 @@ final class ScheduleWidgetCardRenderer {
         final float height;
         final float scale;
         final ScheduleWidgetPalette palette;
+        ScheduleWidgetOptions options = new ScheduleWidgetOptions();
+        boolean largeHeader;
 
         Frame(float width, float height, float scale, ScheduleWidgetPalette palette) {
             this.width = width;
             this.height = height;
             this.scale = scale;
             this.palette = palette;
+        }
+
+        Frame withOptions(ScheduleWidgetOptions options) {
+            Frame result = new Frame(width, height, scale, palette);
+            result.options = options;
+            return result;
         }
 
         static Frame of(Family family, float scale, ScheduleWidgetPalette palette) {
@@ -125,25 +133,32 @@ final class ScheduleWidgetCardRenderer {
         float width = frame.width - PADDING * 2f;
         float bottom = frame.height - PADDING;
         String hint = emptyToNull(tag);
-        float headerHeight = drawHeader(ink, today, week, !wide, hint, false, left, top, width);
+        float headerHeight = drawHeader(ink, today, week, !wide, null, false, left, top, width);
         float y = top + headerHeight;
 
         if (courses == null || courses.isEmpty()) {
-            drawRest(ink, dateOf(today), !wide, left, y + 8f, width, bottom);
+            drawRest(ink, today, left, y + 8f, width, bottom);
             return bitmap;
         }
-        boolean dimmed = hint != null;
+        boolean dimmed = false;
+        if (hint != null) {
+            drawOtherDayBanner(ink, hint, left, y + 8f, width);
+            y += 24f;
+        }
         if (wide) {
-            String[] safeLabels = labels != null && labels.length >= 2 ? labels : new String[]{"当前", "接下来"};
+            String[] safeLabels = hint != null ? new String[]{null, null} : labels != null && labels.length >= 2 ? labels : new String[]{"当前", "接下来"};
             float columnTop = y + 8f;
             float divider = hairline(frame);
             float columnWidth = (width - 28f - divider) / 2f;
             if (dimmed) ink.beginDimmed(left, columnTop, left + width, bottom);
-            drawUpcomingColumn(ink, safeLabels[0], courses.get(0), left, columnTop, columnWidth);
+            float labelHeight = hint == null ? lineHeight(11f) + 7f : 0f;
+            boolean roomy = courseSummaryHeight(ink, courses.get(0), true, false, columnWidth) + labelHeight <= bottom - columnTop
+                    && (courses.size() < 2 || courseSummaryHeight(ink, courses.get(1), true, false, columnWidth) + labelHeight <= bottom - columnTop);
+            drawUpcomingColumn(ink, safeLabels[0], courses.get(0), left, columnTop, columnWidth, roomy);
             ink.fill(left + columnWidth + 14f, columnTop, left + columnWidth + 14f + divider, bottom,
                     frame.palette.separator());
             drawUpcomingColumn(ink, safeLabels[1], courses.size() > 1 ? courses.get(1) : null,
-                    left + columnWidth + 28f + divider, columnTop, columnWidth);
+                    left + columnWidth + 28f + divider, columnTop, columnWidth, roomy);
             if (dimmed) ink.end();
             return bitmap;
         }
@@ -153,28 +168,33 @@ final class ScheduleWidgetCardRenderer {
         if (dimmed) ink.beginDimmed(left, y, left + width, bottom);
         if (showsNext) {
             // 两节挤在小号里：第一节色条跟着文字走、课名一行；两段空白平分剩下的高度。
-            float summary = courseSummaryHeight(ink, first, true, true, width);
+            float summary = courseSummaryHeight(ink, first, false, true, width);
             float next = compactNextHeight();
             float free = bottom - y - summary - next;
             float gap = Math.max(8f, free / 2f);
-            drawCourseSummary(ink, first, true, true, left, y + gap, width);
+            drawCourseSummary(ink, first, false, true, left, y + gap, width);
             drawCompactNext(ink, courses.get(1), left, y + gap + summary + Math.max(6f, free - gap), width);
         } else {
             // 只有一节：上面的空白撑满，课贴着底边。
-            float summary = courseSummaryHeight(ink, first, true, false, width);
-            drawCourseSummary(ink, first, true, false, left, Math.max(y + 8f, bottom - summary), width);
+            String label = hint == null && labels != null ? labels[0] : null;
+            boolean roomy = courseSummaryHeight(ink, first, true, false, width) + (label == null ? 0f : 21f) <= bottom - y - 8f;
+            float summary = courseSummaryHeight(ink, first, roomy, false, width);
+            float labelHeight = label == null ? 0f : lineHeight(11f) + 7f;
+            if (summary + labelHeight > bottom - y - 8f) { label = null; labelHeight = 0f; }
+            float inset = bottom - y - summary - labelHeight > 36f ? 14f : 0f;
+            drawUpcomingColumn(ink, label, first, left, Math.max(y + 8f, bottom - summary - labelHeight - inset), width, roomy);
         }
         if (dimmed) ink.end();
         return bitmap;
     }
 
-    private static void drawUpcomingColumn(Ink ink, String label, JSONObject course, float x, float y, float width) {
+    private static void drawUpcomingColumn(Ink ink, String label, JSONObject course, float x, float y, float width, boolean roomy) {
         ScheduleWidgetPalette palette = ink.frame.palette;
         Paint labelPaint = ink.text(11f, 600, palette.secondary());
-        ink.drawText(ellipsize(label, labelPaint, width), x, y, labelPaint);
-        float top = y + lineHeight(11f) + 7f;
+        if (label != null) ink.drawText(ellipsize(label, labelPaint, width), x, y, labelPaint);
+        float top = y + (label == null ? 0f : lineHeight(11f) + 7f);
         if (course != null) {
-            drawCourseSummary(ink, course, false, false, x, top, width);
+            drawCourseSummary(ink, course, roomy, false, x, top, width);
         } else {
             Paint empty = ink.text(11f, 400, palette.muted());
             ink.drawText("暂无课程", x, top, empty);
@@ -184,7 +204,7 @@ final class ScheduleWidgetCardRenderer {
     // CourseSummary：色条 + 课名 / 地点·老师 / 时间。
     private static float courseSummaryHeight(Ink ink, JSONObject course, boolean roomy, boolean fits, float width) {
         float text = summaryText(ink, course, roomy, fits, width, 0f, 0f, false);
-        return fits ? text : Math.max(roomy ? 58f : 62f, text);
+        return text;
     }
 
     private static void drawCourseSummary(
@@ -196,9 +216,9 @@ final class ScheduleWidgetCardRenderer {
             float y,
             float width
     ) {
-        float gap = roomy ? 9f : 7f;
+        float gap = 9f;
         float text = summaryText(ink, course, roomy, fits, width, x + 5f + gap, y, true);
-        float bar = fits ? text : (roomy ? 58f : 62f);
+        float bar = text;
         ink.bar(x, y, bar, ink.frame.palette.accent(nameOf(course)));
     }
 
@@ -214,26 +234,27 @@ final class ScheduleWidgetCardRenderer {
             boolean draw
     ) {
         ScheduleWidgetPalette palette = ink.frame.palette;
-        float textWidth = width - 5f - (roomy ? 9f : 7f);
-        float spacing = roomy ? 3f : 2f;
+        float textWidth = width - 5f - 9f;
+        float spacing = 3f;
         float cursor = y;
 
-        Paint name = ink.text(roomy ? 15f : 13f, 700, palette.primary());
-        List<String> lines = fitLines(nameOf(course), name, textWidth, fits ? 1 : 2, 0.76f);
+        Paint name = ink.text(roomy ? 17f : 15f, 700, palette.primary());
+        List<String> lines = fitLines(primaryValue(ink, course), name, textWidth, fits ? 1 : 2, 0.76f);
         for (String line : lines) {
             if (draw) ink.drawText(line, x, cursor, name);
             cursor += lineHeight(name.getTextSize());
         }
-        String meta = metadata(course);
+        String meta = metadata(ink, course);
         if (meta != null) {
             cursor += spacing;
-            Paint metaPaint = ink.text(roomy ? 10f : 9f, 400, palette.secondary());
+            Paint metaPaint = ink.text(roomy ? 11f : 10f, 400, palette.secondary());
             if (draw) ink.drawText(ellipsize(meta, metaPaint, textWidth), x, cursor, metaPaint);
             cursor += lineHeight(metaPaint.getTextSize());
         }
+        if (!ink.frame.options.showTime) return cursor - y;
         cursor += spacing;
-        Paint time = ink.text(roomy ? 11f : 10f, 600, palette.primary());
-        String range = timeRange(course);
+        Paint time = ink.text(roomy ? 12f : 11f, 600, palette.primary());
+        String range = timeRange(ink, course);
         shrinkToFit(time, range, textWidth, 0.75f);
         if (draw) ink.drawText(ellipsize(range, time, textWidth), x, cursor, time);
         cursor += lineHeight(time.getTextSize());
@@ -254,9 +275,9 @@ final class ScheduleWidgetCardRenderer {
         float textHeight = lineHeight(12f) + 1f + lineHeight(9f);
         float top = y + (height - textHeight) / 2f;
         Paint name = ink.text(12f, 700, palette.primary());
-        ink.drawText(ellipsize(nameOf(course), name, textWidth), textX, top, name);
+        ink.drawText(ellipsize(primaryValue(ink, course), name, textWidth), textX, top, name);
         Paint time = ink.text(9f, 400, palette.secondary());
-        ink.drawText(ellipsize(timeRange(course), time, textWidth), textX, top + lineHeight(12f) + 1f, time);
+        ink.drawText(ellipsize(timeRange(ink, course), time, textWidth), textX, top + lineHeight(12f) + 1f, time);
     }
 
     // MARK: 今日课表
@@ -280,18 +301,28 @@ final class ScheduleWidgetCardRenderer {
         float top = PADDING;
         float width = frame.width - PADDING * 2f;
         float bottom = frame.height - PADDING;
+        frame.largeHeader = large;
         float spacing = large ? 8f : 7f;
         List<JSONObject> courses = courseList(day);
         String hint = emptyToNull(tag);
 
         if (courses.isEmpty()) {
             float header = drawHeader(ink, today, week, false, null, false, left, top, width);
-            drawRest(ink, dateOf(today), false, left, top + header + spacing, width, bottom);
+            if (large && courseList(today).isEmpty() && ChineseCalendarInfo.restGreeting(dateOf(today)) != null) {
+                drawHolidayGreeting(ink, dateOf(today), left, top + header + spacing, width, bottom);
+            } else drawRest(ink, today, left, top + header + spacing, width, bottom);
             return bitmap;
         }
         boolean otherDay = hint != null;
         float headerHeight = headerHeight(ink, today, false, hint);
         float available = bottom - top;
+
+        if (large && frame.options.timeline) {
+            float cursor = top + drawHeader(ink, today, week, false, null, false, left, top, width) + 11f;
+            if (hint != null) { drawOtherDayBanner(ink, hint, left, cursor, width); cursor += 24f; }
+            drawTimeline(ink, courses, nowMinutes, false, left, cursor, width, bottom);
+            return bitmap;
+        }
 
         if (large) {
             // 从 7 门往少试，挑第一个放得下的，「后面还有几门」才数得准。
@@ -336,7 +367,7 @@ final class ScheduleWidgetCardRenderer {
         float height = headerHeight + headerGap;
         for (int index = 0; index < window.courses.size(); index++) {
             if (index > 0) height += rowSpacing;
-            height += rowHeight(window.courses.get(index), large, false, large ? 6f : 3f);
+            height += rowHeight(ink, window.courses.get(index), large, false, large ? 6f : 3f);
         }
         if (showsRemaining && window.remainingCount > 0) height += (large ? 10f : 8f) + lineHeight(9f);
         return height;
@@ -358,14 +389,15 @@ final class ScheduleWidgetCardRenderer {
             float rowSpacing,
             boolean showsRemaining
     ) {
-        float cursor = y + drawHeader(ink, today, week, false, hint, false, x, y, width) + headerGap;
+        float cursor = y + drawHeader(ink, today, week, false, null, false, x, y, width) + headerGap;
+        if (hint != null) { drawOtherDayBanner(ink, hint, x, cursor, width); cursor += 20f; }
         float padding = large ? 6f : 3f;
         for (int index = 0; index < window.courses.size(); index++) {
             JSONObject course = window.courses.get(index);
             if (index > 0) cursor += rowSpacing;
-            boolean completed = otherDay || isCompleted(course, nowMinutes);
+            boolean completed = !otherDay && isCompleted(course, nowMinutes);
             drawRow(ink, course, large, false, completed, padding, x, cursor, width);
-            cursor += rowHeight(course, large, false, padding);
+            cursor += rowHeight(ink, course, large, false, padding);
         }
         if (showsRemaining && window.remainingCount > 0) {
             // 和上面那门课拉开一点，不然像是那门课的附注。
@@ -381,15 +413,15 @@ final class ScheduleWidgetCardRenderer {
     }
 
     // TodayCourseRow：带底色的一行课。
-    private static float rowHeight(JSONObject course, boolean large, boolean timeOnSeparateLine, float verticalPadding) {
+    private static float rowHeight(Ink ink, JSONObject course, boolean large, boolean timeOnSeparateLine, float verticalPadding) {
         float bar = large ? 40f : (timeOnSeparateLine ? 39f : 29f);
-        return Math.max(bar, rowTextHeight(course, large, timeOnSeparateLine)) + verticalPadding * 2f;
+        return Math.max(bar, rowTextHeight(ink, course, large, timeOnSeparateLine)) + verticalPadding * 2f;
     }
 
-    private static float rowTextHeight(JSONObject course, boolean large, boolean timeOnSeparateLine) {
+    private static float rowTextHeight(Ink ink, JSONObject course, boolean large, boolean timeOnSeparateLine) {
         float height = lineHeight(large ? 14f : 12f);
-        if (metadata(course) != null) height += 2f + lineHeight(large ? 10f : 9f);
-        if (timeOnSeparateLine) height += 2f + lineHeight(large ? 10f : 9f);
+        if (metadata(ink, course) != null) height += 2f + lineHeight(large ? 10f : 9f);
+        if (timeOnSeparateLine && ink.frame.options.showTime) height += 2f + lineHeight(large ? 10f : 9f);
         return height;
     }
 
@@ -406,7 +438,7 @@ final class ScheduleWidgetCardRenderer {
     ) {
         ScheduleWidgetPalette palette = ink.frame.palette;
         String name = nameOf(course);
-        float height = rowHeight(course, large, timeOnSeparateLine, verticalPadding);
+        float height = rowHeight(ink, course, large, timeOnSeparateLine, verticalPadding);
         if (completed) ink.beginDimmed(x, y, x + width, y + height);
         float radius = large ? 11f : 8f;
         ink.roundRect(x, y, x + width, y + height, radius, palette.tint(name));
@@ -422,9 +454,9 @@ final class ScheduleWidgetCardRenderer {
         float right = x + width - horizontal;
         float timeSize = large ? 10f : 9f;
         Paint time = ink.text(timeSize, 600, palette.primary());
-        String range = timeRange(course);
+        String range = timeRange(ink, course);
         float textRight = right;
-        if (!timeOnSeparateLine) {
+        if (!timeOnSeparateLine && ink.frame.options.showTime) {
             // 时间在右边：和左边的字之间至少隔 Spacer(5) 加两份 HStack 间距。
             float maxTime = (right - textX) * 0.5f;
             shrinkToFit(time, range, maxTime, 0.72f);
@@ -434,23 +466,146 @@ final class ScheduleWidgetCardRenderer {
             textRight = right - timeWidth - spacing * 2f - 5f;
         }
         float textWidth = Math.max(0f, textRight - textX);
-        float cursor = innerTop + (inner - rowTextHeight(course, large, timeOnSeparateLine)) / 2f;
+        float cursor = innerTop + (inner - rowTextHeight(ink, course, large, timeOnSeparateLine)) / 2f;
         Paint namePaint = ink.text(large ? 14f : 12f, 700, palette.primary());
-        ink.drawText(ellipsize(name, namePaint, textWidth), textX, cursor, namePaint);
+        ink.drawText(ellipsize(primaryValue(ink, course), namePaint, textWidth), textX, cursor, namePaint);
         cursor += lineHeight(namePaint.getTextSize());
-        String meta = metadata(course);
+        String meta = metadata(ink, course);
         if (meta != null) {
             cursor += 2f;
             Paint metaPaint = ink.text(large ? 10f : 9f, 500, palette.secondary());
             ink.drawText(ellipsize(meta, metaPaint, textWidth), textX, cursor, metaPaint);
             cursor += lineHeight(metaPaint.getTextSize());
         }
-        if (timeOnSeparateLine) {
+        if (timeOnSeparateLine && ink.frame.options.showTime) {
             cursor += 2f;
             shrinkToFit(time, range, textWidth, 0.72f);
             ink.drawText(ellipsize(range, time, textWidth), textX, cursor, time);
         }
         if (completed) ink.end();
+    }
+
+    /** iOS DayTimeline / ProportionalStack: minimum readable heights, duration weights and caps. */
+    private static void drawTimeline(Ink ink, List<JSONObject> courses, int now, boolean compact,
+            float x, float top, float width, float bottom) {
+        float timeWidth = ink.frame.options.showTime ? (compact ? 31f : 38f) : 0f;
+        float columnGap = timeWidth > 0f ? (compact ? 5f : 8f) : 0f;
+        float cardX = x + timeWidth + columnGap;
+        float cardWidth = width - timeWidth - columnGap;
+        float padding = compact ? 7f : 9f;
+        float titleSize = compact ? 12f : 14f;
+        float metaSize = compact ? 9f : 10f;
+        float textWidth = cardWidth - padding * 2f - 5f - (compact ? 6f : 9f);
+        CourseWindow window = selectCourseWindow(courses, 1, now);
+        float[] minimum = null, weights = null, caps = null;
+        float available = bottom - top;
+        for (int limit = Math.min(7, courses.size()); limit >= 1; limit--) {
+            window = selectCourseWindow(courses, limit, now);
+            int size = window.courses.size() * 2 - 1;
+            minimum = new float[size]; weights = new float[size]; caps = new float[size];
+            for (int index = 0; index < window.courses.size(); index++) {
+                JSONObject course = window.courses.get(index);
+                if (index > 0) {
+                    int gap = courseGap(window.courses.get(index - 1), course);
+                    minimum[index * 2 - 1] = gap >= 30 ? 22f : 6f;
+                    weights[index * 2 - 1] = gap * 0.5f;
+                    caps[index * 2 - 1] = gap >= 30 ? (compact ? 36f : 44f) : 12f;
+                }
+                Paint title = ink.text(titleSize, 700, ink.frame.palette.primary());
+                int lines = primaryValue(ink, course).isEmpty() ? 0 : 1;
+                float textHeight = lines * lineHeight(title.getTextSize());
+                if (metadata(ink, course) != null) textHeight += 2f + lineHeight(metaSize);
+                minimum[index * 2] = Math.max(34f, 10f + textHeight);
+                int start = parseMinutes(ScheduleWidgetJson.text(course, "startTime", ""));
+                int end = parseMinutes(ScheduleWidgetJson.text(course, "endTime", ""));
+                weights[index * 2] = start < 0 || end < 0 ? 45f : Math.max(20, end - start);
+                caps[index * 2] = Math.max(minimum[index * 2], compact ? 96f : 108f);
+            }
+            available = bottom - top - (window.remainingCount > 0 ? 22f : 0f);
+            float sum = 0f;
+            for (float value : minimum) sum += value;
+            if (sum <= available || limit == 1) break;
+        }
+        if (minimum == null) return;
+        float[] heights = proportionalHeights(minimum, weights, caps, available);
+        float y = top;
+        for (int index = 0; index < window.courses.size(); index++) {
+            JSONObject course = window.courses.get(index);
+            if (index > 0) {
+                int gap = courseGap(window.courses.get(index - 1), course);
+                float h = heights[index * 2 - 1];
+                if (gap >= 30) {
+                    Paint caption = ink.text(compact ? 9f : 10f, 500, ink.frame.palette.muted());
+                    String label = "休息 " + gap + " 分钟";
+                    ink.drawText(ellipsize(label, caption, cardWidth - padding - 12f), cardX + padding + 12f,
+                            y + (h - lineHeight(caption.getTextSize())) / 2f, caption);
+                    for (float dot = y + 3f; dot < y + h - 2f; dot += 5f) {
+                        ink.fill(cardX + padding + 2f, dot, cardX + padding + 3f, dot + 2f, ink.frame.palette.separator());
+                    }
+                }
+                y += h;
+            }
+            float h = heights[index * 2];
+            boolean completed = isCompleted(course, now);
+            int start = parseMinutes(ScheduleWidgetJson.text(course, "startTime", ""));
+            boolean current = now >= 0 && start >= 0 && start <= now && !completed;
+            int accent = ink.frame.palette.accent(nameOf(course));
+            if (completed) ink.beginDimmed(x, y, x + width, y + h);
+            ink.roundRect(cardX, y, cardX + cardWidth, y + h, compact ? 9f : 11f, ink.frame.palette.tint(nameOf(course)));
+            ink.bar(cardX + padding, y + 5f, Math.max(2f, h - 10f), accent);
+            if (timeWidth > 0f) {
+                Paint startPaint = ink.text(compact ? 11f : 12f, 700, current ? accent : ink.frame.palette.primary());
+                Paint endPaint = ink.text(compact ? 9f : 10f, 500, ink.frame.palette.secondary());
+                String from = ScheduleWidgetJson.text(course, "startTime", "—");
+                String to = ScheduleWidgetJson.text(course, "endTime", "");
+                shrinkToFit(startPaint, from, timeWidth, 0.7f);
+                shrinkToFit(endPaint, to, timeWidth, 0.7f);
+                ink.drawText(from, x + timeWidth - measure(startPaint, from), y + 2f, startPaint);
+                ink.drawText(to, x + timeWidth - measure(endPaint, to), y + h - 2f - lineHeight(endPaint.getTextSize()), endPaint);
+            }
+            float tx = cardX + padding + 5f + (compact ? 6f : 9f);
+            float cursor = y + 5f;
+            Paint title = ink.text(titleSize, 700, ink.frame.palette.primary());
+            ink.drawText(ellipsize(primaryValue(ink, course), title, textWidth), tx, cursor, title);
+            cursor += lineHeight(titleSize) + 2f;
+            Paint meta = ink.text(metaSize, 500, ink.frame.palette.secondary());
+            ScheduleWidgetOptions options = ink.frame.options;
+            String teacher = options.showTeacher && (options.showCourseName || options.showRoom) ? ScheduleWidgetJson.text(course, "teacher", "") : "";
+            String room = options.showCourseName && options.showRoom ? ScheduleWidgetJson.text(course, "location", "") : "";
+            float threeLines = 10f + lineHeight(titleSize) + 2f + (teacher.isEmpty() ? 0f : lineHeight(metaSize) + 2f) + lineHeight(metaSize);
+            if (!room.isEmpty() && h >= threeLines) {
+                if (!teacher.isEmpty()) ink.drawText(ellipsize(teacher, meta, textWidth), tx, cursor, meta);
+                ink.drawText(ellipsize(room, meta, textWidth), tx, y + h - 5f - lineHeight(metaSize), meta);
+            } else {
+                String metadata = metadata(ink, course);
+                if (metadata != null) ink.drawText(ellipsize(metadata, meta, textWidth), tx, cursor, meta);
+            }
+            if (completed) ink.end();
+            y += h;
+        }
+        if (window.remainingCount > 0) {
+            Paint paint = ink.text(9f, 500, ink.frame.palette.muted());
+            String text = ellipsize(remainingText(window.remainingCount), paint, width);
+            ink.drawText(text, x + width - measure(paint, text), y + 10f, paint);
+        }
+    }
+
+    static float[] proportionalHeights(float[] minimum, float[] weights, float[] caps, float available) {
+        float low = 0f, high = Math.max(1f, available);
+        for (int step = 0; step < 32; step++) {
+            float scale = (low + high) / 2f, sum = 0f;
+            for (int i = 0; i < minimum.length; i++) sum += Math.min(caps[i], Math.max(minimum[i], weights[i] * scale));
+            if (sum > available) high = scale; else low = scale;
+        }
+        float[] result = new float[minimum.length];
+        for (int i = 0; i < result.length; i++) result[i] = Math.min(caps[i], Math.max(minimum[i], weights[i] * low));
+        return result;
+    }
+
+    private static int courseGap(JSONObject previous, JSONObject next) {
+        int end = parseMinutes(ScheduleWidgetJson.text(previous, "endTime", ""));
+        int start = parseMinutes(ScheduleWidgetJson.text(next, "startTime", ""));
+        return end < 0 || start < 0 ? 0 : Math.max(0, start - end);
     }
 
     // MARK: 两日课表
@@ -478,8 +633,8 @@ final class ScheduleWidgetCardRenderer {
         float columnWidth = (width - 26f - divider) / 2f;
         String hint = emptyToNull(otherTag);
         // 明天那一列没课就照常说「没有课程」，祝福只属于今天。
-        drawDayColumn(ink, today, todayWeek, hint, true, nowMinutes,
-                ChineseCalendarInfo.restMessage(dateOf(today)), left, top, columnWidth, bottom);
+        drawDayColumn(ink, today, todayWeek.equals(otherWeek) ? "" : todayWeek, hint, true, nowMinutes,
+                "今日无课", left, top, columnWidth, bottom);
         ink.fill(left + columnWidth + 13f, top, left + columnWidth + 13f + divider, bottom, frame.palette.separator());
         drawDayColumn(ink, other, otherWeek, hint, false, -1, "没有课程",
                 left + columnWidth + 26f + divider, top, columnWidth, bottom);
@@ -503,18 +658,31 @@ final class ScheduleWidgetCardRenderer {
         float cursor = y + drawHeader(ink, day, week, true, hint, hidesHint, x, y, width) + 18f;
         List<JSONObject> courses = courseList(day);
         if (courses.isEmpty()) {
+            if (hidesHint && ChineseCalendarInfo.restGreeting(dateOf(day)) != null) {
+                drawHolidayGreeting(ink, dateOf(day), x, cursor, width, bottom);
+                return;
+            }
             Paint paint = ink.text(12f, 600, ink.frame.palette.muted());
             String text = ellipsize(emptyText, paint, width);
             ink.drawText(text, x + (width - measure(paint, text)) / 2f,
                     (cursor + bottom) / 2f - lineHeight(12f) / 2f, paint);
             return;
         }
-        CourseWindow window = selectCourseWindow(courses, 5, nowMinutes);
+        if (ink.frame.options.timeline) {
+            drawTimeline(ink, courses, nowMinutes, true, x, cursor, width, bottom);
+            return;
+        }
+        int limit = Math.max(1, Math.min(5, (int) ((bottom - cursor + 7f) / 54f)));
+        CourseWindow window = selectCourseWindow(courses, limit, nowMinutes);
         for (int index = 0; index < window.courses.size(); index++) {
             JSONObject course = window.courses.get(index);
             if (index > 0) cursor += 7f;
             drawRow(ink, course, false, true, isCompleted(course, nowMinutes), 4f, x, cursor, width);
-            cursor += rowHeight(course, false, true, 4f);
+            cursor += rowHeight(ink, course, false, true, 4f);
+        }
+        if (window.remainingCount > 0) {
+            Paint paint = ink.text(9f, 500, ink.frame.palette.muted());
+            ink.drawText(ellipsize(remainingText(window.remainingCount), paint, width), x, Math.min(cursor + 7f, bottom - lineHeight(9f)), paint);
         }
     }
 
@@ -522,7 +690,7 @@ final class ScheduleWidgetCardRenderer {
 
     private static float headerHeight(Ink ink, JSONObject day, boolean compact, String hint) {
         HeaderParts parts = new HeaderParts(ink, day, compact);
-        return parts.rowHeight + (hint == null ? 0f : 4f + pillHeight());
+        return parts.rowHeight + (hint == null ? 0f : 20f);
     }
 
     /**
@@ -543,13 +711,15 @@ final class ScheduleWidgetCardRenderer {
     ) {
         ScheduleWidgetPalette palette = ink.frame.palette;
         HeaderParts parts = new HeaderParts(ink, day, compact);
-        float spacing = compact ? 4f : 6f;
+        float spacing = compact ? 4f : (ink.frame.largeHeader ? 8f : 6f);
+        float dateSize = ink.frame.largeHeader && !compact ? 26f : 19f;
+        float columnHeight = ink.frame.largeHeader && !compact ? 32f : 24f;
         float center = y + parts.rowHeight / 2f;
 
-        Paint datePaint = ink.text(19f, 700, palette.primary());
-        ink.drawText(parts.date, x, center - lineHeight(19f) / 2f, datePaint);
+        Paint datePaint = ink.text(dateSize, 700, palette.primary());
+        ink.drawText(parts.date, x, center - lineHeight(dateSize) / 2f, datePaint);
         float cursor = x + measure(datePaint, parts.date) + spacing;
-        ink.fill(cursor, center - 12f, cursor + 1f, center + 12f, palette.columnDivider());
+        ink.fill(cursor, center - columnHeight / 2f, cursor + 1f, center + columnHeight / 2f, palette.columnDivider());
         float end = cursor + 1f;
         cursor = end + spacing;
         if (parts.weekday != null) {
@@ -558,7 +728,7 @@ final class ScheduleWidgetCardRenderer {
             cursor = end + spacing;
         }
         if (parts.weekday != null && parts.detail != null) {
-            ink.fill(cursor, center - 12f, cursor + 1f, center + 12f, palette.columnDivider());
+            ink.fill(cursor, center - columnHeight / 2f, cursor + 1f, center + columnHeight / 2f, palette.columnDivider());
             end = cursor + 1f;
             cursor = end + spacing;
         }
@@ -577,7 +747,7 @@ final class ScheduleWidgetCardRenderer {
             // 放不下「第 N 周」先去掉空格、再缩字，都放不下才不显示；也别去挤左边的日期。
             float available = right - end - spacing * 2f - 4f - (badgeWidth > 0f ? badgeWidth + spacing : 0f);
             String[] texts = {"第 " + week + " 周", "第" + week + "周", "第" + week + "周", "第" + week + "周"};
-            float[] sizes = {10f, 10f, 9f, 8f};
+            float[] sizes = {ink.frame.largeHeader && !compact ? 12f : 10f, 10f, 9f, 8f};
             for (int index = 0; index < texts.length; index++) {
                 Paint paint = ink.text(sizes[index], 600, palette.secondary());
                 float textWidth = measure(paint, texts[index]);
@@ -616,14 +786,14 @@ final class ScheduleWidgetCardRenderer {
             date = compactDate.isEmpty() ? "课表" : compactDate;
             weekday = emptyToNull(cleanDayLabel(day == null ? "" : ScheduleWidgetJson.text(day, "label", "")));
             ChineseCalendarInfo.CalendarDay info = ChineseCalendarInfo.info(dateOf(day));
-            badge = info == null ? null : info.badge();
+            badge = info == null || !ink.frame.options.showHoliday ? null : info.badge();
             statutory = info != null && info.isStatutoryHoliday();
             // 宽的日期栏放农历（节日已经在右侧徽标里），窄的没有徽标，节日顶上来。
             detailHighlighted = compact && badge != null;
-            detail = detailHighlighted ? badge : (info == null ? null : info.lunar.shortLabel());
-            float height = Math.max(24f, lineHeight(19f));
-            if (weekday != null) height = Math.max(height, verticalHeight(weekday));
-            if (detail != null) height = Math.max(height, verticalHeight(detail));
+            detail = detailHighlighted ? badge : (info == null || !ink.frame.options.showLunarDate ? null : info.lunar.shortLabel());
+            float height = ink.frame.largeHeader && !compact ? 32f : 24f;
+
+
             if (!compact && badge != null) height = Math.max(height, pillHeight());
             rowHeight = height;
         }
@@ -642,7 +812,7 @@ final class ScheduleWidgetCardRenderer {
 
     /** 画竖排字，以 `center` 竖直居中，返回列宽。 */
     private static float drawVertical(Ink ink, String value, int weight, int color, float x, float center) {
-        float size = verticalSize(value);
+        float size = verticalSize(value) + (ink.frame.largeHeader ? 3f : 0f);
         Paint paint = ink.text(size, weight, color);
         List<String> characters = new ArrayList<>();
         float columnWidth = 0f;
@@ -673,35 +843,84 @@ final class ScheduleWidgetCardRenderer {
 
     // MARK: 休息状态
 
-    /** 休息状态：有假期小字时带一个彩带图标，一句祝福或「今日无课」，下面一行最近的法定假期。 */
-    private static void drawRest(Ink ink, String today, boolean small, float x, float top, float width, float bottom) {
-        ScheduleWidgetPalette palette = ink.frame.palette;
-        String message = ChineseCalendarInfo.restMessage(today);
-        String footnote = ChineseCalendarInfo.restFootnote(today);
-        float iconSize = small ? 13f : 15f;
-        float iconHeight = iconSize * 1.44f;
-
-        Paint messagePaint = ink.text(13f, 700, palette.primary());
-        List<String> lines = fitLines(message, messagePaint, width, 2, 0.72f);
-        Paint footPaint = ink.text(10f, 500, palette.muted());
-        if (footnote != null) shrinkToFit(footPaint, footnote, width, 0.62f);
-
-        float height = lines.size() * lineHeight(messagePaint.getTextSize());
-        if (footnote != null) height += iconHeight + 3f + 3f + lineHeight(footPaint.getTextSize());
-        float cursor = (top + bottom) / 2f - height / 2f;
-        float center = x + width / 2f;
-        if (footnote != null) {
-            drawPartyPopper(ink, center, cursor, iconSize, palette.muted());
-            cursor += iconHeight + 3f;
+    /** iOS RestStateView: status above, holiday's three lines aligned to the bottom. */
+    private static void drawRest(Ink ink, JSONObject today, float x, float top, float width, float bottom) {
+        String date = dateOf(today);
+        String status = courseList(today).isEmpty() ? "今日无课" : "今日课程已结束";
+        ChineseCalendarInfo.HolidayCountdown holiday = ink.frame.options.showHoliday
+                ? ChineseCalendarInfo.countdown(date, ChineseCalendarInfo.REST_COUNTDOWN_DAYS) : null;
+        if (holiday == null) {
+            centered(ink, status, 13f, 600, ink.frame.palette.muted(), x, (top + bottom) / 2f - 8f, width);
+            return;
         }
-        for (String line : lines) {
-            ink.drawText(line, center - measure(messagePaint, line) / 2f, cursor, messagePaint);
-            cursor += lineHeight(messagePaint.getTextSize());
+        if (holiday.daysAway > 0) {
+            Paint statusPaint = ink.text(11f, 600, ink.frame.palette.muted());
+            ink.drawText(ellipsize(status, statusPaint, width), x, top, statusPaint);
         }
-        if (footnote != null) {
-            cursor += 3f;
-            String text = ellipsize(footnote, footPaint, width);
-            ink.drawText(text, center - measure(footPaint, text) / 2f, cursor, footPaint);
+        String caption = holiday.daysAway == 0 ? "放假中" : holiday.daysAway == 1 ? "明天" : holiday.daysAway + " 天后";
+        String title = holiday.daysAway == 0 ? ChineseCalendarInfo.restGreeting(date) : holiday.window.name;
+        float cursor = Math.max(top + (holiday.daysAway > 0 ? 20f : 0f), bottom - lineHeight(11f) - 5f - lineHeight(15f) - 2f - lineHeight(10f));
+        Paint label = ink.text(11f, 600, ink.frame.palette.secondary());
+        ink.drawText(caption, x, cursor, label);
+        cursor += lineHeight(11f) + 5f;
+        Paint heading = ink.text(15f, 700, ink.frame.palette.primary());
+        shrinkToFit(heading, title, width, 0.76f);
+        ink.drawText(ellipsize(title, heading, width), x, cursor, heading);
+        cursor += lineHeight(15f) + 2f;
+        Paint detail = ink.text(10f, 500, ink.frame.palette.secondary());
+        shrinkToFit(detail, holiday.dateLabel(), width, 0.8f);
+        ink.drawText(ellipsize(holiday.dateLabel(), detail, width), x, cursor, detail);
+    }
+
+    private static void centered(Ink ink, String text, float size, int weight, int color, float x, float y, float width) {
+        Paint paint = ink.text(size, weight, color);
+        shrinkToFit(paint, text, width, 0.8f);
+        String shown = ellipsize(text, paint, width);
+        ink.drawText(shown, x + (width - measure(paint, shown)) / 2f, y, paint);
+    }
+
+    private static void drawOtherDayBanner(Ink ink, String hint, float x, float y, float width) {
+        String[] pieces = hint.split(" ", 2);
+        Paint label = ink.text(10f, 800, android.graphics.Color.WHITE);
+        float pill = measure(label, pieces[0]) + 12f;
+        ink.roundRect(x, y, x + pill, y + 16f, 8f, ink.frame.palette.accent());
+        ink.drawText(pieces[0], x + 6f, y + 2f, label);
+        if (pieces.length > 1) {
+            Paint detail = ink.text(11f, 600, ink.frame.palette.secondary());
+            ink.drawText(ellipsize(pieces[1], detail, Math.max(0, width - pill - 5f)), x + pill + 5f, y + 1f, detail);
+        }
+    }
+
+    private static void drawHolidayGreeting(Ink ink, String date, float x, float top, float width, float bottom) {
+        String greeting = ChineseCalendarInfo.restGreeting(date);
+        ChineseCalendarInfo.HolidayCountdown holiday = ink.frame.options.showHoliday ? ChineseCalendarInfo.countdown(date, 0) : null;
+        int total = holiday == null ? 0 : holiday.window.dayCount();
+        boolean progress = total > 1 && total <= 12;
+        float height = 44f + 10f + lineHeight(17f) + (holiday == null ? 0 : 4f + lineHeight(10f)) + (progress ? 36f : 0);
+        float y = Math.max(top, (top + bottom - height) / 2f - 8f);
+        if (greeting != null && greeting.startsWith("清明")) {
+            Paint leaf = ink.text(30f, 600, ink.frame.palette.pink());
+            Path path = new Path();
+            float cx = x + width / 2f;
+            path.moveTo(cx - 12f, y + 32f); path.cubicTo(cx - 20f, y, cx + 10f, y + 4f, cx + 15f, y);
+            path.cubicTo(cx + 20f, y + 24f, cx, y + 42f, cx - 12f, y + 32f);
+            ink.canvas.drawPath(path, leaf);
+        } else drawPartyPopper(ink, x + width / 2f, y, 30f, ink.frame.palette.pink());
+        y += 54f;
+        centered(ink, greeting == null ? "今日无课" : greeting, 17f, 700, ink.frame.palette.primary(), x, y, width);
+        y += lineHeight(17f) + 4f;
+        if (holiday != null) {
+            String detail = progress ? ChineseCalendarInfo.monthDayLabel(holiday.window.start) + " - " + ChineseCalendarInfo.monthDayLabel(holiday.window.end) : holiday.dateLabel();
+            centered(ink, detail, 10f, 500, ink.frame.palette.secondary(), x, y, width);
+            y += lineHeight(10f) + 12f;
+        }
+        if (progress) {
+            int day = Math.max(1, Math.min(total, ChineseCalendarInfo.dayGap(holiday.window.start, date) + 1));
+            float dotsX = x + (width - (total * 10f - 4f)) / 2f;
+            for (int i = 0; i < total; i++) ink.roundRect(dotsX + i * 10f, y, dotsX + i * 10f + 6f, y + 6f, 3f,
+                    i < day ? ink.frame.palette.pink() : ink.frame.palette.separator());
+            y += 12f;
+            centered(ink, day == total ? "假期最后一天" : "第 " + day + " 天 · 还剩 " + (total - day) + " 天", 9f, 600, ink.frame.palette.muted(), x, y, width);
         }
     }
 
@@ -984,16 +1203,25 @@ final class ScheduleWidgetCardRenderer {
         return ScheduleWidgetPalette.displayName(course == null ? "" : ScheduleWidgetJson.text(course, "name", ""));
     }
 
+    private static String primaryValue(Ink ink, JSONObject course) {
+        ScheduleWidgetOptions options = ink.frame.options;
+        if (options.showCourseName) return nameOf(course);
+        if (options.showRoom) return ScheduleWidgetJson.text(course, "location", "");
+        if (options.showTeacher) return ScheduleWidgetJson.text(course, "teacher", "");
+        return options.showTime ? timeRange(ink, course) : "";
+    }
+
     /** 「C204 · 苏老师」；两样都没有就不显示这一行。 */
-    private static String metadata(JSONObject course) {
-        String location = course == null ? "" : ScheduleWidgetJson.text(course, "location", "").trim();
-        String teacher = course == null ? "" : ScheduleWidgetJson.text(course, "teacher", "").trim();
+    private static String metadata(Ink ink, JSONObject course) {
+        String location = course == null || !ink.frame.options.showRoom ? "" : ScheduleWidgetJson.text(course, "location", "").trim();
+        String teacher = course == null || !ink.frame.options.showTeacher ? "" : ScheduleWidgetJson.text(course, "teacher", "").trim();
         if (!location.isEmpty() && !teacher.isEmpty()) return location + " · " + teacher;
         if (!location.isEmpty()) return location;
         return teacher.isEmpty() ? null : teacher;
     }
 
-    private static String timeRange(JSONObject course) {
+    private static String timeRange(Ink ink, JSONObject course) {
+        if (!ink.frame.options.showTime) return "";
         String start = course == null ? "" : ScheduleWidgetJson.text(course, "startTime", "").trim();
         String end = course == null ? "" : ScheduleWidgetJson.text(course, "endTime", "").trim();
         if (start.isEmpty()) return "时间待确认";

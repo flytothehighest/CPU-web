@@ -60,6 +60,19 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
         return WidgetMode.COMPACT;
     }
 
+    static WidgetMode modeForProvider(String name) {
+        if (name.endsWith("ProviderTodayLarge")) return WidgetMode.TODAY_LARGE;
+        if (name.endsWith("ProviderTodayWide")) return WidgetMode.TODAY_WIDE;
+        if (name.endsWith("ProviderLarge")) return WidgetMode.LARGE;
+        if (name.endsWith("ProviderWide")) return WidgetMode.WIDE;
+        return WidgetMode.COMPACT;
+    }
+
+    @Override
+    public void onDeleted(Context context, int[] ids) {
+        for (int id : ids) ScheduleWidgetOptions.remove(context, id);
+    }
+
     @Override
     public void onReceive(Context context, Intent intent) {
         super.onReceive(context, intent);
@@ -71,6 +84,21 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
             updateAll(context);
         } else if (intent != null && ACTION_WIDGET_TICK.equals(intent.getAction())) {
             updateAll(context);
+        } else if (intent != null && ScheduleWidgetCelebration.ACTION.equals(intent.getAction())) {
+            int id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID);
+            android.appwidget.AppWidgetProviderInfo info = AppWidgetManager.getInstance(context).getAppWidgetInfo(id);
+            if (info == null || !context.getPackageName().equals(info.provider.getPackageName())) return;
+            WidgetMode mode = modeForProvider(info.provider.getClassName());
+            JSONObject record = ScheduleWidgetLocalDays.read(context);
+            if (record == null) return;
+            ChineseCalendarInfo.usePublishedHolidays(ScheduleWidgetLocalDays.holidays(record));
+            String date = deviceDateOffset(0);
+            JSONObject data = ScheduleWidgetLocalDays.payload(record, date);
+            JSONObject today = fullDayForDate(data, date, 0);
+            JSONArray courses = coursesOf(today);
+            if (!ScheduleWidgetCelebration.eligible(date, courses == null || courses.length() == 0, mode)) return;
+            PendingResult result = goAsync();
+            ScheduleWidgetCelebration.play(context.getApplicationContext(), id, mode, result::finish);
         }
     }
 
@@ -323,11 +351,16 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
     }
 
     static Painter painter(JSONObject data, WidgetMode mode, String todayDate, int now) {
-        if (mode == WidgetMode.LARGE) return twoDayPainter(data, todayDate, now);
-        if (mode == WidgetMode.TODAY_WIDE || mode == WidgetMode.TODAY_LARGE) {
-            return todayPainter(data, todayDate, now, mode == WidgetMode.TODAY_LARGE);
-        }
-        return upcomingPainter(data, todayDate, now, mode == WidgetMode.WIDE);
+        return painter(data, mode, todayDate, now, ScheduleWidgetOptions.defaults(mode));
+    }
+
+    static Painter painter(JSONObject data, WidgetMode mode, String todayDate, int now, ScheduleWidgetOptions options) {
+        Painter content;
+        if (mode == WidgetMode.LARGE) content = twoDayPainter(data, todayDate, now, options);
+        else if (mode == WidgetMode.TODAY_WIDE || mode == WidgetMode.TODAY_LARGE) {
+            content = todayPainter(data, todayDate, now, mode == WidgetMode.TODAY_LARGE, options);
+        } else content = upcomingPainter(data, todayDate, now, mode == WidgetMode.WIDE, options);
+        return frame -> content.paint(frame.withOptions(options));
     }
 
     private static void renderSchedule(
@@ -339,20 +372,57 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
             WidgetMode mode
     ) {
         showBitmap(context, manager, appWidgetId, views, mode,
-                painter(data, mode, deviceDateOffset(0), currentMinutes()));
+                painter(data, mode, deviceDateOffset(0), currentMinutes(), ScheduleWidgetOptions.load(context, appWidgetId, mode)));
+        if (mode == WidgetMode.LARGE || mode == WidgetMode.TODAY_LARGE) {
+            String date = deviceDateOffset(0);
+            JSONObject today = fullDayForDate(data, date, 0);
+            JSONArray courses = coursesOf(today);
+            ScheduleWidgetOptions options = ScheduleWidgetOptions.load(context, appWidgetId, mode);
+            boolean showsGreeting = mode == WidgetMode.LARGE || options.todayOnly || nextClassDayOffset(data, date) < 0;
+            ScheduleWidgetCelebration.attach(context, views, appWidgetId, showsGreeting &&
+                    ScheduleWidgetCelebration.eligible(date, courses == null || courses.length() == 0, mode));
+        }
+        views.setContentDescription(R.id.widget_content_image, accessibilitySummary(data, mode,
+                deviceDateOffset(0), currentMinutes(), ScheduleWidgetOptions.load(context, appWidgetId, mode)));
     }
 
-    private static Painter upcomingPainter(JSONObject data, String todayDate, int now, boolean wide) {
+    static String accessibilitySummary(JSONObject data, WidgetMode mode, String date, int now, ScheduleWidgetOptions options) {
+        StringBuilder text = new StringBuilder(date).append(" ").append(ChineseCalendarInfo.weekdayLabel(date));
+        JSONObject today = fullDayForDate(data, date, 0);
+        List<JSONObject> selected = mode == WidgetMode.COMPACT || mode == WidgetMode.WIDE
+                ? nextCourses(today, now, mode == WidgetMode.COMPACT ? options.courseCount : 2) : firstCourses(today, Integer.MAX_VALUE);
+        boolean finished = nextCourses(today, now, 1).isEmpty();
+        if (mode != WidgetMode.LARGE && finished && !options.todayOnly) selected = new ArrayList<>();
+        if ((selected.isEmpty() && !options.todayOnly) || mode == WidgetMode.LARGE) {
+            int offset = mode == WidgetMode.LARGE && options.tomorrow ? 1 : nextClassDayOffset(data, date);
+            if (offset > 0) {
+                text.append("，").append(courseDayBanner(offset, addDays(date, offset)));
+                selected.addAll(firstCourses(dayForDate(data, addDays(date, offset)),
+                        mode == WidgetMode.COMPACT ? options.courseCount : mode == WidgetMode.WIDE ? 2 : Integer.MAX_VALUE));
+            }
+        }
+        if (selected.isEmpty()) text.append("，").append(coursesOf(today) != null && coursesOf(today).length() > 0 ? "今日课程已结束" : "今日无课");
+        for (JSONObject course : selected) {
+            if (options.showCourseName) text.append("，").append(ScheduleWidgetJson.text(course, "name", ""));
+            if (options.showTime) text.append(" ").append(timeRange(course));
+            if (options.showRoom) text.append(" ").append(ScheduleWidgetJson.text(course, "location", ""));
+            if (options.showTeacher) text.append(" ").append(ScheduleWidgetJson.text(course, "teacher", ""));
+        }
+        return text.toString();
+    }
+
+    private static Painter upcomingPainter(JSONObject data, String todayDate, int now, boolean wide, ScheduleWidgetOptions options) {
         JSONObject today = fullDayForDate(data, todayDate, 0);
-        List<JSONObject> courses = nextCourses(today, now, 2);
+        int count = wide ? 2 : options.courseCount;
+        List<JSONObject> courses = nextCourses(today, now, count);
         String tag = "";
         String[] labels = courses.isEmpty() ? null : upcomingLabels(courses.get(0), now);
-        if (courses.isEmpty()) {
+        if (courses.isEmpty() && !options.todayOnly) {
             int offset = nextClassDayOffset(data, todayDate);
             if (offset > 0) {
                 JSONObject day = dayForDate(data, addDays(todayDate, offset));
-                courses = firstCourses(day, 2);
-                tag = otherDayTag(offset, ScheduleWidgetJson.text(day, "date", ""));
+                courses = firstCourses(day, count);
+                tag = courseDayBanner(offset, ScheduleWidgetJson.text(day, "date", ""));
                 labels = new String[]{"第一节", "接下来"};
             }
         }
@@ -364,18 +434,17 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
                 frame, today, week, shownTag, shown, shownLabels, wide);
     }
 
-    private static Painter todayPainter(JSONObject data, String todayDate, int now, boolean large) {
+    private static Painter todayPainter(JSONObject data, String todayDate, int now, boolean large, ScheduleWidgetOptions options) {
         JSONObject today = fullDayForDate(data, todayDate, 0);
         JSONObject shown = today;
         String tag = "";
         int shownNow = now;
         // 今天上完了：换到 21 天内最近有课的一天；都没课就是休息状态（docs/schedule-widget-rules.md 第 2 节）。
-        // 安卓没有「只看今天」的选项，所以不把上完的课灰着留在原处。
-        if (nextCourses(today, now, 1).isEmpty()) {
+        if (nextCourses(today, now, 1).isEmpty() && !options.todayOnly) {
             int offset = nextClassDayOffset(data, todayDate);
             if (offset > 0) {
                 shown = dayForDate(data, addDays(todayDate, offset));
-                tag = otherDayTag(offset, ScheduleWidgetJson.text(shown, "date", ""));
+                tag = courseDayBanner(offset, ScheduleWidgetJson.text(shown, "date", ""));
                 shownNow = -1;
             } else {
                 shown = new JSONObject();
@@ -388,9 +457,9 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
         return frame -> ScheduleWidgetCardRenderer.renderToday(frame, today, week, day, shownTag, large, minutes);
     }
 
-    private static Painter twoDayPainter(JSONObject data, String todayDate, int now) {
+    private static Painter twoDayPainter(JSONObject data, String todayDate, int now, ScheduleWidgetOptions options) {
         JSONObject today = fullDayForDate(data, todayDate, 0);
-        int offset = nextClassDayOffset(data, todayDate);
+        int offset = options.tomorrow ? 1 : nextClassDayOffset(data, todayDate);
         JSONObject other = offset > 0
                 ? dayForDate(data, addDays(todayDate, offset))
                 : fullDayForDate(data, addDays(todayDate, 1), 1);
@@ -431,6 +500,12 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
         } catch (Exception ignored) {
             return "";
         }
+    }
+
+    static String courseDayBanner(int offset, String date) {
+        String label = offset == 1 ? "明天" : offset == 2 ? "后天" : otherDayTag(offset, date).replace(" 的课", "");
+        String weekday = ChineseCalendarInfo.weekdayLabel(date);
+        return label + (weekday == null ? "" : " " + weekday);
     }
 
     static String[] upcomingLabels(JSONObject first, int now) {

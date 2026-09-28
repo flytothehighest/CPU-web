@@ -259,9 +259,27 @@ fun WidgetSettingsSheet(activity: MainActivity, onDismiss: () -> Unit) {
             Text(widgets.message, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
         }
         Spacer(Modifier.height(16.dp))
+        val manager = AppWidgetManager.getInstance(activity)
+        val installed = WidgetKind.entries.flatMap { kind ->
+            manager.getAppWidgetIds(ComponentName(activity, kind.provider)).map { kind to it }
+        }
+        if (installed.isNotEmpty()) {
+            Text("编辑桌面小组件", style = MaterialTheme.typography.titleSmall)
+            Text("每个小组件可以分别设置显示方式和课程信息。", fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            installed.forEachIndexed { index, (kind, id) ->
+                androidx.compose.material3.TextButton(onClick = {
+                    activity.startActivity(Intent(activity, ScheduleWidgetConfigureActivity::class.java)
+                        .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id))
+                }, modifier = Modifier.fillMaxWidth()) {
+                    Text("${kind.title} ${kind.size} · ${index + 1}")
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
         Text("手动添加", style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(4.dp))
-        Text("长按桌面空白处，选择“小组件”，找到“药大拾间”后拖到桌面。课表只保存在本机，退出登录时删除。",
+        Text("长按桌面空白处，选择“小组件”，找到“药大拾间”后拖到桌面。长按已添加的小组件可编辑设置；也可从这里编辑。课表只保存在本机，退出登录时删除。",
             fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

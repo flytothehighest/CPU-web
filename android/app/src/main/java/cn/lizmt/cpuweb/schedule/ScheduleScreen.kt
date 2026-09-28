@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.NearMe
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.ArrowDropDown
@@ -121,7 +122,7 @@ fun NativeScheduleScreen(activity: MainActivity) {
     Box(Modifier.fillMaxSize().consumesTouches().background(colors.page)) {
         ScheduleBackground(style)
         CompositionLocalProvider(LocalScheduleGlass provides glass) {
-        Column(Modifier.fillMaxSize().padding(start = 12.dp, end = 12.dp, top = 10.dp)) {
+        Column(Modifier.fillMaxSize().padding(start = 10.dp, end = 10.dp, top = 4.dp)) {
             // A term that failed to load has no weeks, but its picker must stay
             // reachable so another term can be chosen.
             if (store.weekOptions().isNotEmpty() || store.semesterOptions().isNotEmpty()) {
@@ -228,19 +229,20 @@ private fun ScheduleToolbar(
     val colors = LocalScheduleColors.current
     var semesterMenu by remember { mutableStateOf(false) }
     var moreMenu by remember { mutableStateOf(false) }
-    Row(Modifier.fillMaxWidth().height(46.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.weight(1f)) {
+    val canChooseSemester = store.semesterOptions().size > 1
+    Row(Modifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.weight(1f).height(40.dp).clickable(enabled = canChooseSemester) { semesterMenu = true }) {
             Row(
-                Modifier.fillMaxWidth().height(42.dp).clip(RoundedCornerShape(22.dp)).background(colors.surface)
-                    .clickable { semesterMenu = true }.padding(start = 14.dp, end = 8.dp)
+                Modifier.fillMaxWidth().height(32.dp).align(Alignment.Center).clip(RoundedCornerShape(16.dp)).background(colors.surface)
+                    .padding(start = 12.dp, end = 6.dp)
                     .semantics { contentDescription = "选择学期，当前 ${semesterLabel(store)}" },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    semesterLabel(store), color = colors.accent, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                    compactSemesterLabel(store), color = colors.text, fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.sp, fontWeight = FontWeight.SemiBold,
                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
                 )
-                Icon(Icons.Rounded.ArrowDropDown, contentDescription = null, tint = colors.accent)
+                if (canChooseSemester) Icon(Icons.Rounded.ArrowDropDown, contentDescription = null, tint = colors.secondary)
             }
             DropdownMenu(expanded = semesterMenu, onDismissRequest = { semesterMenu = false }) {
                 store.semesterOptions().forEach { option ->
@@ -256,21 +258,21 @@ private fun ScheduleToolbar(
         }
         Spacer(Modifier.width(6.dp))
         Row(
-            Modifier.width(84.dp).height(40.dp).clip(RoundedCornerShape(22.dp)).background(colors.softSurface).padding(3.dp),
+            Modifier.width(76.dp).height(32.dp).clip(RoundedCornerShape(16.dp)).background(colors.softSurface).padding(2.dp),
         ) {
-            ModeButton("周", store.viewMode == "week", Modifier.weight(1f)) { store.selectViewMode("week") }
             ModeButton("日", store.viewMode == "day", Modifier.weight(1f)) { store.selectViewMode("day") }
+            ModeButton("周", store.viewMode == "week", Modifier.weight(1f)) { store.selectViewMode("week") }
         }
         Spacer(Modifier.width(6.dp))
         Box(
-            Modifier.size(40.dp).clip(CircleShape).background(colors.surface).clickable { store.returnToCurrentWeek() }
+            Modifier.size(32.dp).clip(CircleShape).background(colors.surface).clickable { store.returnToCurrentWeek() }
                 .semantics { contentDescription = "回到本周今日" },
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Rounded.MyLocation, contentDescription = null, tint = colors.accent, modifier = Modifier.size(21.dp))
+            Icon(Icons.Outlined.NearMe, contentDescription = null, tint = colors.text, modifier = Modifier.size(18.dp))
         }
         Box {
-            IconButton(onClick = { moreMenu = true }, modifier = Modifier.size(width = 36.dp, height = 44.dp)) {
+            IconButton(onClick = { moreMenu = true }, modifier = Modifier.size(width = 34.dp, height = 40.dp)) {
                 if (store.status == ScheduleStatus.Loading || store.refreshing) {
                     CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = colors.accent)
                 } else {
@@ -300,11 +302,18 @@ private fun ScheduleToolbar(
             }
         }
     }
-    Spacer(Modifier.height(8.dp))
+    Spacer(Modifier.height(2.dp))
 }
 
 private fun semesterLabel(store: ScheduleStore): String =
     store.semesterOptions().firstOrNull { it.value == store.selectedSemester }?.label ?: store.selectedSemester.ifEmpty { "选择学期" }
+
+private fun compactSemesterLabel(store: ScheduleStore): String {
+    val parts = store.selectedSemester.split('-')
+    return if (parts.size == 3 && parts[0].length == 4 && parts[1].length == 4) {
+        "${parts[0]}–${parts[1].takeLast(2)} · ${when (parts[2]) { "1" -> "秋"; "2" -> "春"; else -> "夏" }}"
+    } else semesterLabel(store)
+}
 
 @Composable
 private fun ModeButton(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
@@ -317,7 +326,7 @@ private fun ModeButton(label: String, selected: Boolean, modifier: Modifier, onC
             },
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, fontSize = 14.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+        Text(label, fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
             color = if (selected) colors.text else colors.secondary)
     }
 }
@@ -332,7 +341,7 @@ private fun WeekSwitcher(store: ScheduleStore, onPick: () -> Unit) {
     val current = store.isCurrentWeek()
     val glass = LocalScheduleGlass.current
     Row(
-        Modifier.fillMaxWidth().height(58.dp)
+        Modifier.fillMaxWidth().height(42.dp)
             .then(if (glass != null) Modifier.clip(RoundedCornerShape(18.dp)).background(glass) else Modifier),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -340,12 +349,12 @@ private fun WeekSwitcher(store: ScheduleStore, onPick: () -> Unit) {
             Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, contentDescription = "上一周", tint = colors.text)
         }
         Column(
-            Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).clickable(onClick = onPick).padding(vertical = 4.dp)
+            Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).clickable(onClick = onPick).padding(vertical = 2.dp)
                 .semantics { contentDescription = "选择周次，$label，$range" },
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(label, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = colors.text)
+                Text(label, fontSize = 14.sp, lineHeight = 18.sp, letterSpacing = 0.sp, fontWeight = FontWeight.SemiBold, color = colors.text)
                 if (current) {
                     Spacer(Modifier.width(6.dp))
                     Text("本周", fontSize = 10.sp, color = colors.accent, fontWeight = FontWeight.Bold,
@@ -353,13 +362,13 @@ private fun WeekSwitcher(store: ScheduleStore, onPick: () -> Unit) {
                             .padding(horizontal = 5.dp, vertical = 1.dp))
                 }
             }
-            Text(range, fontSize = 12.sp, color = colors.secondary, maxLines = 1)
+            Text(range, fontSize = 10.sp, lineHeight = 14.sp, letterSpacing = 0.sp, color = colors.secondary, maxLines = 1)
         }
         IconButton(onClick = { store.moveWeek(1) }, enabled = store.canMoveWeek(1)) {
             Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = "下一周", tint = colors.text)
         }
     }
-    Spacer(Modifier.height(6.dp))
+    Spacer(Modifier.height(2.dp))
 }
 
 @Composable
@@ -444,7 +453,7 @@ private fun ScheduleBody(
     val selected = week == store.selectedWeek
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val height = maxHeight
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 12.dp)) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 6.dp)) {
             when {
                 data == null && selected && store.status == ScheduleStatus.Unauthorized -> StateCard(
                     "教务授权已失效", "请重新登录并完成教务授权后读取课表", "去授权", onLogin,
@@ -491,14 +500,14 @@ private fun DayHeaderCell(store: ScheduleStore, day: Int, week: String, highligh
     val adjustment = store.adjustment(day, week)
     val glass = LocalScheduleGlass.current
     Column(
-        modifier.height(44.dp).clip(RoundedCornerShape(12.dp))
-            .background(if (highlighted) colors.surface else glass ?: Color.Transparent)
-            .border(if (highlighted) 0.8.dp else 0.dp, if (highlighted) colors.todayBorder else Color.Transparent, RoundedCornerShape(12.dp)),
+        modifier.height(36.dp).clip(RoundedCornerShape(10.dp))
+            .background(if (highlighted) colors.accent.copy(alpha = 0.10f) else glass ?: Color.Transparent)
+            .border(if (highlighted) 0.8.dp else 0.dp, if (highlighted) colors.accent.copy(alpha = 0.28f) else Color.Transparent, RoundedCornerShape(12.dp)),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(WEEKDAY_LABELS[day - 1], fontSize = 12.sp, fontWeight = FontWeight.Bold, color = colors.text)
+            Text(WEEKDAY_LABELS[day - 1], fontSize = 11.sp, lineHeight = 14.sp, letterSpacing = 0.sp, fontWeight = FontWeight.SemiBold, color = if (highlighted) colors.accent else colors.text)
             if (adjustment != null) {
                 // 休 = day off, 班 = make-up day, like the iOS day badges.
                 Text(
@@ -508,7 +517,7 @@ private fun DayHeaderCell(store: ScheduleStore, day: Int, week: String, highligh
                 )
             }
         }
-        Text(if (date.isEmpty()) "—" else date.replace('-', '.'), fontSize = 10.sp, color = colors.secondary)
+        Text(if (date.isEmpty()) "—" else date.replace('-', '.'), fontSize = 9.sp, lineHeight = 12.sp, letterSpacing = 0.sp, color = colors.secondary)
     }
 }
 
@@ -541,15 +550,15 @@ private fun WeekGrid(
     onAddSlot: (Int, Int) -> Unit,
 ) {
     val colors = LocalScheduleColors.current
-    val stride = max(40f, (height.value - 62f) / SLOT_COUNT).dp
+    val stride = compactWeekRowHeight(height.value).dp
     val cellColor = if (translucent) colors.cell.copy(alpha = if (colors.dark) 0.52f else 0.36f) else colors.cell
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             val glass = LocalScheduleGlass.current
-            Text("节次", fontSize = 11.sp, color = colors.secondary, textAlign = TextAlign.Center,
-                modifier = Modifier.width(38.dp).height(44.dp)
+            Text("节次", fontSize = 10.sp, lineHeight = 14.sp, letterSpacing = 0.sp, color = colors.secondary, textAlign = TextAlign.Center,
+                modifier = Modifier.width(38.dp).height(36.dp)
                     .then(if (glass != null) Modifier.clip(RoundedCornerShape(12.dp)).background(glass) else Modifier)
-                    .padding(top = 14.dp))
+                    .padding(top = 10.dp))
             (1..7).forEach { day ->
                 DayHeaderCell(
                     store, day, week, highlighted = store.isToday(day, week),
@@ -573,11 +582,12 @@ private fun WeekGrid(
                     Column {
                         (1..SLOT_COUNT).forEach { slot ->
                             Box(
-                                Modifier.fillMaxWidth().height(stride - 5.dp).clip(RoundedCornerShape(9.dp)).background(dayCell)
+                                Modifier.fillMaxWidth().height(stride - 4.dp).clip(RoundedCornerShape(8.dp)).background(dayCell)
+                                    .border(0.5.dp, colors.divider.copy(alpha = if (colors.dark) 0.65f else 0.6f), RoundedCornerShape(8.dp))
                                     .clickable { onAddSlot(day, slot) }
                                     .semantics { contentDescription = WEEKDAY_LABELS[day - 1] + "第${slot}节，添加课程" },
                             )
-                            Spacer(Modifier.height(5.dp))
+                            Spacer(Modifier.height(4.dp))
                         }
                     }
                     blocks.forEach { block ->
@@ -585,27 +595,30 @@ private fun WeekGrid(
                         val span = block.endSlot - block.startSlot + 1
                         val overlaps = blocks.count { it.startSlot <= block.endSlot && it.endSlot >= block.startSlot }
                         Column(
-                            Modifier.offset(y = stride * (block.startSlot - 1)).fillMaxWidth().height(stride * span - 5.dp)
-                                .clip(RoundedCornerShape(9.dp)).background(Color(tone.fill))
+                            Modifier.offset(y = stride * (block.startSlot - 1)).fillMaxWidth().height(stride * span - 4.dp)
+                                .clip(RoundedCornerShape(9.dp)).background(colors.surface)
+                                .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(tone.highlight), Color(tone.fill))))
                                 .border(1.dp, Color(tone.border), RoundedCornerShape(9.dp))
                                 .clickable { onCourse(block, week) }
                                 .semantics { contentDescription = courseAccessibility(block) }
-                                .padding(horizontal = 2.dp, vertical = 4.dp),
+                                .padding(horizontal = 2.dp, vertical = 3.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center,
                         ) {
                             Text(
-                                block.course.name, fontSize = 10.5.sp, lineHeight = 12.sp, fontWeight = FontWeight.Bold,
+                                block.course.name, fontSize = 10.sp, lineHeight = 12.sp, letterSpacing = 0.sp, fontWeight = FontWeight.Medium,
                                 color = Color(tone.text), textAlign = TextAlign.Center,
-                                maxLines = if (span == 1) 2 else if (span < 3) 3 else 6, overflow = TextOverflow.Ellipsis,
+                                maxLines = if (span == 1) 2 else 6, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false),
                             )
                             if (!block.course.location.isNullOrEmpty() && span > 1) {
-                                Text("@" + block.course.location, fontSize = 9.sp, lineHeight = 11.sp, fontWeight = FontWeight.Bold,
+                                Spacer(Modifier.height(3.dp))
+                                Text(block.course.location, fontSize = 9.sp, lineHeight = 11.sp, letterSpacing = 0.sp, fontWeight = FontWeight.Normal,
                                     color = Color(tone.text).copy(alpha = 0.86f), textAlign = TextAlign.Center,
                                     maxLines = 2, overflow = TextOverflow.Ellipsis)
                             }
                             if (overlaps > 1 && span > 1) {
-                                Text("+${overlaps - 1} 门", fontSize = 8.sp, color = Color(tone.text), maxLines = 1)
+                                Text("+${overlaps - 1} 门", fontSize = 8.sp, lineHeight = 10.sp, color = Color(tone.text), maxLines = 1)
                             }
                         }
                     }
@@ -627,9 +640,9 @@ private fun SlotAxis(store: ScheduleStore, slot: Int, stride: Dp) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(slot.toString(), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = colors.text)
-        Text(period.startTime, fontSize = 9.sp, lineHeight = 10.sp, color = colors.secondary)
-        Text(period.endTime, fontSize = 9.sp, lineHeight = 10.sp, color = colors.secondary)
+        Text(slot.toString(), fontSize = 11.sp, lineHeight = 14.sp, letterSpacing = 0.sp, fontWeight = FontWeight.SemiBold, color = colors.text)
+        Text(period.startTime, fontSize = 8.sp, lineHeight = 10.sp, letterSpacing = 0.sp, color = colors.secondary)
+        Text(period.endTime, fontSize = 8.sp, lineHeight = 10.sp, letterSpacing = 0.sp, color = colors.secondary)
     }
 }
 
@@ -670,7 +683,8 @@ private fun DayTimeline(
                 val meta = listOfNotNull(block.course.location?.let { "@$it" }, block.course.teacher).joinToString(" · ")
                 Column(
                     Modifier.offset(y = stride * (block.startSlot - 1)).fillMaxWidth().height(stride * span - 4.dp)
-                        .clip(RoundedCornerShape(12.dp)).background(Color(tone.fill))
+                        .clip(RoundedCornerShape(12.dp)).background(colors.surface)
+                        .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(tone.highlight), Color(tone.fill))))
                         .border(1.dp, Color(tone.border), RoundedCornerShape(12.dp))
                         .clickable { onCourse(block, week) }
                         .semantics { contentDescription = courseAccessibility(block) }
@@ -680,7 +694,7 @@ private fun DayTimeline(
                     Text(block.course.name, fontSize = if (span == 1) 13.sp else 16.sp, fontWeight = FontWeight.Medium,
                         color = Color(tone.text), maxLines = if (span == 1) 1 else 3, overflow = TextOverflow.Ellipsis)
                     Spacer(Modifier.height(4.dp))
-                    Text(meta.ifEmpty { "地点待确认" }, fontSize = 11.sp, color = colors.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(meta.ifEmpty { "地点待确认" }, fontSize = 11.sp, color = Color(tone.text).copy(alpha = 0.82f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (span > 1) {
                         Text("${block.course.slotNote ?: "第 ${block.startSlot}–${block.endSlot} 节"} · ${store.timeRange(block.startSlot, block.endSlot)}",
                             fontSize = 11.sp, color = Color(tone.text), maxLines = 1)

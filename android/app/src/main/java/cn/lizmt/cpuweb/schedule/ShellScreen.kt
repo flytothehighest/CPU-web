@@ -42,6 +42,8 @@ import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.union
@@ -355,58 +357,59 @@ private fun NativeTopBar(
     }
 }
 
-/** Filled for the selected tab, outlined otherwise, so the choice reads at a glance. */
-private fun ShellTab.icon(selected: Boolean = true): ImageVector = when (this) {
-    ShellTab.Home -> if (selected) Icons.Rounded.Home else Icons.Outlined.Home
-    ShellTab.Academic -> if (selected) Icons.AutoMirrored.Rounded.MenuBook else Icons.AutoMirrored.Outlined.MenuBook
-    ShellTab.Schedule -> if (selected) Icons.Rounded.CalendarMonth else Icons.Outlined.CalendarMonth
-    ShellTab.Services -> if (selected) Icons.Rounded.GridView else Icons.Outlined.GridView
-    ShellTab.Profile -> if (selected) Icons.Rounded.Person else Icons.Outlined.Person
+/** Same five symbols as iOS ShellTab; all share a quiet, rounded outline weight. */
+private fun ShellTab.tabIcon(): Int = when (this) {
+    ShellTab.Home -> R.drawable.tab_home
+    ShellTab.Academic -> R.drawable.tab_academic
+    ShellTab.Schedule -> R.drawable.tab_schedule
+    ShellTab.Services -> R.drawable.tab_services
+    ShellTab.Profile -> R.drawable.tab_profile
 }
 
-/**
- * The floating tab bar of the HarmonyOS client and the Web mobile layout: a
- * rounded bar with a soft pill behind the selected tab. It keeps its own row
- * in the layout, so no page content is ever drawn underneath it.
- */
+/** Compact iOS-style floating tabs, reserving space so the timetable never sits behind them. */
 @Composable
 private fun NativeTabBar(selected: ShellTab, backdrop: Color, onSelect: (ShellTab) -> Unit) {
     val dark = LocalScheduleColors.current.dark
-    val container = if (dark) Color(0xFF252931) else Color(0xFFF9FAFC)
-    val outline = if (dark) Color(0xFF515760) else Color(0xFFD8DDE4)
-    val pill = if (dark) Color(0xFF384640) else Color(0xFFE4EBE9)
-    val active = if (dark) Color(0xFF88DCCA) else Color(0xFF087E73)
-    val idle = if (dark) Color(0xFFB9BFC9) else Color(0xFF4A505A)
-    val shape = RoundedCornerShape(28.dp)
+    val container = if (dark) Color(0xFF242428) else Color(0xFFFCFCFD)
+    val outline = if (dark) Color(0xFF414146) else Color(0xFFE7E7EB)
+    val pill = if (dark) Color(0xFF3B3B40) else Color(0xFFEEEEF1)
+    val active = if (dark) Color(0xFF80D6C8) else CpuBrand
+    val idle = if (dark) Color(0xFFADADB3) else Color(0xFF63636B)
+    val shape = RoundedCornerShape(27.dp)
     Box(
         Modifier.fillMaxWidth().background(backdrop)
             .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal))
-            .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp),
+            .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 6.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Row(
-            Modifier.widthIn(max = 640.dp).fillMaxWidth().height(56.dp)
-                .shadow(10.dp, shape, ambientColor = Color(0x220D2436), spotColor = Color(0x220D2436))
-                .clip(shape).background(container).border(0.5.dp, outline, shape)
-                .padding(4.dp).selectableGroup(),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        androidx.compose.foundation.layout.BoxWithConstraints(
+            Modifier.widthIn(max = 540.dp).fillMaxWidth().height(54.dp)
+                .shadow(5.dp, shape, ambientColor = Color(0x10000000), spotColor = Color(0x14000000))
+                .clip(shape).background(container).border(0.5.dp, outline, shape).padding(4.dp),
         ) {
-            ShellTab.entries.forEach { tab ->
-                val chosen = tab == selected
-                val fill by animateColorAsState(if (chosen) pill else Color.Transparent, tween(180), label = "tabFill")
-                val tint by animateColorAsState(if (chosen) active else idle, tween(180), label = "tabTint")
-                Column(
-                    Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(24.dp)).background(fill)
-                        .selectable(selected = chosen, role = Role.Tab, onClick = { onSelect(tab) }),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    Icon(tab.icon(chosen), contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
-                    Spacer(Modifier.height(1.dp))
-                    Text(
-                        tab.label, fontSize = 11.sp, lineHeight = 13.sp, color = tint, maxLines = 1,
-                        fontWeight = if (chosen) FontWeight.Bold else FontWeight.Medium,
-                    )
+            val itemWidth = maxWidth / ShellTab.entries.size
+            val position by androidx.compose.animation.core.animateDpAsState(
+                targetValue = itemWidth * ShellTab.entries.indexOf(selected),
+                animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.92f, stiffness = 550f),
+                label = "tabSelection",
+            )
+            Box(Modifier.offset(x = position).width(itemWidth).fillMaxHeight()
+                .clip(RoundedCornerShape(23.dp)).background(pill))
+            Row(Modifier.fillMaxSize().selectableGroup()) {
+                ShellTab.entries.forEach { tab ->
+                    val chosen = tab == selected
+                    val tint by animateColorAsState(if (chosen) active else idle, tween(160), label = "tabTint")
+                    Column(
+                        Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(23.dp))
+                            .selectable(selected = chosen, role = Role.Tab, onClick = { onSelect(tab) }),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Icon(painterResource(tab.tabIcon()), contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+                        Spacer(Modifier.height(2.dp))
+                        Text(tab.label, fontSize = 10.sp, lineHeight = 12.sp, letterSpacing = 0.sp,
+                            color = tint, maxLines = 1, fontWeight = FontWeight.Medium)
+                    }
                 }
             }
         }

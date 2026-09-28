@@ -70,6 +70,18 @@ class ScheduleStoreTest {
     }
 
     @Test
+    fun semesterMenuUsesTheTimetableOptionsWithoutCalendarExpansionOrExtraRequests() = runTest {
+        val terms = listOf("2026-2027-1", "2025-2026-2")
+        val data = JSONObject(snapshot(semesters = terms)).put("calendar", JSONObject().put("semesters",
+            JSONArray((2000..2026).map { year -> JSONObject().put("value", "$year-${year + 1}-1").put("label", "$year") })))
+        val requests = mutableListOf<ScheduleRequest>()
+        val store = store(mutableListOf(data.toString()), requests)
+        advanceUntilIdle()
+        assertEquals(terms, store.semesterOptions().map { it.value })
+        assertEquals(1, requests.size)
+    }
+
+    @Test
     fun completeSemesterSwitchesWeeksWithoutAnotherRequest() = runTest {
         val requests = mutableListOf<ScheduleRequest>()
         val store = store(mutableListOf(snapshot(complete = true)), requests)
@@ -192,7 +204,7 @@ class ScheduleStoreTest {
         advanceUntilIdle()
         assertEquals("2025-2026-1", store.result?.currentSemester)
         assertEquals(
-            listOf("2026-2027-1", "2025-2026-2", "2025-2026-1", "2024-2025-2"),
+            listOf("2026-2027-1", "2025-2026-2", "2025-2026-1"),
             store.semesterOptions().map { it.value },
         )
     }

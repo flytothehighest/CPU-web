@@ -5,7 +5,10 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /** Colors of one course card, as packed ARGB integers. */
-data class ScheduleCourseTone(val fill: Int, val border: Int, val text: Int)
+data class ScheduleCourseTone(val fill: Int, val border: Int, val text: Int, val highlight: Int = fill)
+
+/** Reserve the weekday header, gap and bottom inset; fit all 11 rows in portrait. */
+fun compactWeekRowHeight(availableHeight: Float): Float = max(32f, (availableHeight - 46f) / 11f)
 
 /** The nine Web palettes in the order the palette picker shows them. */
 val SCHEDULE_THEME_ORDER = listOf("color-glass", "green", "blue", "teal", "indigo", "violet", "orange", "rose", "slate")
@@ -107,24 +110,23 @@ fun scheduleCourseTone(name: String, key: String, dark: Boolean): ScheduleCourse
 }
 
 /**
- * Card colors used by the native grid. Color-glass keeps the calmer eight-hue
- * card set shared with HarmonyOS so dense weeks stay readable; the themed
- * palettes follow the Web card tone.
+ * The native grid uses the same name-derived tones as the Web. Do not bucket
+ * names into a short palette: unrelated courses then become indistinguishable.
  */
 fun scheduleCardTone(name: String, key: String, dark: Boolean): ScheduleCourseTone {
-    if (key == "color-glass") {
-        val hues = intArrayOf(220, 185, 245, 25, 330, 105, 280, 160)
-        val hue = hues[(courseNameHash(name) % hues.size).toInt()]
-        val fill = hsla(hue, if (dark) 22 else 65, if (dark) 22 else 96)
-        val ink = hsla(hue, if (dark) 58 else 44, if (dark) 78 else 33)
-        return ScheduleCourseTone(fill, ink, ink)
-    }
     val tone = scheduleCourseTone(name, key, dark)
-    return ScheduleCourseTone(
-        fill = opaque(tone.fill),
-        border = tone.border,
-        text = if (dark) parseHexColor("#F3F5F7") else opaque(tone.text),
-    )
+    var ink = tone.text
+    // Preserve the Web hue while making small native labels readable.
+    repeat(10) {
+        if (contrastRatio(ink, opaque(tone.fill)) < 4.8) {
+            ink = mixScheduleColor(ink, if (dark) 0xFFFFFFFF.toInt() else 0xFF000000.toInt(), 0.92f)
+        }
+    }
+    val highlight = if (dark && key == "color-glass") {
+        val hash = courseNameHash(name)
+        hsla((hash % 360).toInt(), min(82, 62 + ((hash ushr 8) % 18).toInt()), 34, 0.84f)
+    } else tone.fill
+    return tone.copy(text = ink, highlight = highlight)
 }
 
 /** WCAG relative-luminance contrast, used by the palette regression checks. */

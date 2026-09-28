@@ -76,9 +76,8 @@ class ScheduleStore(
     private val cache = LinkedHashMap<String, CacheEntry>()
     private var navigationWeeks: List<ScheduleOption> = emptyList()
     /**
-     * Every term any response has listed. An old term's teaching-calendar page
-     * lists only the terms the school had published by then, so a single
-     * response can drop the running term from the picker.
+     * The first timetable option set, matching the iOS bridge and Harmony's
+     * navigation list. Calendar/history responses must not expand this menu.
      */
     private var knownSemesters by mutableStateOf<List<ScheduleOption>>(emptyList())
     /** The term shown before a switch; a switch that fails returns to it. */
@@ -706,13 +705,14 @@ class ScheduleStore(
     }
 
     private fun learnSemesters(snapshot: ScheduleSnapshot) {
-        val lists = listOf(knownSemesters, snapshot.data?.semesters.orEmpty(), snapshot.calendar?.semesters.orEmpty())
+        if (knownSemesters.isNotEmpty()) return
         val merged = LinkedHashMap<String, ScheduleOption>()
-        lists.flatten().forEach { option ->
+        snapshot.data?.semesters.orEmpty().forEach { option ->
             val value = option.value.trim()
             if (value.isEmpty()) return@forEach
             val previous = merged[value]
-            merged[value] = previous?.copy(current = previous.current || option.current) ?: option
+            merged[value] = previous?.copy(current = previous.current || option.current)
+                ?: option.copy(value = value, label = option.label.ifBlank { value })
         }
         var options = merged.values.toList()
         // JWXT lists terms newest first; keep that order across merged lists.

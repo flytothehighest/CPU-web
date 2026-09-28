@@ -116,35 +116,50 @@ fun OverlapSheet(blocks: List<CourseBlock>, palette: String, onDismiss: () -> Un
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WeekPickerSheet(store: ScheduleStore, onDismiss: () -> Unit) {
-    ScheduleSheetContainer(onDismiss) {
-        SheetTitle("选择周次")
-        val current = store.weekOptions().firstOrNull { store.isCurrentWeek(it.value) }?.value
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp), maxItemsInEachRow = 6) {
-            store.weekOptions().forEach { week ->
-                val selected = week.value == store.selectedWeek
-                Box(
-                    Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(10.dp))
-                        .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh)
-                        .border(if (week.value == current && !selected) 1.dp else 0.dp,
-                            if (week.value == current && !selected) MaterialTheme.colorScheme.primary else Color.Transparent,
-                            RoundedCornerShape(10.dp))
-                        .clickable {
-                            onDismiss()
-                            store.selectWeek(week.value)
+    val colors = LocalScheduleColors.current
+    val current = store.weekOptions().firstOrNull { store.isCurrentWeek(it.value) }?.value
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        dragHandle = {
+            Box(Modifier.padding(vertical = 8.dp).size(width = 28.dp, height = 3.dp)
+                .clip(CircleShape).background(colors.secondary.copy(alpha = 0.3f)))
+        },
+    ) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
+            Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("选择周次", fontSize = 15.sp, lineHeight = 20.sp, letterSpacing = 0.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                TextButton(onClick = { onDismiss(); store.returnToCurrentWeek() }, modifier = Modifier.height(32.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
+                    Text("回到本周", fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.sp, color = colors.accent)
+                }
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                store.weekOptions().chunked(6).forEach { weeks ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        weeks.forEach { week ->
+                            val chosen = week.value == store.selectedWeek
+                            Box(
+                                Modifier.weight(1f).height(36.dp).clip(RoundedCornerShape(8.dp))
+                                    .background(if (chosen) colors.accent else colors.softSurface.copy(alpha = 0.65f))
+                                    .border(if (week.value == current && !chosen) 1.dp else 0.dp,
+                                        if (week.value == current && !chosen) colors.accent else Color.Transparent, RoundedCornerShape(8.dp))
+                                    .clickable { onDismiss(); store.selectWeek(week.value) }
+                                    .semantics { contentDescription = "第${week.value}周"; selected = chosen },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(week.value, fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.sp, fontWeight = if (chosen) FontWeight.SemiBold else FontWeight.Medium,
+                                    color = if (chosen) Color.White else colors.text)
+                            }
                         }
-                        .semantics { contentDescription = "第${week.value}周"; this.selected = selected },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(week.value, color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+                        repeat(6 - weeks.size) { Spacer(Modifier.weight(1f)) }
+                    }
                 }
             }
         }
-        Spacer(Modifier.height(16.dp))
-        Button(onClick = { onDismiss(); store.returnToCurrentWeek() }, modifier = Modifier.fillMaxWidth()) { Text("回到本周") }
     }
 }
 
