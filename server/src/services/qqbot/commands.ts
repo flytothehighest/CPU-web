@@ -14,10 +14,6 @@ export function isStatusCommand(text: string) {
   return /^(?:[/／])?状态$/i.test(normalizeCommandKeywordText(text));
 }
 
-export function isSafetyPlatformGuideCommand(text: string) {
-  return /^(?:[/／])?刷课$/i.test(normalizeCommandKeywordText(text));
-}
-
 export function isConversationStatusCommand(text: string) {
   return /^(?:[/／])?(状态|进度)$/i.test(normalizeCommandKeywordText(text));
 }
