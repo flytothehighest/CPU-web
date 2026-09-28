@@ -12,6 +12,9 @@ const TICK_MS = 5_000;
 const CLAIM_MS = 30_000;
 const RETRY_BASE_MS = 5_000;
 const RETRY_MAX_MS = 300_000;
+// A missed bell is not worth replaying, but a missed end leaves the activity
+// on screen: it still goes out this late, never past the day's midnight.
+const END_GRACE_SECONDS = 8 * 3600;
 let lastBroadcastMaterializedAt = 0;
 let materializedDigest = "";
 
@@ -53,10 +56,12 @@ export function schoolBroadcastEvents(term: Pick<ScheduleTermConfigValue, "perio
   return term.periods.flatMap((final, index) => {
     const seconds = (clock: string) => new Date(`${dateKey}T${clock}:00+08:00`).getTime() / 1000;
     const end = seconds(final.end);
+    const midnight = seconds("00:00") + 86400;
     return [...new Set(term.periods.slice(0, index + 1).flatMap(p => [seconds(p.start), seconds(p.end)]))]
       .sort((a, b) => a - b).map(fireAt => ({
         windowID: `${version}:${final.id}`, eventID: `v2-${version}-${dateKey}-${final.id}-${fireAt}`,
-        fireAt: new Date(fireAt * 1000), expiresAt: new Date((fireAt + 60) * 1000),
+        fireAt: new Date(fireAt * 1000),
+        expiresAt: new Date((fireAt === end ? Math.max(fireAt + 60, Math.min(fireAt + END_GRACE_SECONDS, midnight)) : fireAt + 60) * 1000),
         payload: JSON.stringify(broadcastPayload(dateKey, fireAt, fireAt === end, version)),
         event: fireAt === end ? "end" : "update",
       }));
