@@ -35,6 +35,7 @@ class ScheduleStoreTest {
         ),
         account: String = "acct-a",
         fetchedAt: Long = now,
+        semesters: List<String> = listOf(semester),
     ): String = JSONObject()
         .put("version", 1)
         .put("completeSemester", complete)
@@ -42,7 +43,7 @@ class ScheduleStoreTest {
         .put("data", JSONObject()
             .put("currentSemester", semester)
             .put("currentWeek", week)
-            .put("semesters", JSONArray().put(JSONObject().put("value", semester).put("label", semester).put("current", true)))
+            .put("semesters", JSONArray(semesters.map { JSONObject().put("value", it).put("label", it).put("current", it == semester) }))
             .put("weeks", JSONArray((1..6).map { JSONObject().put("value", "$it").put("label", "第${it}周").put("current", it == 3) }))
             .put("cells", cells))
         .put("auth", JSONObject().put("authenticated", true).put("account", account))
@@ -178,6 +179,56 @@ class ScheduleStoreTest {
         advanceUntilIdle()
         assertEquals("2026-2027-1", store.result?.currentSemester)
         assertTrue(store.errorMessage.contains("其他学期"))
+    }
+
+    @Test
+    fun anOldTermsShorterListKeepsTheRunningTermSelectable() = runTest {
+        val running = listOf("2026-2027-1", "2025-2026-2", "2025-2026-1")
+        // The school's teaching-calendar page for an old term predates the running term.
+        val old = snapshot(semester = "2025-2026-1", semesters = listOf("2025-2026-2", "2025-2026-1", "2024-2025-2"))
+        val store = store(mutableListOf(snapshot(semesters = running), old))
+        advanceUntilIdle()
+        store.selectSemester("2025-2026-1")
+        advanceUntilIdle()
+        assertEquals("2025-2026-1", store.result?.currentSemester)
+        assertEquals(
+            listOf("2026-2027-1", "2025-2026-2", "2025-2026-1", "2024-2025-2"),
+            store.semesterOptions().map { it.value },
+        )
+    }
+
+    @Test
+    fun aTermThatCannotLoadReturnsToThePreviousTerm() = runTest {
+        val failure = JSONObject().put("version", 1).put("auth", JSONObject().put("authenticated", true))
+            .put("error", "教务返回的课表学期与请求不一致").toString()
+        val requests = mutableListOf<ScheduleRequest>()
+        val store = store(mutableListOf(snapshot(semesters = listOf("2026-2027-1", "2020-2021-1")), failure), requests)
+        advanceUntilIdle()
+        store.selectSemester("2020-2021-1")
+        advanceUntilIdle()
+        assertEquals("2020-2021-1", requests.last().semester)
+        assertEquals(ScheduleStatus.Loaded, store.status)
+        assertEquals("2026-2027-1", store.selectedSemester)
+        assertEquals("3", store.selectedWeek)
+        assertEquals("2026-2027-1", store.result?.currentSemester)
+        assertTrue(store.errorMessage.contains("2020-2021-1"))
+        assertTrue(store.semesterOptions().any { it.value == "2020-2021-1" })
+    }
+
+    @Test
+    fun aFailedTermWithoutAFallbackStillListsEveryTerm() = runTest {
+        val failure = JSONObject().put("version", 1).put("auth", JSONObject().put("authenticated", true))
+            .put("error", "教务返回的课表学期与请求不一致").toString()
+        val store = store(mutableListOf(snapshot(semesters = listOf("2026-2027-1", "2020-2021-1")), failure))
+        advanceUntilIdle()
+        // The previous term's copy has expired, so there is nothing to return to.
+        now += ScheduleStore.CACHE_LIFETIME_MS + 1
+        store.selectSemester("2020-2021-1")
+        advanceUntilIdle()
+        assertEquals(ScheduleStatus.Failed, store.status)
+        assertNull(store.result)
+        assertEquals("2020-2021-1", store.selectedSemester)
+        assertEquals(listOf("2026-2027-1", "2020-2021-1"), store.semesterOptions().map { it.value })
     }
 
     @Test

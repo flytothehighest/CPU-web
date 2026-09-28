@@ -261,10 +261,10 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
             String body = readFully(stream);
             JSONObject wrapper = new JSONObject(body);
             if (status == 401 || status == 403 || wrapper.optInt("code", -1) == 401) {
-                throw new WidgetAuthorizationException(wrapper.optString("message", "教务授权已失效"));
+                throw new WidgetAuthorizationException(ScheduleWidgetJson.text(wrapper, "message", "教务授权已失效"));
             }
             if (wrapper.optInt("code", -1) != 0) {
-                throw new IllegalStateException(wrapper.optString("message", "课表读取失败"));
+                throw new IllegalStateException(ScheduleWidgetJson.text(wrapper, "message", "课表读取失败"));
             }
             return wrapper.getJSONObject("data");
         } finally {
@@ -352,7 +352,7 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
             if (offset > 0) {
                 JSONObject day = dayForDate(data, addDays(todayDate, offset));
                 courses = firstCourses(day, 2);
-                tag = otherDayTag(offset, day.optString("date", ""));
+                tag = otherDayTag(offset, ScheduleWidgetJson.text(day, "date", ""));
                 labels = new String[]{"第一节", "接下来"};
             }
         }
@@ -375,7 +375,7 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
             int offset = nextClassDayOffset(data, todayDate);
             if (offset > 0) {
                 shown = dayForDate(data, addDays(todayDate, offset));
-                tag = otherDayTag(offset, shown.optString("date", ""));
+                tag = otherDayTag(offset, ScheduleWidgetJson.text(shown, "date", ""));
                 shownNow = -1;
             } else {
                 shown = new JSONObject();
@@ -394,7 +394,7 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
         JSONObject other = offset > 0
                 ? dayForDate(data, addDays(todayDate, offset))
                 : fullDayForDate(data, addDays(todayDate, 1), 1);
-        String tag = offset > 1 ? otherDayTag(offset, other.optString("date", "")) : "";
+        String tag = offset > 1 ? otherDayTag(offset, ScheduleWidgetJson.text(other, "date", "")) : "";
         String todayWeek = weekForDay(data, today);
         String otherWeek = weekForDay(data, other);
         return frame -> ScheduleWidgetCardRenderer.renderTwoDay(frame, today, todayWeek, other, otherWeek, tag, now);
@@ -511,7 +511,7 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
 
     private static void renderHeader(RemoteViews views, JSONObject data, JSONObject day, String modeText) {
         String week = weekForDay(data, day);
-        String dateText = day != null ? shortDate(day.optString("date", "")) : "";
+        String dateText = day != null ? shortDate(ScheduleWidgetJson.text(day, "date", "")) : "";
         String subtitle = "第 " + (week.isEmpty() ? "--" : week) + " 周 · " + modeText;
         if (!dateText.isEmpty()) subtitle += " " + dateText;
         views.setTextViewText(R.id.widget_subtitle, subtitle);
@@ -519,8 +519,8 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
 
     private static void setSubtitle(RemoteViews views, JSONObject data, JSONObject day, String modeText) {
         String week = weekForDay(data, day);
-        String label = day != null ? day.optString("label", modeText) : modeText;
-        String date = day != null ? shortDate(day.optString("date", "")) : "";
+        String label = day != null ? ScheduleWidgetJson.text(day, "label", modeText) : modeText;
+        String date = day != null ? shortDate(ScheduleWidgetJson.text(day, "date", "")) : "";
         String subtitle = "第 " + (week.isEmpty() ? "--" : week) + " 周 · " + label;
         if (!date.isEmpty()) subtitle += " " + date;
         views.setTextViewText(R.id.widget_subtitle, subtitle);
@@ -668,7 +668,7 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
     }
 
     private static boolean dateMatches(JSONObject day, String currentDate) {
-        return day != null && currentDate.equals(day.optString("date", "").trim());
+        return day != null && currentDate.equals(ScheduleWidgetJson.text(day, "date", "").trim());
     }
 
     private static String deviceDateOffset(int offset) {
@@ -702,8 +702,8 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
 
     private static String dayTitle(JSONObject day, String fallback) {
         if (day == null) return fallback;
-        String date = shortDate(day.optString("date", ""));
-        String label = day.optString("label", fallback);
+        String date = shortDate(ScheduleWidgetJson.text(day, "date", ""));
+        String label = ScheduleWidgetJson.text(day, "label", fallback);
         return date.isEmpty() ? label : label + " " + date;
     }
 
@@ -714,17 +714,17 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
 
     private static String coursePrimaryLine(JSONObject course, boolean includeEndTime) {
         if (course == null) return "";
-        String time = includeEndTime ? timeRange(course) : course.optString("startTime", "");
-        String name = course.optString("name", "课程");
+        String time = includeEndTime ? timeRange(course) : ScheduleWidgetJson.text(course, "startTime", "");
+        String name = ScheduleWidgetJson.text(course, "name", "课程");
         return time.isEmpty() ? name : time + " " + name;
     }
 
     private static String courseMetaLine(JSONObject course) {
         if (course == null) return "";
         List<String> parts = new ArrayList<>();
-        String location = course.optString("location", "");
-        String teacher = course.optString("teacher", "");
-        String note = course.optString("note", course.optString("slotNote", ""));
+        String location = ScheduleWidgetJson.text(course, "location", "");
+        String teacher = ScheduleWidgetJson.text(course, "teacher", "");
+        String note = ScheduleWidgetJson.text(course, "note", ScheduleWidgetJson.text(course, "slotNote", ""));
         if (!location.isEmpty()) parts.add("@" + location);
         if (!teacher.isEmpty()) parts.add(teacher);
         if (!note.isEmpty()) parts.add(note);
@@ -733,15 +733,15 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
 
     private static String timeRange(JSONObject course) {
         if (course == null) return "";
-        String start = course.optString("startTime", "");
-        String end = course.optString("endTime", "");
+        String start = ScheduleWidgetJson.text(course, "startTime", "");
+        String end = ScheduleWidgetJson.text(course, "endTime", "");
         if (start.isEmpty()) return "";
         return end.isEmpty() ? start : start + "-" + end;
     }
 
     private static String locationLine(JSONObject course) {
-        String location = course.optString("location", "");
-        String teacher = course.optString("teacher", "");
+        String location = ScheduleWidgetJson.text(course, "location", "");
+        String teacher = ScheduleWidgetJson.text(course, "teacher", "");
         if (!location.isEmpty() && !teacher.isEmpty()) return "@" + location + " · " + teacher;
         if (!location.isEmpty()) return "@" + location;
         if (!teacher.isEmpty()) return teacher;
@@ -759,11 +759,11 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
     }
 
     private static int courseStartMinutes(JSONObject course) {
-        return parseMinutes(course == null ? "" : course.optString("startTime", ""));
+        return parseMinutes(course == null ? "" : ScheduleWidgetJson.text(course, "startTime", ""));
     }
 
     private static int courseEndMinutes(JSONObject course) {
-        String end = course == null ? "" : course.optString("endTime", "");
+        String end = course == null ? "" : ScheduleWidgetJson.text(course, "endTime", "");
         int parsed = parseMinutes(end);
         if (parsed >= 0) return parsed;
         int start = courseStartMinutes(course);
@@ -790,15 +790,15 @@ public class ScheduleWidgetProvider extends AppWidgetProvider {
         if (days == null || days.length() == 0) return "";
         JSONObject first = days.optJSONObject(0);
         JSONObject last = days.optJSONObject(days.length() - 1);
-        String start = first == null ? "" : shortDate(first.optString("date", ""));
-        String end = last == null ? "" : shortDate(last.optString("date", ""));
+        String start = first == null ? "" : shortDate(ScheduleWidgetJson.text(first, "date", ""));
+        String end = last == null ? "" : shortDate(ScheduleWidgetJson.text(last, "date", ""));
         if (start.isEmpty()) return end;
         return end.isEmpty() ? start : start + " - " + end;
     }
 
     private static void setFooter(RemoteViews views, JSONObject data) {
         views.setTextViewText(R.id.widget_footer, "更新 " + formatTime(
-                data.optString("cachedAt", data.optString("generatedAt", ""))
+                ScheduleWidgetJson.text(data, "cachedAt", ScheduleWidgetJson.text(data, "generatedAt", ""))
         ));
     }
 

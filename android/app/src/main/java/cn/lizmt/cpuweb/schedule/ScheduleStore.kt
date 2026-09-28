@@ -75,6 +75,16 @@ class ScheduleStore(
 
     private val cache = LinkedHashMap<String, CacheEntry>()
     private var navigationWeeks: List<ScheduleOption> = emptyList()
+    /**
+     * Every term any response has listed. An old term's teaching-calendar page
+     * lists only the terms the school had published by then, so a single
+     * response can drop the running term from the picker.
+     */
+    private var knownSemesters by mutableStateOf<List<ScheduleOption>>(emptyList())
+    /** The term shown before a switch; a switch that fails returns to it. */
+    private var fallbackSemester = ""
+    private var fallbackWeek = ""
+    private var failedSemester = ""
     private var job: Job? = null
     private var requestGeneration = 0
     private var pendingKey = ""
@@ -102,6 +112,7 @@ class ScheduleStore(
         val entry = freshCache(saved.semester, saved.week)
         if (entry == null) {
             cache.clear()
+            knownSemesters = emptyList()
             return false
         }
         accountScope = saved.account
@@ -271,6 +282,8 @@ class ScheduleStore(
         refreshBarrier = clock()
         cache.clear()
         navigationWeeks = emptyList()
+        knownSemesters = emptyList()
+        clearFallback()
         result = null
         calendar = null
         periods = BUNDLED_PERIODS
@@ -293,6 +306,7 @@ class ScheduleStore(
     fun selectSemester(value: String) {
         val semester = value.trim()
         if (semester.isEmpty() || semester == selectedSemester) return
+        rememberFallback()
         selectedSemester = semester
         navigationWeeks = emptyList()
         selectedWeek = ""
@@ -354,6 +368,7 @@ class ScheduleStore(
             }
         }
         cancelRequest()
+        rememberFallback()
         selectedSemester = ""
         navigationWeeks = emptyList()
         selectedWeek = ""
@@ -370,6 +385,7 @@ class ScheduleStore(
     fun open(semester: String?, week: String?) {
         openRequests += 1
         if (!semester.isNullOrBlank() && semester != selectedSemester) {
+            rememberFallback()
             selectedSemester = semester
             navigationWeeks = emptyList()
             selectedWeek = week.orEmpty()
@@ -385,8 +401,7 @@ class ScheduleStore(
 
     // region Derived data
 
-    fun semesterOptions(): List<ScheduleOption> =
-        calendar?.semesters?.takeIf { it.isNotEmpty() } ?: result?.semesters.orEmpty()
+    fun semesterOptions(): List<ScheduleOption> = knownSemesters
 
     fun weekOptions(): List<ScheduleOption> = result?.weeks?.takeIf { it.isNotEmpty() } ?: navigationWeeks
 
@@ -638,6 +653,8 @@ class ScheduleStore(
         val data = snapshot.data ?: return
         result = data
         navigationWeeks = data.weeks
+        learnSemesters(snapshot)
+        clearFallback()
         calendar = snapshot.calendar
         periods = snapshot.periods.takeIf { it.size >= SLOT_COUNT } ?: BUNDLED_PERIODS
         if (selectedSemester.isEmpty()) selectedSemester = data.currentSemester
@@ -652,14 +669,62 @@ class ScheduleStore(
     }
 
     private fun fail(message: String) {
-        errorMessage = message.ifEmpty { "课表暂时无法加载，请重试" }
+        val text = message.ifEmpty { "课表暂时无法加载，请重试" }
+        if (result == null && returnToFallback()) {
+            val label = knownSemesters.firstOrNull { it.value == failedSemester }?.label ?: failedSemester
+            errorMessage = if (label.isEmpty()) text else "$label 的课表无法读取：$text"
+            return
+        }
+        errorMessage = text
         status = if (result != null) ScheduleStatus.Loaded else ScheduleStatus.Failed
+    }
+
+    private fun rememberFallback() {
+        // A chain of failing switches keeps the last term that actually loaded.
+        if (result == null || selectedSemester.isEmpty()) return
+        fallbackSemester = selectedSemester
+        fallbackWeek = selectedWeek
+    }
+
+    private fun clearFallback() {
+        fallbackSemester = ""
+        fallbackWeek = ""
+    }
+
+    /** Shows the term from before a failed switch again, if it is still cached. */
+    private fun returnToFallback(): Boolean {
+        val semester = fallbackSemester
+        val week = fallbackWeek
+        clearFallback()
+        if (semester.isEmpty() || semester == selectedSemester) return false
+        val cached = freshCache(semester, week) ?: return false
+        failedSemester = selectedSemester
+        selectedSemester = semester
+        selectedWeek = week
+        applySnapshot(cached.snapshot)
+        return true
+    }
+
+    private fun learnSemesters(snapshot: ScheduleSnapshot) {
+        val lists = listOf(knownSemesters, snapshot.data?.semesters.orEmpty(), snapshot.calendar?.semesters.orEmpty())
+        val merged = LinkedHashMap<String, ScheduleOption>()
+        lists.flatten().forEach { option ->
+            val value = option.value.trim()
+            if (value.isEmpty()) return@forEach
+            val previous = merged[value]
+            merged[value] = previous?.copy(current = previous.current || option.current) ?: option
+        }
+        var options = merged.values.toList()
+        // JWXT lists terms newest first; keep that order across merged lists.
+        if (options.all { TERM_VALUE.matches(it.value) }) options = options.sortedByDescending { it.value }
+        if (options != knownSemesters) knownSemesters = options
     }
 
     private fun remember(snapshot: ScheduleSnapshot, stale: Boolean, persist: Boolean = true) {
         val data = snapshot.data ?: return
         val semester = data.currentSemester
         val entry = CacheEntry(snapshot, snapshot.fetchedAt, stale)
+        learnSemesters(snapshot)
         if (snapshot.completeSemester) {
             cache.keys.filter { it.startsWith("$semester|") }.forEach(cache::remove)
             cache["$semester|*"] = entry
@@ -715,6 +780,7 @@ class ScheduleStore(
         const val ARCHIVE_LIFETIME_MS = 30L * 24 * 60 * 60 * 1000
         const val REQUEST_TIMEOUT_MS = 60_000L
         const val MAX_SEMESTERS = 4
+        private val TERM_VALUE = Regex("\\d{4}-\\d{4}-[123]")
         private val TEACHER_TITLE = Regex(
             "(?:其他正高级|其他副高级|正高级|副高级|主任医师|副主任医师|高级实验师|副研究员|实验师|研究员|副教授|教授|讲师|助教|未评级)$",
         )

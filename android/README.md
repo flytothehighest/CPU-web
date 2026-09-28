@@ -1,6 +1,6 @@
 # 药大拾间 Android 客户端
 
-与新版 iOS（`ios_next`）和 HarmonyOS 客户端结构一致的原生外壳：Jetpack Compose 负责底部五栏、原生顶栏、登录与课表等高频交互；首页、教务、服务、我的及其子页面继续用同一个 WebView 加载现有站点。包名 `cn.lizmt.cpuweb`，版本 `4.0.0 (39)`，最低 Android 6.0（API 23）。
+与新版 iOS（`ios_next`）和 HarmonyOS 客户端结构一致的原生外壳：Jetpack Compose 负责底部五栏、原生顶栏、登录与课表等高频交互；首页、教务、服务、我的及其子页面继续用同一个 WebView 加载现有站点。包名 `cn.lizmt.cpuweb`，版本 `4.0.1 (40)`，最低 Android 6.0（API 23）。
 
 ## 原生能力
 

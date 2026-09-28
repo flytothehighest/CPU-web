@@ -73,7 +73,7 @@ final class ScheduleWidgetLocalDays {
         try {
             JSONObject record = new JSONObject(body);
             JSONArray days = record.optJSONArray("days");
-            if (record.optString("semester", "").isEmpty() || days == null || days.length() == 0) return null;
+            if (ScheduleWidgetJson.text(record, "semester", "").isEmpty() || days == null || days.length() == 0) return null;
             return record;
         } catch (Exception ignored) {
             return null;
@@ -86,25 +86,25 @@ final class ScheduleWidgetLocalDays {
      */
     static JSONObject merge(JSONObject incoming, JSONObject existing) {
         if (incoming == null) return null;
-        String semester = incoming.optString("semester", "").trim();
+        String semester = ScheduleWidgetJson.text(incoming, "semester", "").trim();
         JSONArray days = incoming.optJSONArray("days");
         if (semester.isEmpty() || days == null || days.length() == 0) return null;
         Map<String, JSONObject> byDate = new TreeMap<>();
         for (int index = 0; index < days.length(); index++) {
             JSONObject day = days.optJSONObject(index);
-            String date = day == null ? "" : day.optString("date", "");
+            String date = day == null ? "" : ScheduleWidgetJson.text(day, "date", "");
             if (!date.isEmpty() && !byDate.containsKey(date)) byDate.put(date, day);
         }
         if (byDate.isEmpty()) return null;
         JSONArray holidays = incoming.optJSONArray("holidays");
         if (holidays == null) holidays = new JSONArray();
         boolean complete = incoming.optBoolean("complete", false);
-        if (!complete && existing != null && semester.equals(existing.optString("semester", ""))) {
+        if (!complete && existing != null && semester.equals(ScheduleWidgetJson.text(existing, "semester", ""))) {
             JSONArray previous = existing.optJSONArray("days");
             if (previous != null) {
                 for (int index = 0; index < previous.length(); index++) {
                     JSONObject day = previous.optJSONObject(index);
-                    String date = day == null ? "" : day.optString("date", "");
+                    String date = day == null ? "" : ScheduleWidgetJson.text(day, "date", "");
                     if (!date.isEmpty() && !byDate.containsKey(date)) byDate.put(date, day);
                 }
             }
@@ -135,7 +135,7 @@ final class ScheduleWidgetLocalDays {
             JSONObject today = null;
             for (int index = 0; index < days.length(); index++) {
                 JSONObject day = days.optJSONObject(index);
-                if (day != null && todayDate.equals(day.optString("date", ""))) {
+                if (day != null && todayDate.equals(ScheduleWidgetJson.text(day, "date", ""))) {
                     today = day;
                     break;
                 }
@@ -150,7 +150,7 @@ final class ScheduleWidgetLocalDays {
                 }
             }
             return new JSONObject()
-                    .put("semester", record.optString("semester", ""))
+                    .put("semester", ScheduleWidgetJson.text(record, "semester", ""))
                     .put("week", week == null ? JSONObject.NULL : week)
                     .put("strictDate", true)
                     .put("today", today)
@@ -168,8 +168,8 @@ final class ScheduleWidgetLocalDays {
         for (int index = 0; index < holidays.length(); index++) {
             JSONObject holiday = holidays.optJSONObject(index);
             if (holiday == null) continue;
-            String date = holiday.optString("date", "");
-            String name = holiday.optString("name", "");
+            String date = ScheduleWidgetJson.text(holiday, "date", "");
+            String name = ScheduleWidgetJson.text(holiday, "name", "");
             if (!date.isEmpty() && !name.isEmpty()) result.add(new ChineseCalendarInfo.PublishedHoliday(date, name));
         }
         return result;

@@ -122,7 +122,9 @@ fun NativeScheduleScreen(activity: MainActivity) {
         ScheduleBackground(style)
         CompositionLocalProvider(LocalScheduleGlass provides glass) {
         Column(Modifier.fillMaxSize().padding(start = 12.dp, end = 12.dp, top = 10.dp)) {
-            if (store.weekOptions().isNotEmpty()) {
+            // A term that failed to load has no weeks, but its picker must stay
+            // reachable so another term can be chosen.
+            if (store.weekOptions().isNotEmpty() || store.semesterOptions().isNotEmpty()) {
                 ScheduleToolbar(
                     store = store,
                     onRefresh = { store.load(true) },
@@ -133,9 +135,10 @@ fun NativeScheduleScreen(activity: MainActivity) {
                     onExport = { exportSchedule(activity) },
                     onAppearance = { sheet = ScheduleSheet.Appearance },
                 )
-                WeekSwitcher(store) { sheet = ScheduleSheet.WeekPicker }
+                if (store.weekOptions().isNotEmpty()) WeekSwitcher(store) { sheet = ScheduleSheet.WeekPicker }
             }
-            if (store.errorMessage.isNotEmpty()) {
+            // The failure state card already carries the message.
+            if (store.errorMessage.isNotEmpty() && !(store.result == null && store.status == ScheduleStatus.Failed)) {
                 Banner(
                     message = store.errorMessage,
                     action = if (store.authorizationExpired) "去授权" else if (store.result == null) "" else "重试",

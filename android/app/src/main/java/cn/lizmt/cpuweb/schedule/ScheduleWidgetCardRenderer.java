@@ -612,9 +612,9 @@ final class ScheduleWidgetCardRenderer {
         final float rowHeight;
 
         HeaderParts(Ink ink, JSONObject day, boolean compact) {
-            String compactDate = compactDate(day == null ? "" : day.optString("date", ""));
+            String compactDate = compactDate(day == null ? "" : ScheduleWidgetJson.text(day, "date", ""));
             date = compactDate.isEmpty() ? "课表" : compactDate;
-            weekday = emptyToNull(cleanDayLabel(day == null ? "" : day.optString("label", "")));
+            weekday = emptyToNull(cleanDayLabel(day == null ? "" : ScheduleWidgetJson.text(day, "label", "")));
             ChineseCalendarInfo.CalendarDay info = ChineseCalendarInfo.info(dateOf(day));
             badge = info == null ? null : info.badge();
             statutory = info != null && info.isStatutoryHoliday();
@@ -767,9 +767,9 @@ final class ScheduleWidgetCardRenderer {
 
     static boolean isCompleted(JSONObject course, int nowMinutes) {
         if (course == null || nowMinutes < 0) return false;
-        int end = parseMinutes(course.optString("endTime", ""));
+        int end = parseMinutes(ScheduleWidgetJson.text(course, "endTime", ""));
         if (end < 0) {
-            int start = parseMinutes(course.optString("startTime", ""));
+            int start = parseMinutes(ScheduleWidgetJson.text(course, "startTime", ""));
             end = start < 0 ? -1 : start + 45;
         }
         return end >= 0 && end < nowMinutes;
@@ -981,21 +981,21 @@ final class ScheduleWidgetCardRenderer {
     }
 
     private static String nameOf(JSONObject course) {
-        return ScheduleWidgetPalette.displayName(course == null ? "" : course.optString("name", ""));
+        return ScheduleWidgetPalette.displayName(course == null ? "" : ScheduleWidgetJson.text(course, "name", ""));
     }
 
     /** 「C204 · 苏老师」；两样都没有就不显示这一行。 */
     private static String metadata(JSONObject course) {
-        String location = course == null ? "" : course.optString("location", "").trim();
-        String teacher = course == null ? "" : course.optString("teacher", "").trim();
+        String location = course == null ? "" : ScheduleWidgetJson.text(course, "location", "").trim();
+        String teacher = course == null ? "" : ScheduleWidgetJson.text(course, "teacher", "").trim();
         if (!location.isEmpty() && !teacher.isEmpty()) return location + " · " + teacher;
         if (!location.isEmpty()) return location;
         return teacher.isEmpty() ? null : teacher;
     }
 
     private static String timeRange(JSONObject course) {
-        String start = course == null ? "" : course.optString("startTime", "").trim();
-        String end = course == null ? "" : course.optString("endTime", "").trim();
+        String start = course == null ? "" : ScheduleWidgetJson.text(course, "startTime", "").trim();
+        String end = course == null ? "" : ScheduleWidgetJson.text(course, "endTime", "").trim();
         if (start.isEmpty()) return "时间待确认";
         return end.isEmpty() ? start : start + " - " + end;
     }
@@ -1010,7 +1010,7 @@ final class ScheduleWidgetCardRenderer {
     }
 
     private static String dateOf(JSONObject day) {
-        return day == null ? "" : day.optString("date", "").trim();
+        return day == null ? "" : ScheduleWidgetJson.text(day, "date", "").trim();
     }
 
     private static String cleanDayLabel(String value) {

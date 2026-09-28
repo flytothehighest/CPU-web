@@ -99,7 +99,7 @@ final class ScheduleWidgetWeekRenderer {
             paint.setTypeface(Typeface.DEFAULT);
             paint.setTextSize(22f);
             paint.setColor(today ? accent : palette.secondary());
-            canvas.drawText(shortDate(day == null ? "" : day.optString("date", "")), rect.centerX(), top + 52f, paint);
+            canvas.drawText(shortDate(day == null ? "" : ScheduleWidgetJson.text(day, "date", "")), rect.centerX(), top + 52f, paint);
         }
     }
 
@@ -157,7 +157,7 @@ final class ScheduleWidgetWeekRenderer {
             JSONObject course,
             ScheduleWidgetPalette palette
     ) {
-        String name = ScheduleWidgetPalette.displayName(course.optString("name", ""));
+        String name = ScheduleWidgetPalette.displayName(ScheduleWidgetJson.text(course, "name", ""));
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(palette.tint(name));
         canvas.drawRoundRect(rect, 24f, 24f, paint);
@@ -172,7 +172,7 @@ final class ScheduleWidgetWeekRenderer {
         paint.setTextSize(24f);
         int nameLines = rect.height() >= 82f ? 3 : 1;
         List<String> lines = wrap(name, paint, textWidth, nameLines);
-        String location = course.optString("location", "").trim();
+        String location = ScheduleWidgetJson.text(course, "location", "").trim();
         boolean showLocation = !location.isEmpty() && rect.height() >= 120f;
         float y = rect.top + 36f;
         for (String line : lines) {
@@ -227,8 +227,8 @@ final class ScheduleWidgetWeekRenderer {
         if (days == null || days.length() == 0) return "";
         JSONObject first = days.optJSONObject(0);
         JSONObject last = days.optJSONObject(days.length() - 1);
-        String start = shortDate(first == null ? "" : first.optString("date", ""));
-        String end = shortDate(last == null ? "" : last.optString("date", ""));
+        String start = shortDate(first == null ? "" : ScheduleWidgetJson.text(first, "date", ""));
+        String end = shortDate(last == null ? "" : ScheduleWidgetJson.text(last, "date", ""));
         if (start.isEmpty()) return end;
         return end.isEmpty() ? start : start + " - " + end;
     }
