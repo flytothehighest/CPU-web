@@ -177,6 +177,7 @@ private fun ShellScaffold(activity: MainActivity) {
     val web = activity.web
     val tab = shell.selectedTab
     val onSchedule = tab == ShellTab.Schedule
+    val showNativeSchedule = onSchedule && !web.webOverlayVisible && !web.androidUpdateVisible
     val pageNavigation = PageChrome.usesPageNavigation(web.currentPath) || web.header.pageNavigation
     val imeVisible = WindowInsets.isImeVisible
     var quickEntryOpen by remember { mutableStateOf(false) }
@@ -202,7 +203,7 @@ private fun ShellScaffold(activity: MainActivity) {
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             NativeWebViewport(activity,
-                covered = onSchedule || gated || activity.imagePreview != null || web.failureMessage != null ||
+                covered = showNativeSchedule || gated || activity.imagePreview != null || web.failureMessage != null ||
                     (!shell.isAuthResolved && activity.schedule.result == null),
                 showPost = tab == ShellTab.Home && web.currentPath.substringBefore('?').let { it == "/home" || it == "/" } && !imeVisible,
             )
@@ -211,7 +212,7 @@ private fun ShellScaffold(activity: MainActivity) {
                     ServiceUnavailable(message) { web.retry() }
                 }
             }
-            ScheduleLayer(visible = onSchedule) { NativeScheduleScreen(activity) }
+            ScheduleLayer(visible = showNativeSchedule) { NativeScheduleScreen(activity) }
         }
         val showBar = !gated && !imeVisible && !(pageNavigation && !onSchedule)
         if (showBar) {
@@ -491,6 +492,7 @@ private fun QuickEntrySheet(activity: MainActivity, onDismiss: () -> Unit, onOpe
         add(QuickEntry(Icons.Rounded.Mail, "消息", "/messages", ShellTab.Profile))
         if (web.authState.canAccessAdmin) add(QuickEntry(Icons.Rounded.AdminPanelSettings, "管理后台", "/admin", ShellTab.Profile))
         add(QuickEntry(Icons.Rounded.Download, "客户端下载", "/download", ShellTab.Services))
+        add(QuickEntry(Icons.Rounded.Refresh, "检查更新", "/download?checkUpdate=${System.currentTimeMillis()}", ShellTab.Services))
         add(QuickEntry(Icons.Rounded.Forum, "校园论坛", "/forum", ShellTab.Home))
         add(QuickEntry(Icons.Rounded.Campaign, "校园公告", "/announcements", ShellTab.Home))
         add(QuickEntry(Icons.Rounded.School, "教务数据", "/jwxt", ShellTab.Academic))

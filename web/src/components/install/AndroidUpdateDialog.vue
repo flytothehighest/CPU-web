@@ -28,7 +28,7 @@
         从 2.x 升级到新版架构不会覆盖旧客户端；确认新版可用后，可手动卸载旧版。
       </p>
       <p v-else-if="promptKind !== 'install'" class="muted">
-        3.x 客户端可直接覆盖更新。
+        可直接覆盖更新，无需卸载当前客户端。
       </p>
       <p v-if="needsBrowserUpdate" class="muted">
         旧版应用内更新可能提示“解析软件包时出现问题”。请在系统浏览器下载新版，下载完成后打开 APK 安装，无需卸载当前 3.x 客户端。
@@ -48,8 +48,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { parseAndroidUpdateState } from "@/utils/androidUpdateState";
+import { fetchAndroidRelease } from "@/utils/androidReleaseCheck";
+import { isAndroidUpdateAvailable } from "@/utils/androidUpdatePolicy";
 import { ElMessage } from "element-plus";
 import {
   ANDROID_UPDATE_PROMPT_EVENT,
@@ -68,7 +70,6 @@ import {
   ANDROID_APP_LATEST_VERSION_NAME,
   getAndroidNativeVersionCode,
   getAndroidNativeVersionName,
-  isAndroidAppUpdateAvailable,
   isAndroidLegacyMajorUpgrade,
   isAndroidNativeApp,
   supportsAndroidInAppApkDownload,
@@ -76,6 +77,7 @@ import {
 import { shouldAutoPromptAndroidUpdate } from "@/utils/domainMigration";
 
 interface AndroidBridge {
+  supportsNativeUpdatePrompt?: () => boolean;
   copyText?: (text: string) => boolean;
   downloadAndInstallApk?: (url: string, fileName: string) => boolean;
   openExternalUrl?: (url: string) => void;
@@ -86,10 +88,20 @@ interface AndroidBridge {
 }
 
 const open = ref(false);
+function notifyNativeUpdateVisibility(visible: boolean) {
+  if (isAndroidNativeApp()) (window as any).CPUTimeNative?.postNative?.({ type: "androidUpdatePrompt", visible });
+}
+watch(open, notifyNativeUpdateVisibility, { flush: "post" });
 const promptKind = ref<AndroidUpdatePromptKind>("app");
-let autoPrompted = false;
+let autoPromptedVersion = 0;
 let autoPromptTimer = 0;
 let updatePollTimer = 0;
+let releasePollTimer = 0;
+let lastReleaseCheck = 0;
+let releaseCheck: Promise<void> | null = null;
+let disposed = false;
+const latestRelease = ref({ versionCode: ANDROID_APP_LATEST_VERSION_CODE, versionName: ANDROID_APP_LATEST_VERSION_NAME, fileName: ANDROID_APP_DOWNLOAD_FILE_NAME });
+const updateAvailable = computed(() => isAndroidUpdateAvailable(isAndroidNativeApp(), currentVersionCode.value, latestRelease.value.versionCode));
 const nativeUpdate = ref(parseAndroidUpdateState("{}"));
 const hasPendingUpdate = computed(() => nativeUpdate.value.phase !== "idle");
 const updateBusy = computed(() => ["downloading", "paused", "validating", "installing"].includes(nativeUpdate.value.phase));
@@ -102,7 +114,7 @@ const currentVersionLabel = computed(() => {
   if (currentVersionCode.value) return `版本 ${currentVersionCode.value}`;
   return "未知版本";
 });
-const latestVersionLabel = computed(() => `${ANDROID_APP_LATEST_VERSION_NAME} (${ANDROID_APP_LATEST_VERSION_CODE})`);
+const latestVersionLabel = computed(() => `${latestRelease.value.versionName} (${latestRelease.value.versionCode})`);
 const canInAppUpdate = computed(() => supportsAndroidInAppApkDownload());
 const needsBrowserUpdate = computed(() => isAndroidNativeApp() && !canInAppUpdate.value);
 const showLegacyMigrationNote = computed(() => (
@@ -119,19 +131,50 @@ const primaryButtonText = computed(() => {
 
 onMounted(() => {
   window.addEventListener(ANDROID_UPDATE_PROMPT_EVENT, onPromptEvent as EventListener);
-  document.addEventListener("visibilitychange", resumeUpdateStatus);
+  document.addEventListener("visibilitychange", onVisible);
+  window.addEventListener("focus", onVisible);
   resumeUpdateStatus();
   if (ANDROID_APP_AUTO_UPDATE_PROMPT_ENABLED || shouldPromptAndroidInstallRepair(isAndroidNativeApp(), currentVersionCode.value)) {
-    autoPromptTimer = window.setTimeout(autoPromptIfNeeded, 1200);
+    autoPromptTimer = window.setTimeout(() => { void checkRelease(false); }, 1200);
+    releasePollTimer = window.setInterval(() => { void checkRelease(false); }, 300_000);
   }
 });
 
 onBeforeUnmount(() => {
+  disposed = true;
+  notifyNativeUpdateVisibility(false);
   window.removeEventListener(ANDROID_UPDATE_PROMPT_EVENT, onPromptEvent as EventListener);
   if (autoPromptTimer) window.clearTimeout(autoPromptTimer);
   if (updatePollTimer) window.clearInterval(updatePollTimer);
-  document.removeEventListener("visibilitychange", resumeUpdateStatus);
+  if (releasePollTimer) window.clearInterval(releasePollTimer);
+  document.removeEventListener("visibilitychange", onVisible);
+  window.removeEventListener("focus", onVisible);
 });
+
+function onVisible() {
+  resumeUpdateStatus();
+  if (!document.hidden) void checkRelease(false);
+}
+
+async function checkRelease(manual: boolean): Promise<boolean> {
+  if (!isAndroidNativeApp() || (!manual && document.hidden)) return false;
+  if (!manual && lastReleaseCheck && Date.now() - lastReleaseCheck < 60_000) return true;
+  try {
+    if (!releaseCheck) {
+      releaseCheck = fetchAndroidRelease().then(value => {
+        if (!disposed) latestRelease.value = value;
+        lastReleaseCheck = Date.now();
+      }).finally(() => { releaseCheck = null; });
+    }
+    await releaseCheck;
+    if (disposed) return false;
+    if (!manual) autoPromptIfNeeded();
+    return true;
+  } catch {
+    if (manual) ElMessage.warning("暂时无法检查更新，请稍后重试");
+    return false;
+  }
+}
 
 function readUpdateStatus() {
   const bridge = getAndroidBridge();
@@ -161,22 +204,27 @@ function resumeUpdateStatus() {
   }
 }
 
-function onPromptEvent(event: CustomEvent<AndroidUpdatePromptDetail>) {
-  const detail = event.detail ?? {};
+function onPromptEvent(event: Event) {
+  void showRequestedPrompt((event as CustomEvent<AndroidUpdatePromptDetail>).detail ?? {});
+}
+
+async function showRequestedPrompt(detail: AndroidUpdatePromptDetail) {
+  readUpdateStatus();
+  if (isAndroidNativeApp() && !hasPendingUpdate.value && !await checkRelease(true)) return;
   openPrompt(detail.kind ?? "app", detail.source === "auto");
 }
 
 function autoPromptIfNeeded() {
   autoPromptTimer = 0;
-  if (autoPrompted) return;
+  if (autoPromptedVersion === latestRelease.value.versionCode || hasPendingUpdate.value) return;
   if (!shouldAutoPromptAndroidUpdate(
     window.location.hostname,
-    isAndroidAppUpdateAvailable(),
+    updateAvailable.value,
     isAndroidLegacyMajorUpgrade(),
   )) return;
-  autoPrompted = true;
+  autoPromptedVersion = latestRelease.value.versionCode;
   if (!ANDROID_APP_AUTO_UPDATE_PROMPT_ENABLED) {
-    const key = `cpu-android-install-repair-${ANDROID_APP_LATEST_VERSION_CODE}`;
+    const key = `cpu-android-install-repair-${latestRelease.value.versionCode}`;
     try {
       if (localStorage.getItem(key)) return;
       localStorage.setItem(key, "1");
@@ -188,11 +236,20 @@ function autoPromptIfNeeded() {
 function openPrompt(kind: AndroidUpdatePromptKind, auto = false) {
   if (kind !== "install" && !isAndroidNativeApp()) return;
   readUpdateStatus();
-  if (kind === "app" && !isAndroidAppUpdateAvailable() && !hasPendingUpdate.value) {
+  if (kind === "app" && !updateAvailable.value && !hasPendingUpdate.value) {
     if (!auto) ElMessage.success(`当前已是最新版 ${currentVersionLabel.value}`);
     return;
   }
   promptKind.value = kind;
+  // Older native shells always cover the WebView with their timetable. Move
+  // the one-time automatic prompt onto an existing Web tab so those clients
+  // can actually discover the upgrade that adds native overlay support.
+  if (auto && isAndroidNativeApp()) {
+    const shell = (window as any).CPUTimeNative;
+    let nativePrompt = false;
+    try { nativePrompt = getAndroidBridge()?.supportsNativeUpdatePrompt?.() === true; } catch { /* older shell */ }
+    if (!nativePrompt && typeof shell?.navigate === "function") shell.navigate("/services");
+  }
   open.value = true;
   if (hasPendingUpdate.value) pollUpdateStatus();
 }
@@ -220,7 +277,7 @@ async function downloadAndroidUpdate() {
     return;
   }
   const absoluteUrl = new URL(ANDROID_APP_DOWNLOAD_URL, window.location.origin).toString();
-  if (promptKind.value === "install") {
+  if (promptKind.value === "install" && !isAndroidNativeApp()) {
     openExternalDownload(absoluteUrl);
     open.value = false;
     return;
@@ -229,7 +286,7 @@ async function downloadAndroidUpdate() {
   const bridge = getAndroidBridge();
   if (canInAppUpdate.value && typeof bridge?.downloadAndInstallApk === "function") {
     try {
-      const started = bridge.downloadAndInstallApk(absoluteUrl, ANDROID_APP_DOWNLOAD_FILE_NAME);
+      const started = bridge.downloadAndInstallApk(absoluteUrl, latestRelease.value.fileName);
       if (started !== false) {
         if (readUpdateStatus()) pollUpdateStatus();
         else open.value = false;

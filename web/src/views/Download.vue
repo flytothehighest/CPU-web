@@ -233,7 +233,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
+import { useRoute } from "vue-router";
 import {
   getDesktopDownload,
   getMacDesktopDownload,
@@ -248,11 +249,16 @@ import {
   isLikelyAndroidDevice,
   isLikelyIosDevice,
   isAndroidNativeApp,
-  supportsAndroidInAppApkDownload,
 } from "@/utils/clientInfo";
 import { requestAndroidUpdatePrompt } from "@/utils/androidUpdatePrompt";
 import DownloadSafetyGuideDialog from "@/components/common/DownloadSafetyGuideDialog.vue";
 import AppIcon from "@/components/common/AppIcon.vue";
+
+const route = useRoute();
+function checkRequestedUpdate() {
+  if (route.query.checkUpdate && isAndroidNativeApp()) requestAndroidUpdatePrompt({ kind: "app", source: "manual" });
+}
+watch(() => route.query.checkUpdate, checkRequestedUpdate, { flush: "post" });
 
 type DownloadPlatform = "android" | "ios" | "windows" | "macos";
 
@@ -430,7 +436,7 @@ const downloadGuideVisible = ref(false);
 const downloadGuidePlatform = ref<DownloadGuidePlatform>("windows");
 
 function openDownloadGuide(platform: DownloadPlatform, event: MouseEvent) {
-  if (platform === "android" && isAndroidNativeApp() && !supportsAndroidInAppApkDownload()) {
+  if (platform === "android" && isAndroidNativeApp()) {
     event.preventDefault();
     requestAndroidUpdatePrompt({ kind: "install" });
     return;
@@ -441,6 +447,7 @@ function openDownloadGuide(platform: DownloadPlatform, event: MouseEvent) {
 }
 
 onMounted(async () => {
+  checkRequestedUpdate();
   try {
     const [windows, macos] = await Promise.all([
       getDesktopDownload(),

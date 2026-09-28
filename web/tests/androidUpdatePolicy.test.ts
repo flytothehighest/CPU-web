@@ -8,8 +8,8 @@ import {
   ANDROID_BROWSER_DOWNLOAD_PAGE,
 } from "../src/utils/androidUpdatePolicy";
 
-test("安卓客户端自动更新提示暂时关闭", () => {
-  assert.equal(ANDROID_APP_AUTO_UPDATE_PROMPT_ENABLED, false);
+test("安卓客户端启用自动更新提示", () => {
+  assert.equal(ANDROID_APP_AUTO_UPDATE_PROMPT_ENABLED, true);
 });
 
 test("旧版和未声明修复能力的客户端必须使用浏览器", () => {
@@ -28,8 +28,9 @@ test("修复提示仅针对受影响的 3.x 原生旧版", () => {
   assert.equal(shouldPromptAndroidInstallRepair(false, 36), false);
 });
 
-test("关闭自动提示不影响手动更新判断", () => {
+test("仅向低于发布版本的安卓客户端提示更新", () => {
   assert.equal(isAndroidUpdateAvailable(true, 33, 34), true);
   assert.equal(isAndroidUpdateAvailable(true, 34, 34), false);
+  assert.equal(isAndroidUpdateAvailable(true, 35, 34), false);
   assert.equal(isAndroidUpdateAvailable(false, 33, 34), false);
 });

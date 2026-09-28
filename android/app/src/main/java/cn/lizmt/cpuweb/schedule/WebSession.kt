@@ -104,6 +104,8 @@ class WebSession(
         private set
     var webOverlayVisible by mutableStateOf(false)
         private set
+    var androidUpdateVisible by mutableStateOf(false)
+        private set
     var unreadCount by mutableIntStateOf(0)
         private set
     var directUnreadCount by mutableIntStateOf(0)
@@ -290,6 +292,7 @@ class WebSession(
                 }
             }
             "webOverlay" -> webOverlayVisible = payload.optBoolean("visible", false)
+            "androidUpdatePrompt" -> androidUpdateVisible = payload.optBoolean("visible", false)
         }
     }
 
@@ -362,7 +365,7 @@ class WebSession(
 
     /** Close a Web dialog, go back inside the Web router, or report that nothing was handled. */
     suspend fun goBack(root: String): Boolean {
-        if (webOverlayVisible) {
+        if (webOverlayVisible || androidUpdateVisible) {
             evaluate("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',code:'Escape',bubbles:true}));")
             return true
         }
@@ -533,8 +536,11 @@ class WebSession(
 
     private fun isApkDownload(uri: Uri): Boolean {
         val path = uri.path ?: return false
-        return path.endsWith(".apk") || path.contains("/downloads/")
+        return path.endsWith(".apk", ignoreCase = true) || path == "/api/site/downloads/android-app"
     }
+
+    private fun isDownloadLink(uri: Uri): Boolean =
+        isApkDownload(uri) || uri.path?.startsWith("/api/site/downloads/") == true
 
     private inner class ShellClient : WebViewClient() {
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
@@ -544,7 +550,7 @@ class WebSession(
             val scheme = uri.scheme?.lowercase() ?: return true
             if (scheme == "http" || scheme == "https") {
                 val url = uri.toString()
-                if (isApkDownload(uri)) {
+                if (isDownloadLink(uri)) {
                     openOutside(uri)
                     return true
                 }
@@ -581,6 +587,7 @@ class WebSession(
             isLoading = true
             bridgeReady = false
             webOverlayVisible = false
+            androidUpdateVisible = false
             // Cancel the store's request before its call resolves as lost, so
             // a reload never surfaces as a request timeout.
             onBridgeLost?.invoke("")
@@ -670,7 +677,9 @@ class WebSession(
                     if (opened) return
                     opened = true
                     val url = uri.toString()
-                    if (AppConfig.isTrusted(url)) {
+                    if (isDownloadLink(uri)) {
+                        openOutside(uri)
+                    } else if (AppConfig.isTrusted(url)) {
                         val path = AppConfig.pathOf(url).orEmpty()
                         if (!blocksInternalNavigation || ShellTab.isAuthPath(path)) {
                             if (ShellTab.isSchedulePath(path)) onNavigate?.invoke(path) else navigate(path, replace = false)
@@ -695,6 +704,7 @@ class WebSession(
     private fun replaceAfterRendererLoss(dead: WebView) {
         bridgeReady = false
         webOverlayVisible = false
+        androidUpdateVisible = false
         onBridgeLost?.invoke("")
         failPendingCalls()
         val url = AppConfig.routeUrl(currentPath.ifEmpty { "/home" }) ?: AppConfig.startUrl

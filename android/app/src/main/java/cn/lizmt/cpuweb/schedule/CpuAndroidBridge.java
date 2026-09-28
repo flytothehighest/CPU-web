@@ -42,6 +42,11 @@ public final class CpuAndroidBridge {
     }
 
     @JavascriptInterface
+    public boolean supportsNativeUpdatePrompt() {
+        return true;
+    }
+
+    @JavascriptInterface
     public boolean supportsScheduleWidget() {
         return true;
     }
