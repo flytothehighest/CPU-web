@@ -1,6 +1,12 @@
 <template>
-  <div class="post-page">
-    <header class="post-page-header" :class="{ 'second-hand-page-header': isSecondHandPost }">
+  <div class="post-page" :class="{ 'post-page--native': nativePageChrome }">
+    <header v-if="nativePageChrome" class="native-post-header">
+      <button data-cpu-button="icon" type="button" class="native-post-back" aria-label="返回" :disabled="submitting" @click="goBackFromPost">
+        <el-icon><ArrowLeft /></el-icon>
+      </button>
+      <h1>{{ pageTitle }}</h1>
+    </header>
+    <header v-else class="post-page-header" :class="{ 'second-hand-page-header': isSecondHandPost }">
       <div>
         <span v-if="isSecondHandPost" class="page-eyebrow">SECOND-HAND FORUM</span>
         <h2 class="page-title">{{ pageTitle }}</h2>
@@ -579,6 +585,7 @@
 import { ref, reactive, computed, nextTick, onBeforeUnmount, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
+import { ArrowLeft } from "@element-plus/icons-vue";
 import MarkdownView from "@/components/forum/MarkdownView.vue";
 import RichTextEditor from "@/components/forum/RichTextEditor.vue";
 import ManualReviewConfirmDialog from "@/components/forum/ManualReviewConfirmDialog.vue";
@@ -593,6 +600,7 @@ import { fmtDate } from "@/utils/format";
 import { prepareForumTopicTitle } from "@/utils/forumContent";
 import { CAMPUS_LIFE_ACTIVITY, resolveCampusLifeActivityTheme } from "@/utils/forumActivity";
 import { useMobileLayout } from "@/utils/mobileLayout";
+import { isNativeScheduleShell } from "@/utils/clientInfo";
 import {
   createForumSubmissionId,
   getForumRequestMessage,
@@ -607,6 +615,20 @@ const router = useRouter();
 const auth = useAuthStore();
 const smartPost = useSmartPostJobStore();
 const isMobileLayout = useMobileLayout();
+const nativePageChrome = isNativeScheduleShell();
+
+function goBackFromPost() {
+  // Flush the debounced draft before leaving through the page-owned native header.
+  flushPostDraftSaves();
+  const back = router.options.history.state.back;
+  if (typeof back === "string" && back.startsWith("/") && !back.startsWith("//") && back !== route.fullPath) {
+    router.back();
+  } else if (editingId.value) {
+    void router.replace({ name: "topic", params: { id: editingId.value } });
+  } else {
+    void router.replace("/home");
+  }
+}
 
 const boards = ref<Board[]>([]);
 const courses = ref<Course[]>([]);
@@ -1823,6 +1845,50 @@ function notifyVideoReviewState(summary?: {
 
 <style scoped>
 .post-page { display: flex; flex-direction: column; gap: 16px; }
+.post-page--native { gap: 0; }
+.native-post-header {
+  position: sticky;
+  top: 0;
+  z-index: 90;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  min-height: 52px;
+  padding: max(4px, var(--cpu-safe-area-inset-top, 0px)) 10px 4px;
+  border-bottom: 1px solid var(--cpu-border-soft);
+  background: var(--cpu-card);
+}
+.native-post-header h1 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--cpu-text);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 24px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.native-post-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--cpu-text);
+  font-size: 20px;
+  cursor: pointer;
+}
+.native-post-back:disabled { opacity: 0.45; cursor: default; }
+.post-page--native > .form,
+.post-page--native > .post-load-state {
+  margin: 12px;
+}
 .post-page-header {
   display: flex;
   align-items: center;

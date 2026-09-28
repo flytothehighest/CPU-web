@@ -14,7 +14,8 @@
     grid-template-columns: 42px minmax(0, 1fr) 42px;
     align-items: center;
     min-height: 54px;
-    padding: max(6px, env(safe-area-inset-top)) 10px 6px;
+    // Native shells already consume the status bar inset and set this token to zero.
+    padding: max(6px, var(--cpu-safe-area-inset-top, 0px)) 10px 6px;
     border-bottom: 1px solid var(--cpu-border-soft);
     background: color-mix(in srgb, var(--cpu-card) 94%, transparent);
     backdrop-filter: blur(16px);
