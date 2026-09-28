@@ -9108,5 +9108,65 @@
     "questionId": "2080136617019842561",
     "answer": "1",
     "quesType": "3"
+  },
+  {
+    "questionId": "2064640818131566594",
+    "answer": "C",
+    "quesType": "1"
+  },
+  {
+    "questionId": "1500741624995516417",
+    "answer": "A",
+    "quesType": "1"
+  },
+  {
+    "questionId": "1218056687091138562",
+    "answer": "1",
+    "quesType": "3"
+  },
+  {
+    "questionId": "1783040575499423746",
+    "answer": "A,B",
+    "quesType": "2"
+  },
+  {
+    "questionId": "1217729376558989314",
+    "answer": "1",
+    "quesType": "3"
+  },
+  {
+    "questionId": "1286204116046663681",
+    "answer": "1",
+    "quesType": "3"
+  },
+  {
+    "questionId": "1217729278584242177",
+    "answer": "1",
+    "quesType": "3"
+  },
+  {
+    "questionId": "2063865539901546498",
+    "answer": "A",
+    "quesType": "1"
+  },
+  {
+    "questionId": "2063874960186695681",
+    "answer": "A",
+    "quesType": "1"
+  },
+  {
+    "questionId": "1783700364722196482",
+    "answer": "B,C,D",
+    "quesType": "2"
+  },
+  {
+    "questionId": "2064901160027881473",
+    "answer": "D",
+    "quesType": "1"
+  },
+  {
+    "questionId": "1500740779000205314",
+    "answer": "A",
+    "quesType": "1"
   }
 ]
