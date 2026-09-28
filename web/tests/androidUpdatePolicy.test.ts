@@ -6,6 +6,7 @@ import {
   canUseStagedAndroidUpdate,
   shouldPromptAndroidInstallRepair,
   ANDROID_BROWSER_DOWNLOAD_PAGE,
+  isObsoleteAndroidUpdateFailure,
 } from "../src/utils/androidUpdatePolicy";
 
 test("安卓客户端启用自动更新提示", () => {
@@ -33,4 +34,12 @@ test("仅向低于发布版本的安卓客户端提示更新", () => {
   assert.equal(isAndroidUpdateAvailable(true, 34, 34), false);
   assert.equal(isAndroidUpdateAvailable(true, 35, 34), false);
   assert.equal(isAndroidUpdateAvailable(false, 33, 34), false);
+});
+
+test("已安装版本的重复下载失败不再阻止检查下一版本", () => {
+  assert.equal(isObsoleteAndroidUpdateFailure("failed", "CPU-Web-Android-V47.apk", 47), true);
+  assert.equal(isObsoleteAndroidUpdateFailure("failed", "CPU-Web-Android-V46.apk", 47), true);
+  assert.equal(isObsoleteAndroidUpdateFailure("failed", "CPU-Web-Android-V48.apk", 47), false);
+  assert.equal(isObsoleteAndroidUpdateFailure("downloading", "CPU-Web-Android-V47.apk", 47), false);
+  assert.equal(isObsoleteAndroidUpdateFailure("failed", "unknown.apk", 47), false);
 });

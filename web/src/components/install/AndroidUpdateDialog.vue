@@ -14,6 +14,9 @@
         <p class="muted">{{ nativeUpdate.fileName }}</p>
         <el-progress v-if="nativeUpdate.phase !== 'failed'" :percentage="nativeUpdate.progress" :indeterminate="nativeUpdate.totalBytes <= 0 && updateBusy" />
       </div>
+      <p v-else-if="saveOnly">
+        当前已安装 {{ currentVersionLabel }}，无需重复安装。需要保存安装包时，可以在浏览器下载。
+      </p>
       <p v-else-if="promptKind === 'install'">
         下载 <b>药大拾间</b> Android 客户端 {{ latestVersionLabel }}。
       </p>
@@ -62,6 +65,7 @@ import {
   ANDROID_APP_AUTO_UPDATE_PROMPT_ENABLED,
   ANDROID_BROWSER_DOWNLOAD_PAGE,
   shouldPromptAndroidInstallRepair,
+  isObsoleteAndroidUpdateFailure,
 } from "@/utils/androidUpdatePolicy";
 import {
   ANDROID_APP_DOWNLOAD_FILE_NAME,
@@ -116,11 +120,13 @@ const currentVersionLabel = computed(() => {
 });
 const latestVersionLabel = computed(() => `${latestRelease.value.versionName} (${latestRelease.value.versionCode})`);
 const canInAppUpdate = computed(() => supportsAndroidInAppApkDownload());
+const saveOnly = computed(() => promptKind.value === "install" && isAndroidNativeApp() && !updateAvailable.value && !hasPendingUpdate.value);
 const needsBrowserUpdate = computed(() => isAndroidNativeApp() && !canInAppUpdate.value);
 const showLegacyMigrationNote = computed(() => (
   (promptKind.value === "install" && !isAndroidNativeApp()) || isAndroidLegacyMajorUpgrade()
 ));
 const primaryButtonText = computed(() => {
+  if (saveOnly.value) return "在浏览器保存安装包";
   if (["ready", "permission"].includes(nativeUpdate.value.phase)) return "继续安装";
   if (nativeUpdate.value.phase === "failed") return "重试下载";
   if (updateBusy.value) return nativeUpdate.value.phase === "paused" ? "等待网络" : "更新进行中";
@@ -180,7 +186,9 @@ function readUpdateStatus() {
   const bridge = getAndroidBridge();
   try {
     if (bridge?.supportsPersistentApkUpdate?.() !== true || typeof bridge.getApkUpdateState !== "function") return false;
-    nativeUpdate.value = parseAndroidUpdateState(bridge.getApkUpdateState());
+    const state = parseAndroidUpdateState(bridge.getApkUpdateState());
+    nativeUpdate.value = isObsoleteAndroidUpdateFailure(state.phase, state.fileName, currentVersionCode.value)
+      ? parseAndroidUpdateState("{}") : state;
     return true;
   } catch { return false; }
 }
@@ -256,6 +264,11 @@ function openPrompt(kind: AndroidUpdatePromptKind, auto = false) {
 
 async function downloadAndroidUpdate() {
   const currentBridge = getAndroidBridge();
+  if (saveOnly.value) {
+    openExternalDownload(new URL(ANDROID_APP_DOWNLOAD_URL, window.location.origin).toString());
+    open.value = false;
+    return;
+  }
   if (["ready", "permission"].includes(nativeUpdate.value.phase)) {
     try {
       if (currentBridge?.continueApkInstall?.() !== true) ElMessage.warning("无法继续安装，请重试或使用浏览器下载");
