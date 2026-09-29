@@ -278,7 +278,7 @@ final class ScheduleWidgetCardRenderer {
         ink.drawText(ellipsize(primaryValue(ink, course), name, textWidth), textX, top, name);
         String meta = metadata(ink, course);
         String range = timeRange(ink, course);
-        String details = meta == null ? range : range.isEmpty() ? meta : meta + ' · ' + range;
+        String details = meta == null ? range : range.isEmpty() ? meta : meta + " · " + range;
         Paint detail = ink.text(9f, 400, palette.secondary());
         ink.drawText(ellipsize(details, detail, textWidth), textX, top + lineHeight(12f) + 1f, detail);
     }
