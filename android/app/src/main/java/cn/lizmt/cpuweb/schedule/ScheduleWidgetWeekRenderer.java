@@ -169,21 +169,28 @@ final class ScheduleWidgetWeekRenderer {
         paint.setTextAlign(Paint.Align.LEFT);
         paint.setTypeface(BOLD);
         paint.setColor(palette.primary());
-        paint.setTextSize(24f);
-        int nameLines = rect.height() >= 82f ? 3 : 1;
-        List<String> lines = wrap(name, paint, textWidth, nameLines);
         String location = ScheduleWidgetJson.text(course, "location", "").trim();
-        boolean showLocation = !location.isEmpty() && rect.height() >= 120f;
-        float y = rect.top + 36f;
+        boolean showLocation = !location.isEmpty() && rect.height() >= 42f;
+        float titleSize = rect.height() < 64f ? 15f : rect.height() < 112f ? 19f : 24f;
+        paint.setTextSize(titleSize);
+        int nameLines = showLocation
+                ? (rect.height() >= 170f ? 3 : rect.height() >= 118f ? 2 : 1)
+                : (rect.height() >= 140f ? 3 : rect.height() >= 98f ? 2 : 1);
+        List<String> lines = wrap(name, paint, textWidth, nameLines);
+        float titleLineHeight = titleSize * 1.2f;
+        float locationSize = rect.height() < 64f ? 11f : rect.height() < 112f ? 15f : 19f;
+        float locationLineHeight = locationSize * 1.2f;
+        float totalHeight = lines.size() * titleLineHeight + (showLocation ? 4f + locationLineHeight : 0f);
+        float y = rect.top + (rect.height() - totalHeight) / 2f + titleSize;
         for (String line : lines) {
             canvas.drawText(line, textLeft, y, paint);
-            y += 29f;
+            y += titleLineHeight;
         }
         if (showLocation) {
             paint.setTypeface(Typeface.DEFAULT);
-            paint.setTextSize(19f);
+            paint.setTextSize(locationSize);
             paint.setColor(palette.secondary());
-            canvas.drawText(fit(location, paint, textWidth), textLeft, y + 1f, paint);
+            canvas.drawText(fit(location, paint, textWidth), textLeft, y + 2f, paint);
         }
         paint.setTypeface(Typeface.DEFAULT);
     }

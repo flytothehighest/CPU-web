@@ -187,8 +187,18 @@ export struct NativeSchedulePage {
       Column({ space: 12 }) {
         Text('同一时段的课程').fontSize(20).fontWeight(FontWeight.Bold).fontColor(this.textColor()).width('100%')
         ForEach(this.overlappingBlocks, (block: NativeCourseBlock) => {
-          Button(block.course.name + ' · ' + (block.course.location || '地点待定')).width('100%').height(48)
+          Button() {
+            Column({ space: 2 }) {
+              Text(block.course.name).fontSize(14).fontWeight(FontWeight.Medium)
+                .fontColor(this.toneText(block.course.name)).width('100%').maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+              Text(block.course.location ? '@' + block.course.location : '地点待定').fontSize(11)
+                .fontColor(this.secondaryColor()).width('100%').maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+            }.width('100%').alignItems(HorizontalAlign.Start)
+          }.width('100%').height(52).padding({ left: 12, right: 12 })
             .fontColor(this.toneText(block.course.name)).backgroundColor(this.softSurfaceColor())
+            .accessibilityText(block.course.name + '，' + (block.course.location || '地点待定'))
             .onClick(() => { this.overlappingBlocks = []; this.openDetail(block); })
         })
       }.width('100%').padding({ left: 18, right: 18, top: 28, bottom: 24 }).backgroundColor(this.surfaceColor())

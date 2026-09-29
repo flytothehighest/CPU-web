@@ -276,8 +276,11 @@ final class ScheduleWidgetCardRenderer {
         float top = y + (height - textHeight) / 2f;
         Paint name = ink.text(12f, 700, palette.primary());
         ink.drawText(ellipsize(primaryValue(ink, course), name, textWidth), textX, top, name);
-        Paint time = ink.text(9f, 400, palette.secondary());
-        ink.drawText(ellipsize(timeRange(ink, course), time, textWidth), textX, top + lineHeight(12f) + 1f, time);
+        String meta = metadata(ink, course);
+        String range = timeRange(ink, course);
+        String details = meta == null ? range : range.isEmpty() ? meta : meta + ' · ' + range;
+        Paint detail = ink.text(9f, 400, palette.secondary());
+        ink.drawText(ellipsize(details, detail, textWidth), textX, top + lineHeight(12f) + 1f, detail);
     }
 
     // MARK: 今日课表

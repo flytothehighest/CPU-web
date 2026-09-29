@@ -152,6 +152,7 @@
                   v-for="block in page.weekCourseBlocks"
                   :key="`${page.weekValue}-${block.day}-${block.startSlot}-${block.endSlot}-${block.index}-${block.course.name}`"
                   class="week-course"
+                  :class="{ 'week-course--single-slot': block.endSlot === block.startSlot }"
                   :style="courseBlockStyle(block)"
                   :title="courseTitle(block.course)"
                   @click.stop="onCourseBlockClick($event, block, page.weekValue)"
@@ -182,14 +183,15 @@
                     v-for="block in page.dayCourseBlocks"
                     :key="`${page.weekValue}-${page.day}-${block.startSlot}-${block.endSlot}-${block.index}-${block.course.name}`"
                     class="day-course-block"
+                    :class="{ 'day-course-block--single-slot': block.endSlot === block.startSlot }"
                     :style="dayCourseBlockStyle(block)"
                     :title="courseTitle(block.course)"
                     @click.stop="onCourseBlockClick($event, block, page.weekValue)"
                   >
                     <div class="day-course-name">{{ block.course.name }}</div>
-                    <div class="day-course-meta">
-                      <span v-if="block.course.location">@{{ block.course.location }}</span>
-                      <span v-if="block.course.teacher">{{ block.course.teacher }}</span>
+                    <div class="day-course-meta" :class="{ 'day-course-meta--without-location': !block.course.location }">
+                      <span v-if="block.course.location" class="day-course-location">@{{ block.course.location }}</span>
+                      <span v-if="block.course.teacher" class="day-course-teacher">{{ block.course.teacher }}</span>
                     </div>
                     <div class="day-course-note">{{ block.course.slotNote || block.course.weeks }}</div>
                   </article>

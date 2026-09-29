@@ -399,11 +399,12 @@ export struct ScheduleCardView {
           .fontColor($r('app.color.widget_text'))
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(course.time)
+        Text(course.meta ? `${course.meta} · ${course.time}` : course.time)
           .fontSize(9)
           .lineHeight(11)
           .fontColor($r('app.color.widget_secondary'))
           .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
       }
       .layoutWeight(1)
       .alignItems(HorizontalAlign.Start)

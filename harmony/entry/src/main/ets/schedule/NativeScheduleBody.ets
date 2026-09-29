@@ -82,15 +82,15 @@ export struct NativeScheduleBody {
               })
             }.width('100%')
             ForEach(this.view.blocksForDay(day), (block: NativeCourseBlock) => {
-              Column({ space: 4 }) {
+              Column({ space: block.endSlot === block.startSlot ? 1 : 4 }) {
                 Text(block.course.name).fontSize(this.pageWidth <= 390 ? 10 : 11).fontWeight(FontWeight.Bold)
                   .minFontSize(9).maxFontSize(this.pageWidth <= 390 ? 10 : 11)
                   .heightAdaptivePolicy(TextHeightAdaptivePolicy.MIN_FONT_SIZE_FIRST)
                   .fontColor(this.toneText(block.course.name)).width('100%').textAlign(TextAlign.Center)
-                  .maxLines(block.endSlot === block.startSlot ? 2 : block.endSlot - block.startSlot < 2 ? 3 : 6)
+                  .maxLines(block.endSlot === block.startSlot ? 1 : block.endSlot - block.startSlot < 2 ? 2 : 3)
                   .textOverflow({ overflow: TextOverflow.Ellipsis })
-                if (block.course.location && block.endSlot > block.startSlot) {
-                  Text('@' + block.course.location).fontSize(10).fontWeight(FontWeight.Bold)
+                if (block.course.location) {
+                  Text('@' + block.course.location).fontSize(block.endSlot === block.startSlot ? 9 : 10).fontWeight(FontWeight.Bold)
                     .minFontSize(8).maxFontSize(10).heightAdaptivePolicy(TextHeightAdaptivePolicy.MIN_FONT_SIZE_FIRST)
                     .fontColor(this.toneAccent(block.course.name)).width('100%').textAlign(TextAlign.Center)
                     .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -99,7 +99,8 @@ export struct NativeScheduleBody {
                   Text(`+${this.overlapCount(block) - 1} 门`).fontSize(8).fontColor(this.toneAccent(block.course.name)).maxLines(1)
                 }
               }.width('100%').height((block.endSlot - block.startSlot + 1) * this.weekStride() - 5).clip(true)
-                .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center).padding({ left: 2, right: 2, top: 4, bottom: 4 }).borderRadius(9)
+                .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
+                .padding({ left: 2, right: 2, top: block.endSlot === block.startSlot ? 1 : 4, bottom: block.endSlot === block.startSlot ? 1 : 4 }).borderRadius(9)
                 .backgroundColor(this.toneFill(block.course.name)).border({ width: 1, color: this.toneBorder(block.course.name) })
                 .position({ x: 0, y: (block.startSlot - 1) * this.weekStride() })
                 .accessibilityText(this.courseAccessibility(block)).onClick(() => this.onCourse(block))
@@ -135,10 +136,10 @@ export struct NativeScheduleBody {
         }.width('100%')
         ForEach(this.view.blocksForDay(this.view.selectedDay), (block: NativeCourseBlock) => {
           Button() {
-            Column({ space: 7 }) {
-              Text(block.course.name).fontSize(block.endSlot === block.startSlot ? 13 : 16).fontWeight(FontWeight.Medium)
+            Column({ space: block.endSlot === block.startSlot ? 2 : 5 }) {
+              Text(block.course.name).fontSize(block.endSlot === block.startSlot ? 12 : 16).fontWeight(FontWeight.Medium)
                 .fontColor(this.toneText(block.course.name)).width('100%')
-                .maxLines(block.endSlot === block.startSlot ? 1 : 3).textOverflow({ overflow: TextOverflow.Ellipsis })
+                .maxLines(block.endSlot === block.startSlot ? 1 : block.endSlot - block.startSlot < 2 ? 2 : 3).textOverflow({ overflow: TextOverflow.Ellipsis })
               Text([block.course.location ? '@' + block.course.location : '', block.course.teacher].filter((value: string | undefined) => !!value).join(' · ') || '地点待确认')
                 .fontSize(11).fontColor(this.secondaryColor()).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
               if (block.endSlot > block.startSlot) {
@@ -148,7 +149,7 @@ export struct NativeScheduleBody {
               if (this.overlapCount(block) > 1 && block.endSlot > block.startSlot) {
                 Text(`${this.overlapCount(block)} 门课程重叠，点击查看`).fontSize(10).fontColor(this.secondaryColor()).width('100%')
               }
-            }.width('100%').height('100%').padding({ left: 16, right: 16, top: 6, bottom: 6 })
+            }.width('100%').height('100%').padding({ left: 16, right: 16, top: block.endSlot === block.startSlot ? 3 : 6, bottom: block.endSlot === block.startSlot ? 3 : 6 })
               .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Start)
           }.type(ButtonType.Normal).width('100%').height((block.endSlot - block.startSlot + 1) * this.dayStride() - 4)
             .padding(0).clip(true).backgroundColor(this.toneFill(block.course.name)).border({ width: 1, color: this.toneBorder(block.course.name), radius: 12 })
