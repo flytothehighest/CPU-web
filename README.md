@@ -487,7 +487,7 @@ Content-Type: application/json
 | `DESKTOP_APP_DOWNLOAD_PASSWORD` | 空 | 备用网盘分享页的提取码；PDS 直链模式下不显示 |
 | `DESKTOP_PDS_SHARE_URL` | 桌面端固定文件夹分享 | 阿里云盘企业版（PDS）文件夹分享链接。建议内含 `Windows` / `macOS` 子目录；服务端递归选择最后更新的 `.exe` 与 Apple Silicon `.dmg`，每次请求临时换取直链并由本站稳定地址 302 跳转 |
 | `DESKTOP_PDS_SHARE_PASSWORD` | 空 | PDS 分享提取码；无提取码时留空 |
-| `ANDROID_APP_PDS_SHARE_URL` | 复用桌面端 PDS 分享 | 可选的安卓专用 PDS 文件夹分享链接；未配置时复用 `DESKTOP_PDS_SHARE_URL`，并自动选择版本号最高的 `CPU-Web-Android-V*.apk` |
+| `ANDROID_APP_PDS_SHARE_URL` | 复用桌面端 PDS 分享 | 可选的安卓专用 PDS 文件夹分享链接；未配置时复用 `DESKTOP_PDS_SHARE_URL`，选择 `server/src/releases/android.json` 指定的 APK，不因上传了更高版本而自动发布 |
 | `ANDROID_APP_PDS_SHARE_PASSWORD` | 复用桌面端 PDS 提取码 | 安卓专用 PDS 分享提取码；仅在配置安卓专用分享链接时使用 |
 | `ASSESSMENT_TOOL_PDS_SHARE_URL` | 复用桌面端 PDS 分享 | 综测填表工具的可选独立分享链接；默认在桌面端分享中选择版本号最高的 `药大拾间-综测填表工具-v*.zip` |
 | `ASSESSMENT_TOOL_PDS_SHARE_PASSWORD` | 复用桌面端 PDS 提取码 | 综测填表工具独立分享的提取码；仅在配置独立分享链接时使用 |
@@ -689,6 +689,7 @@ GitHub Actions 是正式生产制品的权威构建来源，本地构建只用�
 ## 多端与子项目说明
 
 - Android 壳说明见 [android/README.md](./android/README.md)
+- Android 打包、签名和发布操作见 [发布操作手册](./docs/android-release-runbook.md)，发布门禁与真机验收见 [发布要求](./docs/android-release.md)。
 - HarmonyOS 壳说明见 [harmony/README.md](./harmony/README.md)
 
 当前多端能力概览：

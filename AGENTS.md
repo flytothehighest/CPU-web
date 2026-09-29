@@ -13,3 +13,19 @@ These requirements apply to every push to `main`, including documentation-only p
 7. Pushing and GitHub compilation do not authorize a production deployment. Deploy only when the user explicitly requests it.
 
 The detailed, auditable procedure is in `docs/production-requirements.md`.
+
+## Android packaging and release handoff
+
+For Android packaging, signing, uploads, update delivery, or release requests, read
+`docs/android-release-runbook.md` and `docs/android-release.md` before acting.
+They contain the operational sequence, existing signing-environment location,
+enterprise upload and deployment entry points, CI artifact reuse criteria, and
+download troubleshooting. Do not rely on another chat's history or ignored
+`output/` helper scripts being available.
+
+Read the candidate version from `android/app/build.gradle` and the published
+version from `server/src/releases/android.json`. Check for an already-built,
+verified release candidate before incrementing the version. Preserve unrelated
+working-tree changes, use the original signing certificate, and never commit
+credentials. A local build, upload, or manifest change alone is not a release;
+report the actual stage and complete all authorized publication steps.

@@ -1,5 +1,7 @@
 # 安卓发布与更新验证
 
+接手打包或发布时，先读 [Android 打包发布操作手册](android-release-runbook.md)：包含候选 CI 复用、本机签名环境、企业盘与部署入口、完整命令和故障排查。本页定义发布门禁与真机验收要求。
+
 ## 分发边界
 
 - APK 只经企业盘分发。公开入口与旧 APK 链接都选择发布清单指定的文件；上传更高版本不会自动发布它。
@@ -20,7 +22,10 @@
 5. 从仓库根目录运行：
 
    ```powershell
-   node --import ./server/node_modules/tsx/dist/loader.mjs server/src/scripts/verifyAndroidRelease.ts --candidate=output/android-candidate.json --apk=web/public/downloads/CPU-Web-Android-V38.apk --promote
+   $candidate = 'output/android-candidate.json'
+   $release = Get-Content $candidate -Raw | ConvertFrom-Json
+   $apk = Join-Path 'output' $release.fileName # 指向实际签名 APK 的位置
+   node --import ./server/node_modules/tsx/dist/loader.mjs server/src/scripts/verifyAndroidRelease.ts "--candidate=$candidate" "--apk=$apk" --promote
    ```
 
    命令会校验本地 APK、签名、包名、版本、GitHub 来源和企业盘下载字节。全部通过后才更新正式发布清单。没有 `--promote` 时只验证，不写入清单。
