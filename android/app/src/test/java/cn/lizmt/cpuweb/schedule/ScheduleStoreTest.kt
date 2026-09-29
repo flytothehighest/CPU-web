@@ -420,6 +420,29 @@ class ScheduleStoreTest {
     }
 
     @Test
+    fun twelfthPeriodSurvivesRenderingExportAndOldBridgePeriodTables() = runTest {
+        val cells = JSONArray().put(JSONObject().put("day", 1).put("bigSlot", 6).put("courses", JSONArray()
+            .put(course("晚间实验", 11, 12, listOf(3)))))
+        val calendar = JSONObject().put("currentWeek", 3).put("weeks", JSONArray().put(
+            JSONObject().put("week", 3).put("days", JSONArray((14..20).map { "2026-09-$it" }))))
+        val oldPeriods = JSONArray(BUNDLED_PERIODS.take(11).map {
+            JSONObject().put("number", it.number).put("startTime", if (it.number == 1) "08:10" else it.startTime).put("endTime", it.endTime)
+        })
+        val raw = JSONObject(snapshot(cells = cells)).put("calendar", calendar).put("periods", oldPeriods).toString()
+        val store = store(mutableListOf(raw))
+        advanceUntilIdle()
+        assertEquals(12, store.blocksForDay(1).single().endSlot)
+        assertEquals("08:10", store.periodTime(1).startTime)
+        assertEquals("21:15", store.periodTime(12).startTime)
+        assertEquals("22:00", store.periodTime(12).endTime)
+        assertTrue(ScheduleExport.text(store).contains("20:20–22:00 晚间实验"))
+        assertTrue(ScheduleExport.calendar(store).contains("DTEND:20260914T140000Z"))
+        val days = store.widgetLocalRecord()!!.getJSONArray("days")
+        val monday = (0 until days.length()).map { days.getJSONObject(it) }.first { it.getString("date") == "2026-09-14" }
+        assertEquals("22:00", monday.getJSONArray("courses").getJSONObject(0).getString("endTime"))
+    }
+
+    @Test
     fun weekTextCompressesRanges() {
         assertEquals("1-3、5、7-8周", ScheduleStore.weekText(listOf(1, 2, 3, 5, 7, 8)))
         assertEquals("01-02节", ScheduleStore.slotLabel(1, 2))

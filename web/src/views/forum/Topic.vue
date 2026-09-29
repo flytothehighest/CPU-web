@@ -30,7 +30,9 @@
     </section>
   </div>
 
-  <div v-else-if="topic" class="topic-page">
+  <div v-else-if="topic" class="topic-page"
+    :class="{ 'topic-page--with-composer': canReply && auth.isLoggedIn }"
+    :style="{ '--topic-composer-height': `${replyComposerHeight}px` }">
     <header class="mobile-topic-header">
       <button data-cpu-button="icon" type="button" class="mobile-topic-back" :aria-label="backLabel" @click="goBackFromTopic">
         <el-icon><ArrowLeft /></el-icon>
@@ -465,7 +467,7 @@
       </template>
     </section>
 
-    <button data-cpu-button="surface" v-if="canReply && auth.isLoggedIn" type="button" class="mobile-reply-composer" @click="openReplyDialog()">
+    <button ref="replyComposerRef" data-cpu-button="surface" v-if="canReply && auth.isLoggedIn" type="button" class="mobile-reply-composer" @click="openReplyDialog()">
       <UserAvatar :size="34" :src="auth.user?.avatar" :name="auth.user?.nickname" :seed="auth.user?.id" alt="我的头像" />
       <span>说点什么…</span>
       <b>发布</b>
@@ -806,6 +808,20 @@ const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
 const isMobileLayout = useMobileLayout();
+const replyComposerRef = ref<HTMLElement | null>(null);
+const replyComposerHeight = ref(56);
+watch(replyComposerRef, (element, _previous, onCleanup) => {
+  if (!element) return;
+  const measure = () => {
+    const height = element.getBoundingClientRect().height;
+    if (height > 0) replyComposerHeight.value = Math.ceil(height);
+  };
+  measure();
+  if (typeof ResizeObserver === "undefined") return;
+  const observer = new ResizeObserver(measure);
+  observer.observe(element);
+  onCleanup(() => observer.disconnect());
+}, { flush: "post" });
 
 const topic = ref<Topic | null>(null);
 const replies = ref<Reply[]>([]);

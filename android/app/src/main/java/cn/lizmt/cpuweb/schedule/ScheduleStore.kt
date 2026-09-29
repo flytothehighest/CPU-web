@@ -655,7 +655,9 @@ class ScheduleStore(
         learnSemesters(snapshot)
         clearFallback()
         calendar = snapshot.calendar
-        periods = snapshot.periods.takeIf { it.size >= SLOT_COUNT } ?: BUNDLED_PERIODS
+        // Keep supplied period times when an older bridge only knows eleven slots.
+        val suppliedPeriods = snapshot.periods.associateBy { it.number }
+        periods = BUNDLED_PERIODS.map { suppliedPeriods[it.number] ?: it }
         if (selectedSemester.isEmpty()) selectedSemester = data.currentSemester
         if (selectedWeek.isEmpty()) {
             selectedWeek = data.currentWeek.ifEmpty { snapshot.calendar?.currentWeek?.takeIf { it > 0 }?.toString().orEmpty() }

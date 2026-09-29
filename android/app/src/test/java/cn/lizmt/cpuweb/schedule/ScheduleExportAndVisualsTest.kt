@@ -97,9 +97,9 @@ class ScheduleExportAndVisualsTest {
     }
 
     @Test
-    fun portraitWeekFitsElevenRowsWithoutTheOld48DpFloor() {
-        for (height in listOf(400f, 480f, 540f, 640f)) {
-            assertTrue(compactWeekRowHeight(height) * 11 + 46 <= height + 0.01f)
+    fun portraitWeekFitsTwelveRowsWithoutClippingPeriodLabels() {
+        for (height in listOf(460f, 480f, 540f, 640f)) {
+            assertTrue(compactWeekRowHeight(height) * SLOT_COUNT + 46 <= height + 0.01f)
         }
     }
 }

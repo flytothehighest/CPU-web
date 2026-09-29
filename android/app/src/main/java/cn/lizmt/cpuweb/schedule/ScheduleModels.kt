@@ -128,17 +128,17 @@ data class CourseBlock(
         .put("course", course.toJson())
 }
 
-/** The university's eleven small periods, used until the calendar supplies its own. */
+/** The university's twelve small periods, used until the calendar supplies its own. */
 val BUNDLED_PERIODS: List<SchedulePeriod> = listOf(
     SchedulePeriod(1, "08:00", "08:45"), SchedulePeriod(2, "08:55", "09:40"),
     SchedulePeriod(3, "09:55", "10:40"), SchedulePeriod(4, "10:50", "11:35"),
     SchedulePeriod(5, "13:30", "14:15"), SchedulePeriod(6, "14:25", "15:10"),
     SchedulePeriod(7, "15:25", "16:10"), SchedulePeriod(8, "16:20", "17:05"),
     SchedulePeriod(9, "18:30", "19:15"), SchedulePeriod(10, "19:25", "20:10"),
-    SchedulePeriod(11, "20:20", "21:05"),
+    SchedulePeriod(11, "20:20", "21:05"), SchedulePeriod(12, "21:15", "22:00"),
 )
 
-const val SLOT_COUNT = 11
+const val SLOT_COUNT = 12
 val WEEKDAY_LABELS = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
 
 object ScheduleJson {

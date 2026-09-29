@@ -284,6 +284,12 @@ fun NativePostAction(activity: MainActivity) {
         text = { Text("投稿") },
         containerColor = MaterialTheme.colorScheme.surface,
         contentColor = MaterialTheme.colorScheme.primary,
+        elevation = androidx.compose.material3.FloatingActionButtonDefaults.elevation(
+            defaultElevation = 0.dp,
+            pressedElevation = 0.dp,
+            focusedElevation = 0.dp,
+            hoveredElevation = 0.dp,
+        ),
     )
 }
 

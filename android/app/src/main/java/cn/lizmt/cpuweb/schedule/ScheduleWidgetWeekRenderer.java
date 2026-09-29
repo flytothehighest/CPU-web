@@ -15,17 +15,17 @@ import java.util.List;
 final class ScheduleWidgetWeekRenderer {
     private static final int WIDTH = 1080;
     private static final int HEIGHT = 820;
-    private static final int SLOT_COUNT = 11;
+    private static final int SLOT_COUNT = ScheduleModelsKt.SLOT_COUNT;
     private static final float SUMMARY_HEIGHT = 70f;
     private static final float LABEL_WIDTH = 88f;
     private static final float HEADER_HEIGHT = 70f;
     private static final String[] START_TIMES = {
             "08:00", "08:55", "09:55", "10:50", "13:30", "14:25",
-            "15:25", "16:20", "18:30", "19:25", "20:20"
+            "15:25", "16:20", "18:30", "19:25", "20:20", "21:15"
     };
     private static final String[] END_TIMES = {
             "08:45", "09:40", "10:40", "11:35", "14:15", "15:10",
-            "16:10", "17:05", "19:15", "20:10", "21:05"
+            "16:10", "17:05", "19:15", "20:10", "21:05", "22:00"
     };
     private static final Typeface BOLD = Typeface.create(Typeface.DEFAULT, Typeface.BOLD);
 

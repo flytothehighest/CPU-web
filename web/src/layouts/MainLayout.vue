@@ -2288,7 +2288,8 @@ html[data-theme="dark"] .assistant-widget {
   .main.main--mobile-topic {
     width: 100%;
     margin: 0;
-    padding: 0 0 calc(76px + env(safe-area-inset-bottom));
+    // Topic.vue reserves the measured height of its own floating composer.
+    padding: 0;
   }
 
   .layout-root--full-height .main--full-height {

@@ -6,6 +6,12 @@
     padding-bottom: 12px;
   }
 
+  // Own the fixed composer's clearance inside the page. Native shells override
+  // MainLayout's outer bottom padding, so that padding cannot protect replies.
+  .topic-page--with-composer {
+    padding-bottom: calc(var(--topic-composer-height, 56px) + max(8px, env(safe-area-inset-bottom)) + 16px);
+  }
+
   .mobile-topic-header {
     position: sticky;
     top: 0;

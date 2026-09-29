@@ -7,8 +7,8 @@ import kotlin.math.roundToInt
 /** Colors of one course card, as packed ARGB integers. */
 data class ScheduleCourseTone(val fill: Int, val border: Int, val text: Int, val highlight: Int = fill)
 
-/** Reserve the weekday header, gap and bottom inset; fit all 11 rows in portrait. */
-fun compactWeekRowHeight(availableHeight: Float): Float = max(32f, (availableHeight - 46f) / 11f)
+/** Reserve the weekday header, gap and bottom inset; fit all timetable rows in portrait. */
+fun compactWeekRowHeight(availableHeight: Float): Float = max(34f, (availableHeight - 46f) / SLOT_COUNT)
 
 /** The nine Web palettes in the order the palette picker shows them. */
 val SCHEDULE_THEME_ORDER = listOf("color-glass", "green", "blue", "teal", "indigo", "violet", "orange", "rose", "slate")
