@@ -32,6 +32,8 @@ struct WidgetDisplayOptions: Codable, Equatable {
     var showLunarDate: Bool
     /// 节日徽标与休息时的假期倒计时。
     var showHoliday: Bool
+    /// 最近的节假日常驻在日期栏右侧（「距国庆节还有 5 天」），而不是只在休息时才出现。
+    var holidayAlwaysVisible: Bool
 
     static let `default` = WidgetDisplayOptions(
         showCourseName: true,
@@ -46,7 +48,8 @@ struct WidgetDisplayOptions: Codable, Equatable {
         showTeacher: Bool,
         showTime: Bool,
         showLunarDate: Bool = true,
-        showHoliday: Bool = true
+        showHoliday: Bool = true,
+        holidayAlwaysVisible: Bool = true
     ) {
         self.showCourseName = showCourseName
         self.showRoom = showRoom
@@ -54,9 +57,10 @@ struct WidgetDisplayOptions: Codable, Equatable {
         self.showTime = showTime
         self.showLunarDate = showLunarDate
         self.showHoliday = showHoliday
+        self.holidayAlwaysVisible = holidayAlwaysVisible
     }
 
-    /// 旧版本存的 JSON 没有农历和节假日字段。缺字段时按默认值补齐，否则整份设置
+    /// 旧版本存的 JSON 没有农历、节假日和常驻字段（中间有几版去掉过常驻）。缺字段时按默认值补齐，否则整份设置
     /// 解码失败，已经关掉的开关又会被打开。
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
@@ -66,7 +70,8 @@ struct WidgetDisplayOptions: Codable, Equatable {
             showTeacher: try values.decodeIfPresent(Bool.self, forKey: .showTeacher) ?? true,
             showTime: try values.decodeIfPresent(Bool.self, forKey: .showTime) ?? true,
             showLunarDate: try values.decodeIfPresent(Bool.self, forKey: .showLunarDate) ?? true,
-            showHoliday: try values.decodeIfPresent(Bool.self, forKey: .showHoliday) ?? true
+            showHoliday: try values.decodeIfPresent(Bool.self, forKey: .showHoliday) ?? true,
+            holidayAlwaysVisible: try values.decodeIfPresent(Bool.self, forKey: .holidayAlwaysVisible) ?? true
         )
     }
 
