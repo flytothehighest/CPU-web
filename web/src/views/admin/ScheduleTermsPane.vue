@@ -102,6 +102,7 @@
 </template>
 
 <script setup lang="ts">
+import { smallSlots } from "@/views/schedule/slots";
 import { computed, onMounted, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { adminApi, type ScheduleTermConfig } from "@/api/admin";
@@ -178,7 +179,7 @@ function clone(item: ScheduleTermConfig): Draft {
   return JSON.parse(JSON.stringify({ ...item, version: undefined, updatedAt: undefined }));
 }
 function defaultPeriods(): Period[] {
-  return Array.from({ length: 11 }, (_, index) => ({ id: index + 1, name: `第${index + 1}节`, start: "08:00", end: "08:45" }));
+  return smallSlots.map(({ no, start, end }) => ({ id: no, name: `第${no}节`, start, end }));
 }
 function defaultDraft(semester = "") : Draft {
   return { semester, semesterStartMonday: "", weekCount: 18, timezone: "Asia/Shanghai", note: "", periods: [], adjustments: [] };

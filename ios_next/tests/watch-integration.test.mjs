@@ -103,8 +103,8 @@ test('self signing values are configurable and local overrides stay ignored', as
   assert.match(debugConfig, /#include\? "Signing\.local\.xcconfig"/);
   assert.match(configuration(project, 'Debug configuration for PBXProject "CpuTime"'), /DebugSigning\.xcconfig/);
   assert.match(configuration(project, 'Release configuration for PBXProject "CpuTime"'), /SharedSigning\.xcconfig/);
-  assert.match(configuration(project, 'Debug configuration for PBXProject "CpuTime"'), /IPHONEOS_DEPLOYMENT_TARGET = 17\.0;/);
-  assert.match(configuration(project, 'Release configuration for PBXProject "CpuTime"'), /IPHONEOS_DEPLOYMENT_TARGET = 17\.0;/);
+  assert.match(configuration(project, 'Debug configuration for PBXProject "CpuTime"'), /IPHONEOS_DEPLOYMENT_TARGET = 15\.0;/);
+  assert.match(configuration(project, 'Release configuration for PBXProject "CpuTime"'), /IPHONEOS_DEPLOYMENT_TARGET = 15\.0;/);
   assert.doesNotMatch(project, /IPHONEOS_DEPLOYMENT_TARGET = 27\.0;/);
   assert.match(ignore, /ios_next\/CpuTime\/Configurations\/Signing\.local\.xcconfig/);
   assert.match(entitlement, /\$\(CPU_APP_GROUP_IDENTIFIER\)/);

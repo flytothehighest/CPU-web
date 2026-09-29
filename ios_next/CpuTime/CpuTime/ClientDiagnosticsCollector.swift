@@ -137,7 +137,7 @@ nonisolated final class ClientDiagnosticsCollector: NSObject, MXMetricManagerSub
             item["exceptionType"] = crash.exceptionType?.intValue ?? NSNull()
             item["signal"] = crash.signal?.intValue ?? NSNull()
             item["terminationReason"] = crash.terminationReason.map { String($0.prefix(1000)) } ?? NSNull()
-            if let reason = crash.exceptionReason {
+            if #available(iOS 17.0, *), let reason = crash.exceptionReason {
                 item["exceptionClassName"] = String(reason.className.prefix(200))
                 item["exceptionMessage"] = String(reason.composedMessage.prefix(1000))
             }

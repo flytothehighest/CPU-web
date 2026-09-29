@@ -99,6 +99,7 @@ const SMALL_SLOTS = [
   { no: 9, start: "18:30", end: "19:15" },
   { no: 10, start: "19:25", end: "20:10" },
   { no: 11, start: "20:20", end: "21:05" },
+  { no: 12, start: "21:15", end: "22:00" },
 ];
 const MAX_SMALL_SLOT = SMALL_SLOTS[SMALL_SLOTS.length - 1]?.no ?? 11;
 

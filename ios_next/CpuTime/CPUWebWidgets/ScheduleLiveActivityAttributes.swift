@@ -3,6 +3,7 @@ import Foundation
 
 /// Shared wire model for the iPhone Live Activity and its WidgetKit view.
 /// This file is compiled into both the app and the widget extension.
+@available(iOS 16.1, *)
 public struct ScheduleLiveActivityAttributes: ActivityAttributes, Equatable {
     public static let broadcastCoursesKey = "cpu.liveActivity.broadcastCourses"
 

@@ -151,10 +151,12 @@ test('native payload uses real schedule, custom courses and normalized odd weeks
     course: { name: '自习', weeks: '全部周', weekList: [] } }] } });
   const result = await ctx.window.CPUTimeNativeScheduleFetch('2025-2026-2', '1', false);
   assert.equal(result.auth.authenticated, true);
-  assert.equal(result.periods.length, 11);
+  assert.equal(result.periods.length, 12);
   assert.equal(result.periods[0].number, 1);
   assert.equal(result.periods[0].startTime, '08:00');
   assert.equal(result.periods[0].endTime, '08:45');
+  assert.equal(result.periods[11].number, 12);
+  assert.equal(result.periods[11].endTime, '22:00');
   assert.deepEqual(Array.from(result.data.cells[0].courses[0].weekList), [1, 3, 5, 7]);
   assert.match(result.data.cells[0].courses[0].nativeId, /^[a-f0-9-]{36}$/);
   assert.equal(result.data.cells[1].courses[0].name, '自习');

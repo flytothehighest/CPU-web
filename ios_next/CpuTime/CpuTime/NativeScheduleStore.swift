@@ -325,11 +325,12 @@ public struct NativeSchedulePeriod: Codable, Equatable, Sendable {
         NativeSchedulePeriod(number: 8, startTime: "16:20", endTime: "17:05"),
         NativeSchedulePeriod(number: 9, startTime: "18:30", endTime: "19:15"),
         NativeSchedulePeriod(number: 10, startTime: "19:25", endTime: "20:10"),
-        NativeSchedulePeriod(number: 11, startTime: "20:20", endTime: "21:05")
+        NativeSchedulePeriod(number: 11, startTime: "20:20", endTime: "21:05"),
+        NativeSchedulePeriod(number: 12, startTime: "21:15", endTime: "22:00")
     ]
 
-    /// Older bridges may report the former twelfth-slot marker. Clamp it to
-    /// the last real period before native or Watch code looks up times.
+    /// Clamp imported course ranges to the available timetable before
+    /// native or Watch code looks up times.
     static func normalizedRange(
         bigSlot: Int,
         startSlot: Int?,
@@ -747,8 +748,11 @@ public enum NativeScheduleCourseBlockMerger {
             return aCustom == bCustom && rangesOverlap(left, right)
         }
         if a.customId != nil || b.customId != nil { return false }
-        if let leftID = a.nativeId, let rightID = b.nativeId, leftID != rightID { return false }
-        if let leftID = a.sourceKey, let rightID = b.sourceKey, leftID != rightID { return false }
+        // A bridge id can identify a physical row, not a unique course. Check
+        // visible occurrence/subset rules below before rejecting different ids.
+        // Explicit clock overrides still identify distinct scheduled events.
+        guard a.customStartTime == b.customStartTime,
+              a.customEndTime == b.customEndTime else { return false }
         let sameName = identityPart(a.name) == identityPart(b.name)
         let compatibleTeacher = compatibleTeacher(a.teacher, b.teacher)
         let compatibleLocation = locationCompatible(a.location, b.location)

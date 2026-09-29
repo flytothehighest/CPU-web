@@ -83,7 +83,7 @@
 
   .day-grid-body {
     grid-template-columns: 42px minmax(0, 1fr);
-    grid-template-rows: repeat(11, minmax(52px, calc(var(--schedule-vh, 1vh) * 6)));
+    grid-template-rows: repeat(12, minmax(52px, calc(var(--schedule-vh, 1vh) * 6)));
     gap: 4px;
   }
 
@@ -130,7 +130,7 @@
   }
 
   .week-grid-body {
-    grid-template-rows: repeat(11, minmax(44px, calc(var(--schedule-vh, 1vh) * 5.5)));
+    grid-template-rows: repeat(12, minmax(44px, calc(var(--schedule-vh, 1vh) * 5.5)));
   }
 
   .slot-axis b {
@@ -213,7 +213,7 @@
 
   .day-grid-body {
     grid-template-columns: 36px minmax(0, 1fr);
-    grid-template-rows: repeat(11, minmax(48px, calc(var(--schedule-vh, 1vh) * 5.6)));
+    grid-template-rows: repeat(12, minmax(48px, calc(var(--schedule-vh, 1vh) * 5.6)));
     gap: 3px;
   }
 
@@ -234,7 +234,7 @@
   }
 
   .week-grid-body {
-    grid-template-rows: repeat(11, minmax(40px, calc(var(--schedule-vh, 1vh) * 5.2)));
+    grid-template-rows: repeat(12, minmax(40px, calc(var(--schedule-vh, 1vh) * 5.2)));
   }
 
   .slot-axis b {

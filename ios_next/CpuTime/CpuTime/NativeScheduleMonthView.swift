@@ -5,6 +5,7 @@ import SwiftUI
 /// 周视图和日视图都是按节次画网格的课表；月视图不再画网格，而是一张日历：每天一
 /// 格，格子里是公历日、农历/节日和当天课程的彩色圆点，下面跟着所选那天的课程清
 /// 单。教学周信息保留在每行左侧的「周」栏里，这样月历和学期周次仍能对上。
+@available(iOS 17.0, *)
 struct NativeScheduleMonthView: View {
     /// 所显示月份里的任意一天（`yyyy-MM-dd`）。
     let monthAnchor: String
@@ -84,7 +85,7 @@ struct NativeScheduleMonthView: View {
         }
         .padding(.vertical, 10)
         .padding(.horizontal, Self.gridInset)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .background { NativeScheduleBackgroundSurface() }
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
@@ -240,12 +241,13 @@ struct NativeScheduleMonthView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .background { NativeScheduleBackgroundSurface() }
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private func agendaRow(_ block: NativeScheduleCourseBlock) -> some View {
-        Button {
+        let tone = NativeSchedulePalette.tone(name: block.course.name, palette: palette, dark: colorScheme == .dark)
+        return Button {
             onCourseSelected(block, selectedDate)
         } label: {
             HStack(spacing: 10) {
@@ -258,15 +260,20 @@ struct NativeScheduleMonthView: View {
                         .lineLimit(1)
                     Text(metadata(block))
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(tone.text.color.opacity(0.85))
                         .lineLimit(1)
                 }
                 Spacer(minLength: 8)
                 Text(timeRange(block))
                     .font(.caption.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(tone.text.color.opacity(0.85))
                     .multilineTextAlignment(.trailing)
             }
+            .foregroundStyle(tone.text.color)
+            .padding(10)
+            .background(LinearGradient(colors: [tone.top.color, tone.bottom.color], startPoint: .top, endPoint: .bottom))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(tone.border.color, lineWidth: 1) }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -356,45 +363,5 @@ struct NativeScheduleMonthView: View {
                 courses: slot.map { blocks($0.day, $0.week) } ?? []
             )
         }
-    }
-}
-
-enum NativeScheduleThemeColor {
-    static func accent(for name: String, palette: String, scheme: ColorScheme) -> Color {
-        let hash = name.unicodeScalars.reduce(UInt64(0)) { ($0 &* 31) &+ UInt64($1.value) }
-        let base: Double?
-        switch palette {
-        case "green": base = 0.42
-        case "blue": base = 0.58
-        case "teal": base = 0.50
-        case "indigo": base = 0.66
-        case "violet": base = 0.75
-        case "orange": base = 0.08
-        case "rose": base = 0.93
-        case "slate": base = 0.58
-        default: base = nil
-        }
-        let hue = base.map { ($0 + Double(hash % 23) / 360).truncatingRemainder(dividingBy: 1) }
-            ?? Double(hash % 360) / 360
-        let saturation = palette == "slate" ? 0.20 + Double((hash >> 8) % 8) / 100
-            : 0.58 + Double((hash >> 8) % 18) / 100
-        let lightness = scheme == .dark ? 0.72 : 0.25 + Double((hash >> 24) % 8) / 100
-        let accentSaturation = scheme == .dark
-            ? min(0.82, saturation + 0.08)
-            : min(0.76, saturation + 0.04)
-        let chroma = (1 - abs(2 * lightness - 1)) * accentSaturation
-        let scaled = hue * 6
-        let x = chroma * (1 - abs(scaled.truncatingRemainder(dividingBy: 2) - 1))
-        let baseRGB: (Double, Double, Double)
-        switch scaled {
-        case 0..<1: baseRGB = (chroma, x, 0)
-        case 1..<2: baseRGB = (x, chroma, 0)
-        case 2..<3: baseRGB = (0, chroma, x)
-        case 3..<4: baseRGB = (0, x, chroma)
-        case 4..<5: baseRGB = (x, 0, chroma)
-        default: baseRGB = (chroma, 0, x)
-        }
-        let match = lightness - chroma / 2
-        return Color(red: baseRGB.0 + match, green: baseRGB.1 + match, blue: baseRGB.2 + match)
     }
 }

@@ -4,6 +4,7 @@ import ActivityKit
 
 /// Native companion settings are intentionally split by product surface. The
 /// entry page stays short; each destination owns the controls for one thing.
+@available(iOS 17.0, *)
 struct NativeDeviceSettingsView: View {
     @ObservedObject var session: HybridWebViewStore
     @ObservedObject var watchStore: PhoneWatchScheduleStore
@@ -76,7 +77,6 @@ struct NativeDeviceSettingsView: View {
         return "未配对"
     }
 
-    @available(iOS 16.1, *)
     private var liveActivityStatus: String {
         let enabled = UserDefaults(suiteName: NextWidgetConfiguration.appGroup)?
             .object(forKey: NativeLiveActivityController.enabledKey) as? Bool ?? true
@@ -84,6 +84,7 @@ struct NativeDeviceSettingsView: View {
     }
 }
 
+@available(iOS 17.0, *)
 private struct SettingsDestinationRow<Destination: View>: View {
     let title: String
     let detail: String
@@ -112,6 +113,7 @@ private struct SettingsDestinationRow<Destination: View>: View {
     }
 }
 
+@available(iOS 17.0, *)
 private struct NativeWidgetSettingsPage: View {
     @ObservedObject var session: HybridWebViewStore
 
@@ -122,6 +124,7 @@ private struct NativeWidgetSettingsPage: View {
     }
 }
 
+@available(iOS 17.0, *)
 private struct NativeWatchSettingsPage: View {
     @ObservedObject var store: PhoneWatchScheduleStore
 
@@ -132,7 +135,7 @@ private struct NativeWatchSettingsPage: View {
     }
 }
 
-@available(iOS 16.1, *)
+@available(iOS 17.0, *)
 private struct NativeLiveActivitySettingsPage: View {
     var body: some View {
         Form { LiveActivitySettingsSection() }
@@ -141,6 +144,7 @@ private struct NativeLiveActivitySettingsPage: View {
     }
 }
 
+@available(iOS 17.0, *)
 private struct NativeCalendarSettingsPage: View {
     @ObservedObject var store: NativeScheduleStore
 
@@ -151,6 +155,7 @@ private struct NativeCalendarSettingsPage: View {
     }
 }
 
+@available(iOS 17.0, *)
 private struct ScheduleSettingsSection: View {
     @ObservedObject private var preferences = NativeSchedulePreferences.shared
 
@@ -200,6 +205,7 @@ private struct ScheduleSettingsSection: View {
     }
 }
 
+@available(iOS 17.0, *)
 private struct NativeScheduleSettingsView: View {
     @ObservedObject var preferences: NativeSchedulePreferences
     var scheduleStore: NativeScheduleStore? = nil
@@ -335,7 +341,7 @@ private struct NativeScheduleSettingsView: View {
 
 }
 
-@available(iOS 16.1, *)
+@available(iOS 17.0, *)
 private struct LiveActivitySettingsSection: View {
     @ObservedObject private var controller = NativeLiveActivityController.shared
     @State private var enabled: Bool
@@ -446,6 +452,7 @@ private struct LiveActivitySettingsSection: View {
     }
 }
 
+@available(iOS 17.0, *)
 private struct CalendarImportSection: View {
     @ObservedObject var store: NativeScheduleStore
     @State private var importing = false
@@ -554,6 +561,7 @@ private struct CalendarImportSection: View {
 }
 
 @MainActor
+@available(iOS 17.0, *)
 private final class NativeScheduleCalendarImporter {
     fileprivate static let mapPrefix = "scheduleAppleCalendarEventMap.v1."
     fileprivate static let remindersKey = "scheduleAppleCalendarRemindersEnabled"
@@ -758,6 +766,7 @@ private final class NativeScheduleCalendarImporter {
 
 /// Kept as a small compatibility wrapper for any older route that still opens
 /// the widget-only sheet.
+@available(iOS 17.0, *)
 struct NativeWidgetSetupView: View {
     @ObservedObject var session: HybridWebViewStore
     @Environment(\.dismiss) private var dismiss
@@ -779,6 +788,7 @@ struct NativeWidgetSetupView: View {
     }
 }
 
+@available(iOS 17.0, *)
 private struct WidgetSettingsSection: View {
     @ObservedObject var session: HybridWebViewStore
     @State private var theme: String

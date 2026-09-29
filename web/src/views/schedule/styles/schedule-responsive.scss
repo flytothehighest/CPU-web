@@ -111,7 +111,7 @@
 
   .day-grid-body {
     grid-template-columns: 42px minmax(0, 1fr);
-    grid-template-rows: repeat(11, minmax(52px, calc(var(--schedule-vh, 1vh) * 6)));
+    grid-template-rows: repeat(12, minmax(52px, calc(var(--schedule-vh, 1vh) * 6)));
     gap: 4px;
   }
 
@@ -162,7 +162,7 @@
   }
 
   .week-grid-body {
-    grid-template-rows: repeat(11, minmax(44px, 1fr));
+    grid-template-rows: repeat(12, minmax(44px, 1fr));
   }
 
   .slot-axis b {
@@ -245,7 +245,7 @@
   }
   .day-grid-body {
     grid-template-columns: 36px minmax(0, 1fr);
-    grid-template-rows: repeat(11, minmax(48px, calc(var(--schedule-vh, 1vh) * 5.6)));
+    grid-template-rows: repeat(12, minmax(48px, calc(var(--schedule-vh, 1vh) * 5.6)));
     gap: 3px;
   }
   .day-course-block {
@@ -261,7 +261,7 @@
     font-size: 10px;
   }
   .week-grid-body {
-    grid-template-rows: repeat(11, minmax(40px, 1fr));
+    grid-template-rows: repeat(12, minmax(40px, 1fr));
   }
   .slot-axis b {
     font-size: 11px;

@@ -11,6 +11,7 @@ import WidgetKit
 /// is a random UUID kept in UserDefaults, not the IDFA or IDFV, and failures
 /// are silent: statistics must never affect the app.
 @MainActor
+@available(iOS 17.0, *)
 final class IosClientHeartbeat {
     static let shared = IosClientHeartbeat()
 

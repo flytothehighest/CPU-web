@@ -3,6 +3,7 @@ import Foundation
 import SwiftUI
 
 @MainActor
+@available(iOS 17.0, *)
 final class NativeShellCoordinator: ObservableObject {
     @Published private(set) var selectedTab: ShellTab = .schedule
     /// False until the launch session probe has decided where to start. The

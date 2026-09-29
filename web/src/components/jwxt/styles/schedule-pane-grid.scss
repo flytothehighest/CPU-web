@@ -153,7 +153,7 @@
 .day-grid-body {
   display: grid;
   grid-template-columns: 50px minmax(0, 1fr);
-  grid-template-rows: repeat(11, minmax(58px, calc(var(--schedule-vh, 1vh) * 6.2)));
+  grid-template-rows: repeat(12, minmax(58px, calc(var(--schedule-vh, 1vh) * 6.2)));
   gap: 5px;
   position: relative;
 }
@@ -295,7 +295,7 @@
 
 .week-grid-body {
   position: relative;
-  grid-template-rows: repeat(11, minmax(48px, calc(var(--schedule-vh, 1vh) * 5.8)));
+  grid-template-rows: repeat(12, minmax(48px, calc(var(--schedule-vh, 1vh) * 5.8)));
   align-items: stretch;
 }
 

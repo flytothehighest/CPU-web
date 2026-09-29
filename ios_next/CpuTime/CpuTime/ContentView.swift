@@ -14,7 +14,11 @@ struct CpuTimeApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            if #available(iOS 17.0, *) {
+                ContentView()
+            } else {
+                LegacyWebView()
+            }
         }
     }
 }
@@ -35,6 +39,7 @@ final class CpuTimeAppDelegate: NSObject, UIApplicationDelegate {
     }
 }
 
+@available(iOS 17.0, *)
 struct ContentView: View {
     @StateObject private var webSession = HybridWebViewStore()
     @StateObject private var scheduleStore: NativeScheduleStore
@@ -248,7 +253,7 @@ private enum NativeScheduleDebugFixture {
             semesterEnd: days[6],
             weeks: [NativeCalendarWeek(week: 1, days: days, monday: days[0], sunday: days[6])]
         )
-        let cells = [
+        var cells = [
             NativeScheduleCell(day: todayColumn, bigSlot: 1, courses: [
                 NativeScheduleCourse(
                     nativeId: "source:debug-english",
@@ -289,6 +294,26 @@ private enum NativeScheduleDebugFixture {
                 ),
             ]),
         ]
+        if ProcessInfo.processInfo.environment["CPU_DEBUG_VISUAL_SCHEDULE"] == "1" {
+            let names = ["高等数学", "大学英语", "有机化学", "药理学", "人体解剖生理学", "药物分析", "生物化学", "大学物理", "思想道德与法治", "体育", "药剂学", "中药学", "微生物学与免疫学", "分析化学", "药理学实验与实践", "高等数学", "大学英语", "药事管理学"]
+            cells = names.enumerated().map { index, name in
+                let day = index % 6 + 1
+                let start = index == 16 ? 12 : (index == 17 ? 11 : (index / 6) * 4 + 1)
+                return NativeScheduleCell(day: day, bigSlot: (start + 1) / 2, courses: [
+                    NativeScheduleCourse(
+                        nativeId: "source:visual-\(index)",
+                        name: name,
+                        teacher: "\(["李", "王", "张"][index % 3])老师",
+                        weeks: "第 1 周",
+                        weekList: [1],
+                        location: "教学楼 \(201 + index)",
+                        startSlot: start,
+                        endSlot: start + ([14, 16].contains(index) ? 0 : 1),
+                        sourceKey: "visual|\(index)|\(name)"
+                    ),
+                ])
+            }
+        }
         let result = NativeScheduleResult(
             source: .jwxt,
             semesters: semesters,
@@ -312,6 +337,7 @@ private enum NativeScheduleDebugFixture {
 
 /// A one-time first-run surface that gives the user a clear entry point before
 /// the shared web session decides whether login is required.
+@available(iOS 17.0, *)
 private struct WelcomeView: View {
     let onContinue: () -> Void
     @State private var appeared = false
@@ -375,6 +401,7 @@ private struct WelcomeView: View {
 }
 
 /// Shown for the instant between the first frame and the session decision.
+@available(iOS 17.0, *)
 private struct LaunchWaitingView: View {
     @State private var appeared = false
 
@@ -434,6 +461,7 @@ private enum NativeLoginFieldKind: Hashable {
 /// A native login surface with no escape route. A one-pixel WebView remains
 /// mounted behind it so the existing Web auth store can perform the SSO
 /// handshake and set the shared HttpOnly session cookie.
+@available(iOS 17.0, *)
 private struct LoginGateView: View {
     @ObservedObject var webSession: HybridWebViewStore
 
@@ -724,6 +752,7 @@ private struct LoginGateView: View {
     }
 }
 
+@available(iOS 17.0, *)
 private struct NativeLoginField: View {
     let systemImage: String
     let placeholder: String
@@ -766,6 +795,7 @@ private struct NativeLoginField: View {
     }
 }
 
+@available(iOS 17.0, *)
 private struct NativeCaptchaImage: View {
     let source: String
 
@@ -809,6 +839,7 @@ private struct NativeCaptchaImage: View {
 }
 
 
+@available(iOS 17.0, *)
 struct NativeShellView: View {
     @ObservedObject var webSession: HybridWebViewStore
     @ObservedObject var scheduleStore: NativeScheduleStore
@@ -977,6 +1008,7 @@ private enum NativeShellOverlay: String, Identifiable {
     var id: String { rawValue }
 }
 
+@available(iOS 17.0, *)
 private struct NativeQuickEntryView: View {
     @ObservedObject var session: HybridWebViewStore
     let onOpen: (String?, ShellTab?) -> Void
@@ -1086,6 +1118,7 @@ private struct NativeQuickEntryHeightKey: PreferenceKey {
     }
 }
 
+@available(iOS 17.0, *)
 private struct NativeTopBar: View {
     @ObservedObject var session: HybridWebViewStore
     let onHome: () -> Void
@@ -1177,6 +1210,7 @@ private struct NativeTopBar: View {
     }
 }
 
+@available(iOS 17.0, *)
 private struct WebTabScreen: View {
     @ObservedObject var session: HybridWebViewStore
     let tab: ShellTab
@@ -1237,6 +1271,7 @@ private struct WebTabScreen: View {
     }
 }
 
+@available(iOS 17.0, *)
 private struct NativeServiceUnavailableView: View {
     let title: String
     let message: String
@@ -1266,5 +1301,7 @@ private struct NativeServiceUnavailableView: View {
 }
 
 #Preview {
-    ContentView()
+    if #available(iOS 17.0, *) {
+        ContentView()
+    }
 }

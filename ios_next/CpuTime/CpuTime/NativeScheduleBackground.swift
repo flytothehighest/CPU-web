@@ -14,6 +14,7 @@ extension EnvironmentValues {
 
 /// The page and the editor share this renderer. The photo uses Web's centered
 /// `cover` layout with one overlay, rather than multiplying two opacities.
+@available(iOS 17.0, *)
 struct NativeScheduleBackground: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -24,7 +25,13 @@ struct NativeScheduleBackground: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack {
-                Color(uiColor: .systemGroupedBackground)
+                LinearGradient(
+                    colors: colorScheme == .dark
+                        ? [NativeSchedulePalette.RGBA(0x101c19).color, NativeSchedulePalette.RGBA(0x0e1820).color]
+                        : [NativeSchedulePalette.RGBA(0xedf4ff).color, NativeSchedulePalette.RGBA(0xf7fbff).color,
+                           NativeSchedulePalette.RGBA(0xf8fafc).color],
+                    startPoint: .top, endPoint: .bottom
+                )
                 if let image {
                     let radius = NativeSchedulePreferences.normalizedBlur(blur)
                     // Overscan prevents blurred edges from revealing an empty
@@ -61,6 +68,7 @@ struct NativeScheduleBackground: View {
 }
 
 /// Match Web's translucent empty cells and readable header/axis surfaces.
+@available(iOS 17.0, *)
 struct NativeScheduleBackgroundSurface: View {
     enum Strength { case cell, soft }
     @Environment(\.colorScheme) private var colorScheme
@@ -69,17 +77,19 @@ struct NativeScheduleBackgroundSurface: View {
     var strength: Strength = .soft
 
     var body: some View {
-        if hasBackground && !reduceTransparency {
-            (colorScheme == .dark
-                ? Color(red: 26 / 255, green: 41 / 255, blue: 37 / 255)
-                : .white)
-                .opacity(strength == .cell ? (colorScheme == .dark ? 0.52 : 0.36) : 0.72)
+        if reduceTransparency {
+            NativeSchedulePalette.RGBA(colorScheme == .dark ? 0x20312c : 0xf8fafc).color
         } else {
-            Color(uiColor: .secondarySystemGroupedBackground)
+            NativeSchedulePalette.RGBA(
+                colorScheme == .dark ? (strength == .cell ? 0x1e302b : 0x263a34) : 0xffffff,
+                alpha: strength == .cell ? (colorScheme == .dark ? 0.52 : 0.36)
+                    : (hasBackground ? 0.72 : (colorScheme == .dark ? 0.68 : 0.56))
+            ).color
         }
     }
 }
 
+@available(iOS 17.0, *)
 struct NativeScheduleBackgroundEditor: View {
     @ObservedObject var preferences: NativeSchedulePreferences
     var scheduleStore: NativeScheduleStore? = nil

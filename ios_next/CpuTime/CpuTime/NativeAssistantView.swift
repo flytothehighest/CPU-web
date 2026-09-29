@@ -3,6 +3,7 @@ import UIKit
 import Combine
 
 @MainActor
+@available(iOS 17.0, *)
 final class NativeAssistantModel: ObservableObject {
     @Published var input = ""
     @Published var messages: [NativeAssistantMessage] = []
@@ -388,6 +389,7 @@ final class NativeAssistantModel: ObservableObject {
 /// Native conversation surface for the iOS shell. The Web session remains the
 /// transport owner, while SwiftUI owns the keyboard, composer and scroll
 /// geometry so the page above never gets pushed out of view.
+@available(iOS 17.0, *)
 struct NativeAssistantView: View {
     @ObservedObject var session: HybridWebViewStore
     @ObservedObject private var assistant: NativeAssistantModel
@@ -842,6 +844,7 @@ struct NativeAssistantView: View {
 
 /// Size from SwiftUI's proposed width, without publishing measurements back
 /// into layout. This avoids a UIKit/SwiftUI layout feedback loop while typing.
+@available(iOS 17.0, *)
 private struct NativeAssistantTextEditor: UIViewRepresentable {
     @Binding var text: String
     @Binding var isFocused: Bool

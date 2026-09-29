@@ -376,6 +376,7 @@ import {
   type ScheduleEditState,
 } from "@/utils/scheduleEdits";
 import { courseMatchesWeek, normalizedCourseWeekList } from "@/utils/scheduleWeeks";
+import { smallSlots, MAX_SMALL_SLOT } from "@/views/schedule/slots";
 import { isOriginalCourseEditUnchanged } from "@/views/schedule/courseEditor";
 import {
   claimOfficialScheduleChangeNotice,
@@ -476,20 +477,6 @@ const isNativeScheduleApp = ["android", "harmony", "ios"].includes(detectClientP
 let scheduleEditsSaveTimer = 0;
 let scheduleEditsLoadPromise: Promise<void> | null = null;
 let pendingScheduleEditsSave: { semester: string; edits: ScheduleEditState } | null = null;
-const smallSlots = [
-  { no: 1, start: "08:00", end: "08:45" },
-  { no: 2, start: "08:55", end: "09:40" },
-  { no: 3, start: "09:55", end: "10:40" },
-  { no: 4, start: "10:50", end: "11:35" },
-  { no: 5, start: "13:30", end: "14:15" },
-  { no: 6, start: "14:25", end: "15:10" },
-  { no: 7, start: "15:25", end: "16:10" },
-  { no: 8, start: "16:20", end: "17:05" },
-  { no: 9, start: "18:30", end: "19:15" },
-  { no: 10, start: "19:25", end: "20:10" },
-  { no: 11, start: "20:20", end: "21:05" },
-];
-const MAX_SMALL_SLOT = smallSlots[smallSlots.length - 1]?.no ?? 10;
 const isGraduateSource = computed(() => props.source === "graduate");
 const editDialogOpen = ref(false);
 const customCourseForm = reactive({

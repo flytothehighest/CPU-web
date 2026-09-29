@@ -11,12 +11,12 @@ struct NativeScheduleStoreChecks {
         precondition(decoded.data?.currentWeek == "3")
         precondition(decoded.calendar?.currentWeek == 3)
         precondition(abs(decoded.fetchedAt!.timeIntervalSince1970 - 1_788_739_200) < 1)
-        precondition(decoded.periods.count == 11,
+        precondition(decoded.periods.count == 12,
                      "An older deployed bridge without periods must receive the bundled timetable")
         precondition(decoded.periods.first?.number == 1
                      && decoded.periods.first?.startTime == "08:00"
-                     && decoded.periods.last?.number == 11
-                     && decoded.periods.last?.endTime == "21:05",
+                     && decoded.periods.last?.number == 12
+                     && decoded.periods.last?.endTime == "22:00",
                      "The bundled period table must match the existing web schedule")
         let finalSlot = NativeSchedulePeriod.normalizedRange(
             bigSlot: 6,
@@ -24,8 +24,14 @@ struct NativeScheduleStoreChecks {
             endSlot: 12,
             periods: decoded.periods
         )
-        precondition(finalSlot.start == 11 && finalSlot.end == 11,
-                     "An older bridge's twelfth slot must clamp to the last real period")
+        precondition(finalSlot.start == 12 && finalSlot.end == 12,
+                     "The twelfth slot must not be truncated to the eleventh")
+
+        let eveningRange = NativeSchedulePeriod.normalizedRange(
+            bigSlot: 6, startSlot: nil, endSlot: nil, periods: decoded.periods
+        )
+        precondition(eveningRange.start == 11 && eveningRange.end == 12,
+                     "The sixth big slot spans periods eleven and twelve")
 
         let legacyWeeks = #"{"version":1,"source":"jwxt","auth":{"authenticated":true},"data":{"currentSemester":"fall","weeks":[{"value":"1","label":"第 1 周"},{"value":"2","label":"第 2 周"}],"currentWeek":"","cells":[]},"calendar":{"currentWeek":0,"weeks":[{"week":1},{"week":2}]}}"#
         let legacyDecoded = try JSONDecoder().decode(NativeScheduleSnapshot.self, from: Data(legacyWeeks.utf8))
@@ -216,6 +222,17 @@ struct NativeScheduleStoreChecks {
         precondition(!store.restoreCachedSelection(), "Account changes must invalidate cache")
         precondition(store.result == nil && store.calendar == nil && store.state == .idle)
         precondition(watchResets == 1, "Account changes must clear the independently persisted Watch cache")
+
+        let timedCourses = ["20:20", "21:15"].enumerated().map { index, time in
+            NativeScheduleCourseBlockRecord(
+                id: "timed-\(index)",
+                course: NativeScheduleCourse(nativeId: "source:timed-\(index)",
+                    customStartTime: time, customEndTime: "22:00", name: "晚间实验",
+                    weeks: "1周", weekList: [1], startSlot: 11, endSlot: 12),
+                bigSlot: 6, startSlot: 11, endSlot: 12)
+        }
+        precondition(NativeScheduleCourseBlockMerger.merge(timedCourses).count == 2,
+                     "Different custom clock times must remain independent events")
 
         var semesterCalls = 0
         let semesterStore = NativeScheduleStore(loader: { _ in

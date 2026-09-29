@@ -112,6 +112,7 @@ final class PhoneWatchScheduleStore: ObservableObject {
     }
 }
 
+@available(iOS 17.0, *)
 struct WatchSyncStatusView: View {
     @ObservedObject var store: PhoneWatchScheduleStore
     @Environment(\.dismiss) private var dismiss
@@ -133,6 +134,7 @@ struct WatchSyncStatusView: View {
 
 }
 
+@available(iOS 17.0, *)
 struct WatchSyncStatusSection: View {
     @ObservedObject var store: PhoneWatchScheduleStore
 

@@ -5,7 +5,9 @@ import UIKit
 /// The native timetable surface. Data loading and authentication stay in
 /// NativeScheduleStore so the SwiftUI surface can also be embedded beside the
 /// existing web routes.
+@available(iOS 17.0, *)
 struct NativeScheduleView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @ObservedObject private var store: NativeScheduleStore
     @ObservedObject private var preferences = NativeSchedulePreferences.shared
     private let onDeviceSettings: () -> Void
@@ -1008,7 +1010,7 @@ struct NativeScheduleView: View {
             if showsHeader {
                 Text("节次")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(NativeScheduleThemeColor.secondary(colorScheme))
                     .frame(width: Self.slotAxisWidth, height: NativeScheduleDayColumn.dateHeaderHeight)
             }
 
@@ -1016,20 +1018,17 @@ struct NativeScheduleView: View {
                 ForEach(ScheduleSlot.all, id: \.number) { slot in
                     VStack(spacing: 2) {
                         Text("\(slot.number)")
-                            .font(.caption.weight(.bold).monospacedDigit())
+                            .font(.system(size: 13, weight: .bold).monospacedDigit())
+                            .foregroundStyle(NativeScheduleThemeColor.primary(colorScheme))
                         Text(slot.start)
                             .font(.system(size: 9).monospacedDigit())
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(NativeScheduleThemeColor.secondary(colorScheme))
                         Text(slot.end)
                             .font(.system(size: 9).monospacedDigit())
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(NativeScheduleThemeColor.secondary(colorScheme))
                     }
                     .frame(width: Self.slotAxisWidth, height: rowHeight)
-                    .overlay(alignment: .trailing) {
-                        Rectangle()
-                            .fill(Color(uiColor: .separator).opacity(0.5))
-                            .frame(width: 0.5)
-                    }
+
                 }
             }
         }
@@ -1852,21 +1851,13 @@ struct ScheduleSlot {
     let start: String
     let end: String
 
-    static let all: [ScheduleSlot] = [
-        ScheduleSlot(number: 1, start: "08:00", end: "08:45"),
-        ScheduleSlot(number: 2, start: "08:55", end: "09:40"),
-        ScheduleSlot(number: 3, start: "09:55", end: "10:40"),
-        ScheduleSlot(number: 4, start: "10:50", end: "11:35"),
-        ScheduleSlot(number: 5, start: "13:30", end: "14:15"),
-        ScheduleSlot(number: 6, start: "14:25", end: "15:10"),
-        ScheduleSlot(number: 7, start: "15:25", end: "16:10"),
-        ScheduleSlot(number: 8, start: "16:20", end: "17:05"),
-        ScheduleSlot(number: 9, start: "18:30", end: "19:15"),
-        ScheduleSlot(number: 10, start: "19:25", end: "20:10"),
-        ScheduleSlot(number: 11, start: "20:20", end: "21:05")
-    ]
+    static let all = NativeSchedulePeriod.bundledTimetable.map {
+        ScheduleSlot(number: $0.number, start: $0.startTime, end: $0.endTime)
+    }
+
 }
 
+@available(iOS 17.0, *)
 private struct NativeAdjustmentBadge: View {
     let kind: String
 
@@ -1883,8 +1874,9 @@ private struct NativeAdjustmentBadge: View {
     }
 }
 
+@available(iOS 17.0, *)
 private struct NativeScheduleDayColumn: View {
-    @Environment(\.scheduleHasBackground) private var hasBackground
+    @Environment(\.colorScheme) private var colorScheme
     // Web's compact mobile grid uses 44px rows. Keeping that rhythm here
     // gives the week view enough breathing room while all eleven rows still
     // fit above the native tab bar.
@@ -1896,7 +1888,7 @@ private struct NativeScheduleDayColumn: View {
     // The Web grid uses a 3px row gap on mobile. Keep the native cells on the
     // same rhythm so empty rows do not look stretched apart.
     static let slotGap: CGFloat = 3
-    static let dateHeaderHeight: CGFloat = 46
+    static let dateHeaderHeight: CGFloat = 54
 
     let day: Int
     let dateText: String?
@@ -1971,45 +1963,32 @@ private struct NativeScheduleDayColumn: View {
     var body: some View {
         VStack(spacing: 0) {
             if showsDateHeader {
-                VStack(spacing: 2) {
-                    Text(dayLabel)
-                        .font(.caption.weight(.semibold))
+                VStack(spacing: 3) {
+                    Text(dayLabel).font(.system(size: 13, weight: .bold))
                     HStack(spacing: 1) {
                         Text(dateText ?? "--")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.6)
-                        if let adjustment {
-                            NativeAdjustmentBadge(kind: adjustment.kind)
-                        }
+                            .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                            .lineLimit(1).minimumScaleFactor(0.6)
+                        if let adjustment { NativeAdjustmentBadge(kind: adjustment.kind) }
                     }
-                    // The badge is fixed-size, so cap the row to the header's
-                    // inner box and let the date shrink instead of spilling out.
-                    .frame(maxWidth: max(0, columnWidth - 8))
+                    .frame(maxWidth: max(0, columnWidth - 6))
                 }
-                .frame(width: columnWidth, height: Self.dateHeaderHeight)
+                .foregroundStyle(isToday
+                    ? (colorScheme == .dark ? NativeSchedulePalette.RGBA(0x9fd9cf).color : Color.cpuBrand)
+                    : NativeScheduleThemeColor.secondary(colorScheme))
+                .frame(width: columnWidth, height: Self.dateHeaderHeight - 8)
+                .background {
+                    let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    NativeScheduleBackgroundSurface()
+                        .overlay {
+                            if isToday { Color.cpuBrand.opacity(colorScheme == .dark ? 0.18 : 0.10) }
+                        }
+                        .clipShape(shape)
+                        .overlay { shape.strokeBorder(isToday ? Color.cpuBrand : NativeScheduleThemeColor.cellBorder(colorScheme), lineWidth: 1) }
+                }
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("\(dayLabel) \(dateText ?? "")\(adjustment.map { $0.kind == "off" ? "，休息" : "，补班" } ?? "")")
-                .background {
-                    if isToday {
-                        ScheduleGlassBackground(
-                            cornerRadius: 12,
-                            colors: [
-                                Color(hue: 0.43, saturation: 0.22, brightness: 0.92).opacity(0.12),
-                                Color(hue: 0.59, saturation: 0.20, brightness: 0.96).opacity(0.10),
-                                Color(hue: 0.89, saturation: 0.18, brightness: 0.96).opacity(0.12),
-                            ],
-                            border: Color.cpuBrand.opacity(0.22)
-                        )
-                            .padding(.horizontal, 2)
-                            .padding(.vertical, 3)
-                    } else if hasBackground {
-                        NativeScheduleBackgroundSurface()
-                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                            .padding(.vertical, 3)
-                    }
-                }
+                .padding(.bottom, 8)
             }
 
             ZStack(alignment: .topLeading) {
@@ -2125,7 +2104,10 @@ private struct NativeScheduleDayColumn: View {
                     if laneOccupied {
                         Color.clear
                     } else {
-                        ScheduleGlassBackground(cornerRadius: 8)
+                        ScheduleGlassBackground(
+                            cornerRadius: showsDateHeader ? 8 : 12,
+                            colors: isToday ? [Color.cpuBrand.opacity(colorScheme == .dark ? 0.08 : 0.045)] : [.clear]
+                        )
                     }
                 }
                     .frame(width: max(12, columnWidth / CGFloat(rowLaneCount) - 2), height: rowHeight - 2)
@@ -2144,6 +2126,7 @@ private struct NativeScheduleDayColumn: View {
 
 /// Native Liquid Glass is confined to controls. Course grids retain lightweight
 /// gradients so scrolling does not create dozens of live blur surfaces.
+@available(iOS 17.0, *)
 private struct ScheduleGlassControl: ViewModifier {
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -2198,18 +2181,17 @@ private struct ScheduleGlassControl: ViewModifier {
     }
 }
 
+@available(iOS 17.0, *)
 private struct ScheduleGlassBackground: View {
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.scheduleHasBackground) private var hasBackground
     let cornerRadius: CGFloat
     var colors: [Color] = [.clear, .clear]
-    var border: Color = Color(uiColor: .separator).opacity(0.12)
+    var border: Color? = nil
     var lineWidth: CGFloat = 0.7
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         NativeScheduleBackgroundSurface(strength: .cell)
-            .opacity(hasBackground ? 1 : 0.86)
             .clipShape(shape)
             .overlay {
                 shape.fill(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing))
@@ -2225,11 +2207,12 @@ private struct ScheduleGlassBackground: View {
                     endPoint: .bottomTrailing
                 ))
             }
-            .overlay { shape.strokeBorder(border, lineWidth: lineWidth) }
+            .overlay { shape.strokeBorder(border ?? NativeScheduleThemeColor.cellBorder(colorScheme), lineWidth: lineWidth) }
             .allowsHitTesting(false)
     }
 }
 
+@available(iOS 17.0, *)
 private struct NativeScheduleCourseCard: View {
     @Environment(\.colorScheme) private var colorScheme
     let course: NativeScheduleCourse
@@ -2260,21 +2243,21 @@ private struct NativeScheduleCourseCard: View {
                 return values.isEmpty ? nil : values.joined(separator: " · ")
             }()
 
-            VStack(spacing: compact ? 3 : (shortCard ? 2 : 5)) {
+            VStack(alignment: compact ? .center : .leading, spacing: compact ? 2 : (shortCard ? 3 : 7)) {
                 Text(course.name)
-                    .font(.system(size: compact || shortCard ? 11 : 14, weight: .semibold))
-                    .lineLimit(shortCard ? 1 : (compact ? 3 : 2))
+                    .font(.system(size: compact ? 10 : (shortCard ? 14 : 18), weight: .bold))
+                    .lineLimit(shortCard ? 2 : (compact ? 4 : 3))
                     .minimumScaleFactor(0.85)
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: .infinity, alignment: compact ? .center : .leading)
                     .layoutPriority(1)
 
                 if let metadata {
                     Text(metadata)
-                        .font(.system(size: compact || shortCard ? 9 : 12, weight: .medium))
+                        .font(.system(size: compact ? 9 : 13, weight: .semibold))
                         .lineLimit(shortCard ? 1 : 2)
                         .minimumScaleFactor(0.85)
-                        .frame(maxWidth: .infinity)
-                        .layoutPriority(2)
+                        .frame(maxWidth: .infinity, alignment: compact ? .center : .leading)
+                        .layoutPriority(0)
                 }
 
                 if !compact, !shortCard, let note {
@@ -2282,142 +2265,34 @@ private struct NativeScheduleCourseCard: View {
                         .font(.system(size: 11, weight: .regular))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
-                        .frame(maxWidth: .infinity)
+                        .frame(maxWidth: .infinity, alignment: compact ? .center : .leading)
                         .opacity(0.86)
                 }
             }
-            .multilineTextAlignment(.center)
-            .foregroundStyle(accent)
-            .padding(.horizontal, compact ? 3 : 10)
+            .multilineTextAlignment(compact ? .center : .leading)
+            .foregroundStyle(tone.text.color)
+            .padding(.horizontal, compact ? 3 : 14)
             .padding(.vertical, shortCard ? 4 : 7)
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .center)
         }
         .background {
-            let shape = RoundedRectangle(cornerRadius: 9, style: .continuous)
-            ZStack {
-                // Match Web's color-glass tone: a colored surface with a
-                // slightly darker lower stop, instead of a gray material
-                // layer that washes the course color out.
-                shape.fill(
-                    LinearGradient(
-                        colors: [
-                            courseBackground.opacity(colorScheme == .dark ? 0.94 : 0.88),
-                            courseBackgroundHighlight.opacity(colorScheme == .dark ? 0.94 : 0.88),
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                // Web's inset highlight is subtle but gives every card a
-                // glass edge when several cards sit next to one another.
-                shape.fill(
-                    LinearGradient(
-                        stops: [
-                            .init(color: .white.opacity(colorScheme == .dark ? 0.18 : 0.40), location: 0),
-                            .init(color: .white.opacity(0.05), location: 0.34),
-                            .init(color: .clear, location: 0.72),
-                            .init(color: .black.opacity(colorScheme == .dark ? 0.10 : 0.025), location: 1),
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                shape.strokeBorder(courseBorder, lineWidth: 1)
-            }
-            .allowsHitTesting(false)
+            let shape = RoundedRectangle(cornerRadius: compact ? 9 : 16, style: .continuous)
+            shape.fill(LinearGradient(colors: [tone.top.color, tone.bottom.color],
+                                      startPoint: .top, endPoint: .bottom))
+                .overlay(alignment: .top) {
+                    shape.strokeBorder(.white.opacity(colorScheme == .dark ? 0.20 : 0.32), lineWidth: 0.5)
+                }
+                .overlay { shape.strokeBorder(tone.border.color, lineWidth: 1.5) }
+                .allowsHitTesting(false)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-        .shadow(
-            color: colorScheme == .dark ? Color.black.opacity(0.24) : Color(red: 44 / 255, green: 62 / 255, blue: 94 / 255).opacity(0.08),
-            radius: colorScheme == .dark ? 8 : 5,
-            y: colorScheme == .dark ? 3 : 2
-        )
+        .clipShape(RoundedRectangle(cornerRadius: compact ? 9 : 16, style: .continuous))
+        .shadow(color: .black.opacity(colorScheme == .dark ? 0.22 : 0.06),
+                radius: compact ? 4 : 8, y: compact ? 2 : 4)
         .accessibilityElement(children: .combine)
     }
 
-    private var accent: Color {
-        if colorScheme == .dark {
-            return hslColor(hue: hue, saturation: min(0.82, saturation + 0.08), lightness: 0.72)
-        }
-        return hslColor(hue: hue, saturation: min(0.76, saturation + 0.04), lightness: textLightness)
-    }
-
-    private var courseBorder: Color {
-        if colorScheme == .dark {
-            return hslColor(hue: hue, saturation: min(0.86, saturation + 0.08), lightness: 0.72).opacity(0.72)
-        }
-        let hash = course.name.unicodeScalars.reduce(UInt64(0)) { ($0 &* 31) &+ UInt64($1.value) }
-        let lightness = 0.48 + Double((hash >> 20) % 10) / 100
-        return hslColor(hue: hue, saturation: min(0.82, saturation + 0.08), lightness: lightness).opacity(0.48)
-    }
-
-    private var hue: Double {
-        let hash = course.name.unicodeScalars.reduce(UInt64(0)) { ($0 &* 31) &+ UInt64($1.value) }
-        if let base = paletteHue {
-            return (base + Double(hash % 23) / 360).truncatingRemainder(dividingBy: 1)
-        }
-        return Double(hash % 360) / 360
-    }
-
-    private var paletteHue: Double? {
-        switch palette {
-        case "green": return 0.42
-        case "blue": return 0.58
-        case "teal": return 0.50
-        case "indigo": return 0.66
-        case "violet": return 0.75
-        case "orange": return 0.08
-        case "rose": return 0.93
-        case "slate": return 0.58
-        default: return nil
-        }
-    }
-
-    private var saturation: Double {
-        let hash = course.name.unicodeScalars.reduce(UInt64(0)) { ($0 &* 31) &+ UInt64($1.value) }
-        if palette == "slate" { return 0.20 + Double((hash >> 8) % 8) / 100 }
-        return 0.58 + Double((hash >> 8) % 18) / 100
-    }
-
-    private var backgroundLightness: Double {
-        let hash = course.name.unicodeScalars.reduce(UInt64(0)) { ($0 &* 31) &+ UInt64($1.value) }
-        return 0.89 + Double((hash >> 16) % 5) / 100
-    }
-
-    private var textLightness: Double {
-        let hash = course.name.unicodeScalars.reduce(UInt64(0)) { ($0 &* 31) &+ UInt64($1.value) }
-        return 0.25 + Double((hash >> 24) % 8) / 100
-    }
-
-    private var courseBackground: Color {
-        if colorScheme == .dark {
-            return hslColor(hue: hue, saturation: min(0.82, saturation + 0.04), lightness: 0.34)
-        }
-        return hslColor(hue: hue, saturation: saturation, lightness: backgroundLightness)
-    }
-
-    private var courseBackgroundHighlight: Color {
-        if colorScheme == .dark {
-            return hslColor(hue: hue, saturation: min(0.82, saturation + 0.04), lightness: 0.24)
-        }
-        return hslColor(hue: hue, saturation: saturation, lightness: max(0.84, backgroundLightness - 0.04))
-    }
-
-    private func hslColor(hue: Double, saturation: Double, lightness: Double) -> Color {
-        let chroma = (1 - abs(2 * lightness - 1)) * saturation
-        let scaled = hue * 6
-        let x = chroma * (1 - abs(scaled.truncatingRemainder(dividingBy: 2) - 1))
-        let base: (Double, Double, Double)
-        switch scaled {
-        case 0..<1: base = (chroma, x, 0)
-        case 1..<2: base = (x, chroma, 0)
-        case 2..<3: base = (0, chroma, x)
-        case 3..<4: base = (0, x, chroma)
-        case 4..<5: base = (x, 0, chroma)
-        default: base = (chroma, 0, x)
-        }
-        let match = lightness - chroma / 2
-        return Color(red: base.0 + match, green: base.1 + match, blue: base.2 + match)
+    private var tone: NativeSchedulePalette.Tone {
+        NativeSchedulePalette.tone(name: course.name, palette: palette, dark: colorScheme == .dark)
     }
 
     private func clean(_ value: String?) -> String? {
@@ -2428,6 +2303,7 @@ private struct NativeScheduleCourseCard: View {
     }
 }
 
+@available(iOS 17.0, *)
 private struct NativeCourseEditorSheet: View {
     let selection: SelectedCourse?
     @ObservedObject var store: NativeScheduleStore
@@ -2546,8 +2422,8 @@ private struct NativeCourseEditorSheet: View {
                             .labelsHidden()
                             .pickerStyle(.menu)
                         }
-                        editorStepperRow("开始第 \(startSlot) 节", value: $startSlot, range: 1...11)
-                        editorStepperRow("结束第 \(endSlot) 节", value: $endSlot, range: startSlot...11)
+                        editorStepperRow("开始第 \(startSlot) 节", value: $startSlot, range: 1...ScheduleSlot.all.count)
+                        editorStepperRow("结束第 \(endSlot) 节", value: $endSlot, range: startSlot...ScheduleSlot.all.count)
                     }
 
                     if !hiddenCourses.isEmpty {
@@ -2686,8 +2562,8 @@ private struct NativeCourseEditorSheet: View {
     private func saveCourse(keepAsCustom: Bool = false) {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { errorMessage = "请填写课程名称"; return }
-        let start = min(max(startSlot, 1), 11)
-        let end = min(max(endSlot, start), 11)
+        let start = min(max(startSlot, 1), ScheduleSlot.all.count)
+        let end = min(max(endSlot, start), ScheduleSlot.all.count)
         let weekList: [Int]
         if weekMode == "all" {
             weekList = []
@@ -2886,6 +2762,7 @@ private struct NativeCourseEditorSheet: View {
     }
 }
 
+@available(iOS 17.0, *)
 private struct NativeScheduleChangeNoticeSheet: View {
     let notice: NativeScheduleChangeNotice
     let onDismiss: () -> Void
@@ -2948,6 +2825,7 @@ private struct NativeScheduleChangeNoticeSheet: View {
     }
 }
 
+@available(iOS 17.0, *)
 private struct CourseDetailSheet: View {
     let course: NativeScheduleCourse
     let day: Int
@@ -3009,6 +2887,7 @@ private struct CourseDetailSheet: View {
     }
 }
 
+@available(iOS 17.0, *)
 private struct StateCard: View {
     let systemImage: String
     let title: String

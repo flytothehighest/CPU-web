@@ -80,6 +80,7 @@ struct WidgetDisplayOptions: Codable, Equatable {
 }
 
 @MainActor
+@available(iOS 17.0, *)
 final class NativeWidgetSettings: ObservableObject {
     /// App 已经给小组件写过本地课表。小组件不再请求服务端，有这份文件就能显示。
     var isConfigured: Bool {

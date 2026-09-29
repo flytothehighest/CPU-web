@@ -178,7 +178,7 @@ final class ScheduleSyncCoordinator {
                     if self.refreshing {
                         self.refreshTimeout?.cancel()
                         self.refreshTimeout = Task { @MainActor [weak self] in
-                            try? await Task.sleep(for: .seconds(45))
+                            try? await Task.sleep(nanoseconds: 45_000_000_000)
                             guard !Task.isCancelled else { return }
                             self?.fail(.sourceUnavailable)
                         }

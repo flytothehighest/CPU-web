@@ -316,7 +316,9 @@ nonisolated enum ChineseCalendarInfo {
     }
 
     fileprivate static func lunarDate(for date: Date) -> LunarDate {
-        let components = chinese.dateComponents([.year, .month, .day, .isLeapMonth], from: date)
+        var requested: Set<Calendar.Component> = [.year, .month, .day]
+        if #available(iOS 17.0, *) { requested.insert(.isLeapMonth) }
+        let components = chinese.dateComponents(requested, from: date)
         return LunarDate(
             month: components.month ?? 1,
             day: components.day ?? 1,

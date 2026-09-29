@@ -235,7 +235,7 @@ nonisolated struct ScheduleEnvelope: Codable, Equatable {
         timezone: String
     ) -> Int {
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: timezone) ?? .gmt
+        calendar.timeZone = TimeZone(identifier: timezone) ?? TimeZone(secondsFromGMT: 0)!
         calendar.firstWeekday = 2
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")

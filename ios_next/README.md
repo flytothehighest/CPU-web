@@ -1,6 +1,16 @@
 # iOS 原生客户端（当前新版）
 
-在 `CpuTime/CpuTime.xcodeproj` 打开 `CpuTime` scheme。最低系统版本 iOS 17，Apple Watch 最低为 watchOS 10。旧的 `ios/` 是独立保留的 WebView 客户端，新功能和 Watch 集成应在 `ios_next/` 开发。
+在 `CpuTime/CpuTime.xcodeproj` 打开 `CpuTime` scheme。最低系统版本 iOS 15；iOS 15–16 使用网页兼容界面，iOS 17 及以上使用原生界面。Apple Watch 最低为 watchOS 10，配套同步入口仅在 iOS 17 及以上提供。旧的 `ios/` 是独立保留的 WebView 客户端，新功能和 Watch 集成应在 `ios_next/` 开发。
+
+## 系统兼容
+
+- **iOS 15–16**：使用持久化 WKWebView，保留网页登录、教务、课表、服务和个人中心。顶部「校园导航」在旧 WebKit 不显示网页底栏时仍可进入这些页面；支持返回、刷新、加载失败重试以及课表深链接。没有原生课表编辑／背景／分享、原生助手、实时活动、Watch 同步或 iOS 小组件配置。页面本身支持的操作仍可使用。
+- **iOS 17 及以上**：保留现有原生功能；推送实时活动及定时启动仍遵循各自 iOS 17.2／18／26 的版本检查。小组件扩展最低 iOS 17，不为旧系统降级加载。
+- 登录 Cookie 使用同一个默认 WebKit 数据存储，升级系统切到原生界面时不会主动清除。兼容界面只声明 `CPUWebIOSApp` 旧容器标识，不声明 `CPUTimeNative` 或虚构能力桥。
+- App 与 iOS 小组件显式弱链接 ActivityKit。Xcode 26.6 SDK 将 `ActivityStyle` 标成 iOS 16.1 可用，但 iOS 17.0 实际缺少 `ActivityStyle.standard` 符号；仅靠调用处的 `#available` 不能阻止 dyld 在启动时解析强引用。弱链接与运行时版本分支必须同时保留。
+- iOS 15.0–15.3 的网页使用随包兼容脚本补齐 `Object.hasOwn` 与 `Array.prototype.at`。不依赖网站先部署更新。
+
+回归方式与实际测试范围见 [系统兼容测试记录](docs/ios-compatibility-qa.md)。网站下载页的最低版本仍描述当前 App Store 已发布版本；发布支持 iOS 15 的新版后需同步更新 `web/src/utils/clientInfo.ts` 的商店版本说明。
 
 ## 当前范围
 
@@ -15,6 +25,8 @@
 - 课表在内存中保留 12 小时，并可将最近成功快照写入 Application Support 以支持冷启动；磁盘快照同时校验站点会话指纹和账号指纹。退出、换号或过期时立即清除。
 
 原生课表已支持课程编辑、配色、自定义背景与分享导出。背景可从课表“更多 → 背景自定义”直接设置，也可从设备设置进入；与 Web 一致使用居中铺满、22%～88% 背景显现（默认 76%）和 0～18 柔化程度。预览显示当前课表并即时应用调节，周／日视图共用背景与浅深色遮罩。图片原件仅保存在本机，显示时降采样以限制大照片的内存占用；清除背景与恢复默认都会删除本地图片。旧版绝对文件路径在升级后会按当前容器恢复。原有 `ios/` 包装客户端独立保留。
+
+课表主体沿用 Web／安卓的主题色与课程色规则：课名按规范化空白、UTF-16 和 32 位溢出计算颜色，日／周／月视图共用配色。单色主题使用固定底色、边框及文字色；深色彩色课程使用浅色文字。`check-schedule-palette.sh` 直接读取 Web 配色函数，与 Swift 结果做跨端对照。
 
 ## Web 配套改动
 
@@ -49,6 +61,9 @@ npm run type-check --prefix web
 node ios_next/scripts/build-web-bridge.mjs
 node --test ios_next/tests/*.test.mjs
 bash ios_next/scripts/check-live-activity.sh
+bash ios_next/scripts/check-schedule-palette.sh
+swiftc ios_next/CpuTime/CpuTime/NativeScheduleStore.swift ios_next/tests/NativeSchedulePeriodChecks.swift -o /tmp/cpu-next-period-checks
+/tmp/cpu-next-period-checks
 swift test --package-path ios_next
 swiftc ios_next/CpuTime/CpuTime/NativeScheduleStore.swift ios_next/tests/NativeScheduleStoreChecks.swift -o /tmp/cpu-next-store-checks
 /tmp/cpu-next-store-checks
@@ -62,7 +77,7 @@ xcodebuild -project ios_next/CpuTime/CpuTime.xcodeproj -scheme CPUWatch -destina
 
 修改共享课表桥或 `ios_next/bridge` 后重新运行 `build-web-bridge.mjs`，将更新后的 JS 资源随 iOS 包一起构建。
 
-背景验证脚本在已启动的 Apple Silicon iOS 模拟器中检查实际 UIKit 解码、原图保存、大图降采样、替换失败保护、冷启动恢复、旧容器路径迁移、数值边界与清除／重置，并输出三种比例的本地图片用于可视验证。`CPU_DEBUG_MOCK_SCHEDULE=1` 的调试课表独立于学校会话；可再加 `CPU_DEBUG_BACKGROUND_EDITOR=1` 直接打开背景预览。Xcode 未设为当前开发目录时，命令前加 `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`。
+背景验证脚本在已启动的 Apple Silicon iOS 模拟器中检查实际 UIKit 解码、原图保存、大图降采样、替换失败保护、冷启动恢复、旧容器路径迁移、数值边界与清除／重置，并输出三种比例的本地图片用于可视验证。`CPU_DEBUG_MOCK_SCHEDULE=1` 的调试课表独立于学校会话；可再加 `CPU_DEBUG_VISUAL_SCHEDULE=1` 检查多课程配色与长标题，或加 `CPU_DEBUG_BACKGROUND_EDITOR=1` 直接打开背景预览。Xcode 未设为当前开发目录时，命令前加 `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`。
 
 底栏选择由原生用户操作或当前可见网页的显式导航请求驱动。网页 history／加载完成通知不反向改写底栏；连续切换会作废旧跳转及其失败回退，视图挂载也不改变选中项。原生触发的整页切换按标签切换处理，不播放网页的交叉淡入：否则旧页面会带着切换前的滚动位置冻结在新页面上继续显示约 300ms。页面在路由过渡期间把刘海间距交给正在进入的页面，避免新页面先顶到状态栏再跳下来。
 

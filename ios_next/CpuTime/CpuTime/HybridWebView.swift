@@ -253,6 +253,7 @@ struct NativeAuthState: Equatable, Sendable {
 }
 
 @MainActor
+@available(iOS 17.0, *)
 final class HybridWebViewStore: NSObject, ObservableObject, WKScriptMessageHandler {
     static let handlerName = "cpuTimeNative"
     @Published private(set) var isLoading = true
@@ -1929,6 +1930,7 @@ private final class ImmersiveWebView: WKWebView {
     }
 }
 
+@available(iOS 17.0, *)
 struct HybridWebView: UIViewRepresentable {
     let session: HybridWebViewStore
     let tab: ShellTab
@@ -1960,6 +1962,7 @@ struct HybridWebView: UIViewRepresentable {
 }
 
 @MainActor
+@available(iOS 17.0, *)
 final class WebViewHostView: UIView {
     weak var session: HybridWebViewStore?
 
@@ -1974,6 +1977,7 @@ final class WebViewHostView: UIView {
 }
 
 @MainActor
+@available(iOS 17.0, *)
 private final class HybridWebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
     private weak var store: HybridWebViewStore?
 
