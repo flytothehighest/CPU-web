@@ -538,7 +538,14 @@ export class NativeScheduleStore {
   }
 
   private courseWithRange(course: NativeScheduleCourse, startSlot: number, endSlot: number, next?: NativeScheduleCourse): NativeScheduleCourse {
-    const weekList = [...new Set([...(course.weekList ?? []), ...(next?.weekList ?? [])])].sort((a: number, b: number) => a - b);
+    const weekList: number[] = [];
+    (course.weekList ?? []).forEach((week: number) => {
+      if (!weekList.includes(week)) weekList.push(week);
+    });
+    (next?.weekList ?? []).forEach((week: number) => {
+      if (!weekList.includes(week)) weekList.push(week);
+    });
+    weekList.sort((a: number, b: number) => a - b);
     return { name: course.name, nativeId: course.nativeId ?? next?.nativeId, teacher: course.teacher ?? next?.teacher, weeks: weekList.length ? this.weekText(weekList) : (course.weeks || next?.weeks || ''), weekList,
       location: course.location ?? next?.location, slotNote: this.slotLabel(startSlot, endSlot), startSlot, endSlot,
       sourceKey: course.sourceKey, customId: course.customId, custom: course.custom, orphaned: course.orphaned,
