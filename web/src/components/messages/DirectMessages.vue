@@ -1,178 +1,253 @@
 <template>
-  <div class="direct-messages" :class="{ 'has-active': !!activeCounterpart }">
-    <aside class="conversation-sidebar">
-      <div class="sidebar-head">
-        <div class="sidebar-copy">
-          <b>私聊</b>
-          <span>{{ totalUnread ? `${totalUnread} 条未读消息` : "消息仅会显示给会话双方" }}</span>
+  <div class="dm" :class="{ 'has-active': !!activeCounterpart }">
+    <aside class="dm-side">
+      <div class="dm-side-head">
+        <div class="dm-side-title">
+          <h3>私聊</h3>
+          <span v-if="totalUnread" class="dm-count">{{ Math.min(totalUnread, 99) }}</span>
         </div>
-        <div class="sidebar-actions">
-          <el-badge :value="totalUnread" :hidden="!totalUnread" :max="99" />
-          <el-button class="notice-link" text type="primary" @click="openNoticeCenter">其他通知</el-button>
-        </div>
+        <button type="button" class="dm-text-btn dm-notice-link" @click="openNoticeCenter">其他通知</button>
       </div>
+      <label v-if="conversations.length > 5 || searchQuery" class="dm-search">
+        <el-icon><Search /></el-icon>
+        <input v-model="searchQuery" type="search" placeholder="搜索会话" aria-label="搜索会话" />
+      </label>
 
-      <div v-if="listLoading && !conversations.length" class="sidebar-state">正在加载会话...</div>
-      <div v-else-if="listError && !conversations.length" class="sidebar-state sidebar-error">
-        <span>{{ listError }}</span>
-        <el-button text type="primary" @click="loadConversationList">重试</el-button>
+      <div v-if="listLoading && !conversations.length" class="dm-side-state">
+        <span class="dm-spinner" aria-hidden="true"></span>
+        <span>正在加载会话…</span>
       </div>
-      <el-empty v-else-if="!conversations.length" description="还没有私聊" :image-size="72" />
-      <div v-else class="conversation-list">
-        <button data-cpu-button="surface"
-          v-for="conversation in conversations"
+      <div v-else-if="listError && !conversations.length" class="dm-side-state">
+        <span>{{ listError }}</span>
+        <button type="button" class="dm-text-btn" @click="loadConversationList">重试</button>
+      </div>
+      <div v-else-if="!conversations.length" class="dm-side-state">
+        <span class="dm-empty-icon"><el-icon><ChatLineRound /></el-icon></span>
+        <b>还没有私聊</b>
+        <span>在帖子或用户主页点击“私信”即可发起</span>
+      </div>
+      <div v-else class="dm-list">
+        <button
+          v-for="conversation in filteredConversations"
           :key="conversation.id"
           type="button"
-          class="conversation-row"
-          :class="{ active: activeConversation?.id === conversation.id }"
+          class="dm-row"
+          :class="{ 'is-active': activeConversation?.id === conversation.id, 'is-unread': conversation.unreadCount > 0 }"
           :aria-current="activeConversation?.id === conversation.id ? 'true' : undefined"
           :aria-label="`打开与 ${conversationDisplayName(conversation)} 的私聊${conversation.unreadCount ? `，${conversation.unreadCount} 条未读` : ''}`"
           @click="openConversation(conversation.id)"
         >
           <UserAvatar
-            :size="42"
+            :size="44"
             :src="conversation.counterpart.avatar"
             :name="conversation.counterpart.nickname"
             :seed="conversation.counterpart.id || conversation.counterpart.nickname"
             :profile-frame="conversation.counterpart.profileFrame"
             alt="私聊对象头像"
           />
-          <span class="conversation-copy">
-            <span class="conversation-line">
+          <span class="dm-row-copy">
+            <span class="dm-row-line">
               <b :title="conversation.counterpartRemark ? `原昵称：${conversation.counterpart.nickname}` : undefined">
-                <span v-if="conversation.counterpartRemark" class="remark-name">{{ conversation.counterpartRemark }}</span>
+                <span v-if="conversation.counterpartRemark" class="dm-remark">{{ conversation.counterpartRemark }}</span>
                 <DisplayNickname v-else :name="conversation.counterpart.nickname" />
               </b>
-              <small>{{ shortTime(conversation.lastMessageAt) }}</small>
+              <time>{{ shortTime(conversation.lastMessageAt) }}</time>
             </span>
-            <span class="conversation-preview">
-              {{ conversationPreview(conversation.lastMessage) }}
+            <span class="dm-row-line">
+              <span class="dm-row-preview">{{ conversationPreview(conversation.lastMessage) }}</span>
+              <span v-if="conversation.unreadCount" class="dm-count">{{ Math.min(conversation.unreadCount, 99) }}</span>
             </span>
           </span>
-          <span v-if="conversation.unreadCount" class="unread-dot">{{ Math.min(conversation.unreadCount, 99) }}</span>
         </button>
+        <p v-if="searchQuery && !filteredConversations.length" class="dm-list-empty">没有匹配“{{ searchQuery }}”的会话</p>
       </div>
     </aside>
 
-    <section class="chat-pane">
-      <div v-if="targetLoading" class="chat-state">正在打开私聊...</div>
-      <div v-else-if="targetError && !activeCounterpart" class="chat-state">
-        <el-empty :description="targetError">
-          <el-button type="primary" @click="applyRouteTarget">重试</el-button>
-        </el-empty>
+    <section class="dm-chat">
+      <div v-if="targetLoading" class="dm-chat-state">
+        <span class="dm-spinner" aria-hidden="true"></span>
+        <span>正在打开私聊…</span>
       </div>
-      <div v-else-if="!activeCounterpart" class="chat-state chat-placeholder">
-        <el-empty description="从帖子或用户主页发起私聊，或在左侧选择一个会话" />
+      <div v-else-if="targetError && !activeCounterpart" class="dm-chat-state">
+        <span class="dm-empty-icon"><el-icon><Warning /></el-icon></span>
+        <b>{{ targetError }}</b>
+        <button type="button" class="dm-pill-btn" @click="applyRouteTarget">重试</button>
+      </div>
+      <div v-else-if="!activeCounterpart" class="dm-chat-state">
+        <span class="dm-empty-icon dm-empty-icon--lg"><el-icon><ChatLineRound /></el-icon></span>
+        <b>选择一个会话开始聊天</b>
+        <span>也可以从帖子或用户主页发起新的私聊</span>
       </div>
       <template v-else>
-        <header class="chat-head">
-          <button data-cpu-button="icon" type="button" class="mobile-back" aria-label="返回会话列表" title="返回会话列表" @click="backToList">
+        <header class="dm-chat-head">
+          <button type="button" class="dm-icon-btn dm-back" aria-label="返回会话列表" title="返回会话列表" @click="backToList">
             <el-icon><ArrowLeft /></el-icon>
-            <span>返回</span>
           </button>
-          <UserAvatar
-            :size="40"
-            :src="activeCounterpart.avatar"
-            :name="activeCounterpart.nickname"
-            :seed="activeCounterpart.id || activeCounterpart.nickname"
-            :profile-frame="activeCounterpart.profileFrame"
-            alt="私聊对象头像"
-          />
-          <div class="chat-title">
-            <b :title="activeRemark ? `原昵称：${activeCounterpart.nickname}` : undefined">
-              <span v-if="activeRemark" class="remark-name">{{ activeRemark }}</span>
-              <DisplayNickname v-else :name="activeCounterpart.nickname" />
-            </b>
-            <span>{{ activeChatSubtitle }}</span>
-          </div>
-          <div class="chat-actions cpu-button-row">
-            <el-button text type="danger" @click="reportOverviewOpen = true">举报</el-button>
-            <el-button text type="danger" @click="blockCounterpart">屏蔽</el-button>
-            <el-button v-if="!activeCounterpart.anonymous && activeCounterpart.id > 0" class="remark-link" text type="primary" @click="editCounterpartRemark">
-              {{ activeRemark ? "改备注" : "备注" }}
-            </el-button>
-            <el-button v-if="!activeCounterpart.anonymous" class="profile-link" text type="primary" @click="openProfile">查看资料</el-button>
-          </div>
-        </header>
-
-        <div ref="messageScroller" class="message-scroller" aria-live="polite" aria-label="私聊消息记录">
-          <div v-if="nextCursor" class="load-more">
-            <el-button text type="primary" :loading="olderLoading" @click="loadOlderMessages">加载更早消息</el-button>
-          </div>
-          <div v-if="messageLoading && !messages.length" class="message-loading">正在加载消息...</div>
-          <div v-else-if="messageError && !messages.length" class="message-loading sidebar-error">
-            <span>{{ messageError }}</span>
-            <el-button text type="primary" @click="loadMessages(true)">重试</el-button>
-          </div>
-          <div v-else-if="!messages.length" class="new-chat-tip">
+          <button
+            type="button"
+            class="dm-peer"
+            :disabled="activeCounterpart.anonymous || activeCounterpart.id <= 0"
+            :title="activeCounterpart.anonymous ? undefined : '查看资料'"
+            @click="openProfile"
+          >
             <UserAvatar
-              :size="56"
+              :size="38"
               :src="activeCounterpart.avatar"
               :name="activeCounterpart.nickname"
               :seed="activeCounterpart.id || activeCounterpart.nickname"
               :profile-frame="activeCounterpart.profileFrame"
               alt="私聊对象头像"
             />
-            <b>发消息给 <DisplayNickname :name="activeCounterpart.nickname" /></b>
-            <span>对方首次回复前最多发送两条，回复后即可继续交流。</span>
+            <span class="dm-peer-copy">
+              <b :title="activeRemark ? `原昵称：${activeCounterpart.nickname}` : undefined">
+                <span v-if="activeRemark" class="dm-remark">{{ activeRemark }}</span>
+                <DisplayNickname v-else :name="activeCounterpart.nickname" />
+              </b>
+              <small>{{ activeChatSubtitle }}</small>
+            </span>
+          </button>
+          <div class="dm-head-actions">
+            <button
+              v-if="!activeCounterpart.anonymous && activeCounterpart.id > 0"
+              type="button"
+              class="dm-icon-btn"
+              :aria-label="activeRemark ? '修改备注' : '设置备注'"
+              :title="activeRemark ? '修改备注' : '设置备注'"
+              @click="editCounterpartRemark"
+            >
+              <el-icon><EditPen /></el-icon>
+            </button>
+            <el-dropdown trigger="click" placement="bottom-end" @command="handleMoreCommand">
+              <button type="button" class="dm-icon-btn" aria-label="更多操作" title="更多操作">
+                <el-icon><MoreFilled /></el-icon>
+              </button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item v-if="!activeCounterpart.anonymous && activeCounterpart.id > 0" command="profile" :icon="User">查看资料</el-dropdown-item>
+                  <el-dropdown-item command="report" :icon="Warning">举报</el-dropdown-item>
+                  <el-dropdown-item command="block" :icon="CircleClose" class="dm-danger-item">屏蔽</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
-          <div
-            v-for="message in messages"
-            :key="message.id"
-            class="message-row"
-            :class="{ mine: message.senderId === auth.user?.id }"
-          >
-            <div class="message-bubble">
-              <p>{{ message.content }}</p>
-              <span>
-                {{ messageTime(message.createdAt) }}
-                <template v-if="message.senderId === auth.user?.id"> · {{ messageDeliveryText(message) }}</template>
-                <button data-cpu-button="text"
-                  v-else
-                  type="button"
-                  class="message-report-button"
-                  @click="openMessageReport(message)"
-                >举报</button>
-              </span>
+        </header>
+
+        <div ref="messageScroller" class="dm-scroller" aria-live="polite" aria-label="私聊消息记录">
+          <div class="dm-thread">
+            <div v-if="nextCursor" class="dm-load-more">
+              <button type="button" class="dm-pill-btn" :disabled="olderLoading" @click="loadOlderMessages">
+                <span v-if="olderLoading" class="dm-spinner dm-spinner--sm" aria-hidden="true"></span>
+                加载更早消息
+              </button>
             </div>
+            <div v-if="messageLoading && !messages.length" class="dm-thread-state">
+              <span class="dm-spinner" aria-hidden="true"></span>
+              <span>正在加载消息…</span>
+            </div>
+            <div v-else-if="messageError && !messages.length" class="dm-thread-state">
+              <span>{{ messageError }}</span>
+              <button type="button" class="dm-text-btn" @click="loadMessages(true)">重试</button>
+            </div>
+            <div v-else-if="!messages.length" class="dm-intro">
+              <UserAvatar
+                :size="64"
+                :src="activeCounterpart.avatar"
+                :name="activeCounterpart.nickname"
+                :seed="activeCounterpart.id || activeCounterpart.nickname"
+                :profile-frame="activeCounterpart.profileFrame"
+                alt="私聊对象头像"
+              />
+              <b>发消息给 <DisplayNickname :name="activeCounterpart.nickname" /></b>
+              <span>对方首次回复前最多发送两条，回复后即可继续交流。</span>
+            </div>
+
+            <template v-for="block in messageBlocks" :key="block.key">
+              <div v-if="block.type === 'day'" class="dm-day"><span>{{ block.label }}</span></div>
+              <div
+                v-else
+                class="dm-msg"
+                :class="{
+                  'is-mine': block.mine,
+                  'is-first': block.first,
+                  'is-last': block.last,
+                  'is-rejected': isRejected(block.message),
+                }"
+              >
+                <div class="dm-bubble-row">
+                  <p class="dm-bubble">{{ block.message.content }}</p>
+                  <button
+                    v-if="!block.mine"
+                    type="button"
+                    class="dm-msg-report"
+                    aria-label="举报这条消息"
+                    title="举报这条消息"
+                    @click="openMessageReport(block.message)"
+                  >
+                    <el-icon><Warning /></el-icon>
+                  </button>
+                </div>
+                <div v-if="block.last || block.status" class="dm-meta">
+                  <time v-if="block.last">{{ clockTime(block.message.createdAt) }}</time>
+                  <span v-if="block.status" class="dm-status" :class="`is-${block.status.tone}`">{{ block.status.text }}</span>
+                </div>
+              </div>
+            </template>
           </div>
         </div>
 
-        <footer class="composer">
-          <el-alert
-            v-if="sendBlocked"
-            type="info"
-            :closable="false"
-            show-icon
-            title="已发送两条消息，请等待对方回复后再继续"
-          />
-          <div class="composer-row">
-            <el-input
-              v-model="draft"
-              type="textarea"
-              :autosize="{ minRows: 1, maxRows: 4 }"
-              resize="none"
-              maxlength="2000"
-              :disabled="sendBlocked || sending"
-              :placeholder="sendBlocked ? '等待对方回复' : '输入消息'"
-              @keydown="onComposerKeydown"
-            />
-            <el-button type="primary" :loading="sending" :disabled="!canSubmit" @click="sendMessage">发送</el-button>
+        <footer class="dm-dock">
+          <div v-if="sendBlocked" class="dm-notice" role="status">
+            <el-icon><InfoFilled /></el-icon>
+            <span>已发送两条消息，请等待对方回复后再继续</span>
           </div>
-          <span class="composer-hint">{{ composerHint }} · 发送后后台审核，通过后对方才会收到</span>
+          <div class="dm-composer" :class="{ 'is-disabled': sendBlocked }" @click="focusComposer">
+            <textarea
+              ref="composerRef"
+              v-model="draft"
+              rows="1"
+              maxlength="2000"
+              enterkeyhint="send"
+              :disabled="sendBlocked || sending"
+              :placeholder="sendBlocked ? '等待对方回复' : '输入消息，Enter 发送'"
+              aria-label="输入私聊消息"
+              @input="resizeComposer"
+              @keydown="onComposerKeydown"
+            ></textarea>
+            <span v-if="draft.length >= 1800" class="dm-counter">{{ draft.length }}/2000</span>
+            <button
+              type="button"
+              class="dm-send"
+              aria-label="发送"
+              title="发送（Enter）"
+              :disabled="!canSubmit"
+              @click.stop="sendMessage"
+            >
+              <span v-if="sending" class="dm-spinner dm-spinner--sm dm-spinner--light" aria-hidden="true"></span>
+              <el-icon v-else><Top /></el-icon>
+            </button>
+          </div>
+          <p class="dm-hint">{{ composerHint }} · 发送后后台审核，通过后对方才会收到</p>
         </footer>
       </template>
     </section>
+
     <el-dialog v-model="reportOverviewOpen" title="举报与投诉" width="min(460px, calc(100vw - 32px))" append-to-body destroy-on-close>
-      <p>请选择需要举报的消息，举报将提交给管理员处理。</p>
-      <div class="report-message-options">
-        <el-button v-for="message in reportableMessages" :key="message.id" class="report-message-option" @click="openMessageReport(message)">
-          {{ messageTime(message.createdAt) }} · {{ message.content }}
-        </el-button>
+      <p class="dm-report-lead">请选择需要举报的消息，举报将提交给管理员处理。</p>
+      <div v-if="reportableMessages.length" class="dm-report-options">
+        <button
+          v-for="message in reportableMessages"
+          :key="message.id"
+          type="button"
+          class="dm-report-option"
+          @click="openMessageReport(message)"
+        >
+          <time>{{ messageTime(message.createdAt) }}</time>
+          <span>{{ message.content }}</span>
+        </button>
       </div>
-      <p v-if="!reportableMessages.length">当前没有可举报的对方消息。</p>
+      <p v-else class="dm-report-lead">当前没有可举报的对方消息。</p>
       <el-button v-if="activeCounterpart && !activeCounterpart.anonymous && activeCounterpart.id > 0" @click="openCounterpartReport">举报用户资料</el-button>
-      <p>其他投诉或无法选择消息时，可联系 <a href="mailto:admin@lizmt.cn">admin@lizmt.cn</a>，说明会话时间及问题；请勿提供密码或验证码。</p>
+      <p class="dm-report-foot">其他投诉或无法选择消息时，可联系 <a href="mailto:admin@lizmt.cn">admin@lizmt.cn</a>，说明会话时间及问题；请勿提供密码或验证码。</p>
       <template #footer><el-button @click="reportOverviewOpen = false">关闭</el-button></template>
     </el-dialog>
     <ContentReportDialog
@@ -188,7 +263,18 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
-import { ArrowLeft } from "@element-plus/icons-vue";
+import {
+  ArrowLeft,
+  ChatLineRound,
+  CircleClose,
+  EditPen,
+  InfoFilled,
+  MoreFilled,
+  Search,
+  Top,
+  User,
+  Warning,
+} from "@element-plus/icons-vue";
 import { useRoute, useRouter } from "vue-router";
 import { blockUser } from "@/utils/userBlock";
 import UserAvatar from "@/components/common/UserAvatar.vue";
@@ -232,6 +318,57 @@ const reportDialogOpen = ref(false);
 const reportOverviewOpen = ref(false);
 const reportTarget = ref<{ type: "direct_message" | "user"; id: number; label: string } | null>(null);
 const reportableMessages = computed(() => messages.value.filter(message => message.senderId !== auth.user?.id));
+const composerRef = ref<HTMLTextAreaElement | null>(null);
+const searchQuery = ref("");
+const filteredConversations = computed(() => {
+  const keyword = searchQuery.value.trim().toLowerCase();
+  if (!keyword) return conversations.value;
+  return conversations.value.filter((conversation) => [
+    conversation.counterpartRemark,
+    conversation.counterpart.nickname,
+    conversation.lastMessage?.content,
+  ].some((text) => text?.toLowerCase().includes(keyword)));
+});
+
+// 同一个人 5 分钟内连续发出的消息合成一组：只在组尾显示时间，气泡圆角连成一串
+const MESSAGE_GROUP_GAP_MS = 5 * 60 * 1000;
+type MessageStatus = { text: string; tone: "muted" | "read" | "warn" | "danger" };
+type MessageBlock =
+  | { type: "day"; key: string; label: string }
+  | {
+    type: "message";
+    key: string;
+    message: DirectMessageItem;
+    mine: boolean;
+    first: boolean;
+    last: boolean;
+    status: MessageStatus | null;
+  };
+const messageBlocks = computed<MessageBlock[]>(() => {
+  const blocks: MessageBlock[] = [];
+  const items = messages.value;
+  items.forEach((message, index) => {
+    const previous = items[index - 1];
+    const next = items[index + 1];
+    const day = dayKey(message.createdAt);
+    if (!previous || dayKey(previous.createdAt) !== day) {
+      blocks.push({ type: "day", key: `day-${day}-${message.id}`, label: dayLabel(message.createdAt) });
+    }
+    const mine = message.senderId === auth.user?.id;
+    const first = !previous || !sameGroup(previous, message);
+    const last = !next || !sameGroup(message, next);
+    blocks.push({
+      type: "message",
+      key: `message-${message.id}`,
+      message,
+      mine,
+      first,
+      last,
+      status: mine ? messageStatus(message, last) : null,
+    });
+  });
+  return blocks;
+});
 let disposed = false;
 let refreshTimer = 0;
 let routeSeq = 0;
@@ -325,6 +462,11 @@ watch(composerDraftKey, (key, previousKey) => {
   if (previousKey) persistComposerDraft(previousKey, draft.value);
   draft.value = readComposerDraft(key);
 }, { immediate: true });
+
+// 草稿恢复、发送后清空、切换会话都会改动内容，输入框高度要跟着变
+watch([draft, composerRef], () => {
+  void nextTick(resizeComposer);
+});
 
 watch(draft, (content) => {
   const key = composerDraftKey.value;
@@ -761,11 +903,59 @@ function messageTime(value: string) {
   return fmtDate(value, "MM-DD HH:mm");
 }
 
-function messageDeliveryText(message: DirectMessageItem) {
-  if (message.aiReviewStatus === "checking") return "审核中";
-  if (["blocked_ai", "blocked_force", "rejected_manual"].includes(message.aiReviewStatus)) return "未通过审核";
-  if (message.aiReviewStatus === "review_failed") return "审核未完成";
-  return message.readAt ? "已读" : "未读";
+function sameGroup(a: DirectMessageItem, b: DirectMessageItem) {
+  return a.senderId === b.senderId
+    && dayKey(a.createdAt) === dayKey(b.createdAt)
+    && new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() < MESSAGE_GROUP_GAP_MS;
+}
+
+function dayKey(value: string) {
+  return fmtDate(value, "YYYY-MM-DD");
+}
+
+function dayLabel(value: string) {
+  const date = new Date(value);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  if (date.toDateString() === today.toDateString()) return "今天";
+  if (date.toDateString() === yesterday.toDateString()) return "昨天";
+  return fmtDate(value, date.getFullYear() === today.getFullYear() ? "M月D日" : "YYYY年M月D日");
+}
+
+function clockTime(value: string) {
+  return fmtDate(value, "HH:mm");
+}
+
+function isRejected(message: DirectMessageItem) {
+  return ["blocked_ai", "blocked_force", "rejected_manual"].includes(message.aiReviewStatus);
+}
+
+// 审核状态每条都要显示；已读 / 未读只挂在组尾，避免重复
+function messageStatus(message: DirectMessageItem, last: boolean): MessageStatus | null {
+  if (message.aiReviewStatus === "checking") return { text: "审核中", tone: "warn" };
+  if (isRejected(message)) return { text: "未通过审核", tone: "danger" };
+  if (message.aiReviewStatus === "review_failed") return { text: "审核未完成", tone: "warn" };
+  if (!last) return null;
+  return message.readAt ? { text: "已读", tone: "read" } : { text: "未读", tone: "muted" };
+}
+
+function resizeComposer() {
+  const element = composerRef.value;
+  if (!element) return;
+  element.style.height = "auto";
+  element.style.height = `${element.scrollHeight}px`;
+}
+
+function focusComposer(event: MouseEvent) {
+  if (event.target instanceof HTMLButtonElement) return;
+  composerRef.value?.focus();
+}
+
+function handleMoreCommand(command: string) {
+  if (command === "profile") openProfile();
+  else if (command === "report") reportOverviewOpen.value = true;
+  else if (command === "block") void blockCounterpart();
 }
 
 function conversationPreview(message?: DirectMessageItem | null) {
@@ -785,115 +975,770 @@ function errorMessage(error: unknown, fallback: string) {
 </script>
 
 <style scoped>
-.direct-messages {
+/* 按钮统一清掉浏览器默认样式；:where 保持零特异性，后面的具体类可以直接覆盖。 */
+.dm :where(button) {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.dm :where(button:disabled) {
+  cursor: default;
+}
+.dm :where(button:focus-visible) {
+  outline: 2px solid color-mix(in srgb, var(--cpu-primary) 60%, transparent);
+  outline-offset: 2px;
+}
+
+/* ---------- 外框 ---------- */
+.dm {
+  --dm-hover: color-mix(in srgb, var(--cpu-text) 5%, transparent);
+  --dm-theirs: var(--cpu-surface-subtle);
+  --dm-mine: var(--cpu-button-primary);
+  --dm-mine-ink: var(--cpu-button-on-primary);
+  --dm-warn-ink: #a15c07;
   display: grid;
-  grid-template-columns: minmax(230px, 300px) minmax(0, 1fr);
-  height: clamp(620px, 68vh, 760px);
+  grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
+  /* 225px 是顶栏、页头和标签栏的高度，再留出卡片与页面底部内边距，让输入框落在首屏内 */
+  height: clamp(480px, calc(100dvh - 290px), 860px);
   min-height: 0;
   overflow: hidden;
-  border: 1px solid var(--cpu-border-soft);
-  border-radius: 14px;
+  color: var(--cpu-text);
   background: var(--cpu-card);
+  border: 1px solid var(--cpu-border-soft);
+  border-radius: 18px;
 }
-.conversation-sidebar { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); border-right: 1px solid var(--cpu-border-soft); background: var(--cpu-surface-soft); }
-.sidebar-head { min-height: 68px; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px; border-bottom: 1px solid var(--cpu-border-soft); }
-.sidebar-copy { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.sidebar-head b { color: var(--cpu-text); }
-.sidebar-head span { color: var(--cpu-text-secondary); font-size: 12px; }
-.sidebar-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; }
-.notice-link { display: none; margin-left: 0 !important; }
-.conversation-list { min-height: 0; display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
-.conversation-row { position: relative; width: 100%; min-width: 0; min-height: 68px; padding: 13px 14px; display: flex; gap: 10px; align-items: center; border: 0; border-bottom: 1px solid var(--cpu-border-soft); background: transparent; color: inherit; text-align: left; cursor: pointer; transition: background-color .16s ease, box-shadow .16s ease; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
-.conversation-row:hover, .conversation-row.active { background: var(--cpu-card); }
-.conversation-row:focus-visible { outline: 2px solid color-mix(in srgb, var(--cpu-primary) 60%, transparent); outline-offset: -3px; }
-.conversation-row.active { box-shadow: inset 3px 0 var(--cpu-primary); }
-.conversation-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 5px; }
-.conversation-line { min-width: 0; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
-.conversation-line b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
-.remark-name { color: var(--cpu-text); font: inherit; }
-.conversation-line small { flex-shrink: 0; color: var(--cpu-text-muted); font-size: 10px; }
-.conversation-preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--cpu-text-secondary); font-size: 12px; }
-.unread-dot { min-width: 20px; height: 20px; padding: 0 5px; display: grid; place-items: center; border-radius: 999px; background: #ef4444; color: white; font-size: 10px; }
-.sidebar-state, .message-loading { min-height: 150px; padding: 24px; display: grid; place-items: center; color: var(--cpu-text-secondary); font-size: 13px; text-align: center; }
-.sidebar-error { display: flex; flex-direction: column; justify-content: center; gap: 6px; }
-.chat-pane { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
-.chat-state { grid-row: 1 / -1; min-height: 520px; display: grid; place-items: center; color: var(--cpu-text-secondary); }
-.chat-head { width: 100%; min-width: 0; min-height: 68px; padding: 10px 16px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--cpu-border-soft); box-sizing: border-box; overflow: hidden; }
-.chat-title { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
-.chat-title b { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chat-title b :deep(.display-nickname) { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chat-title span { color: var(--cpu-text-secondary); font-size: 12px; }
-.chat-title .remark-name { color: var(--cpu-text); }
-.chat-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 2px; }
-.chat-actions :deep(.el-button) { margin-left: 0; }
-.remark-link { flex: 0 0 auto; padding-inline: 7px !important; }
-.mobile-back { display: none; min-width: 38px; height: 38px; flex: 0 0 auto; place-items: center; padding: 0; border: 0; border-radius: 12px; background: var(--cpu-surface-soft); color: var(--cpu-primary); font-size: 20px; cursor: pointer; touch-action: manipulation; }
-.mobile-back span { font-size: 12px; font-weight: 700; }
-.mobile-back:focus-visible { outline: 2px solid var(--cpu-primary); outline-offset: 2px; }
-.message-scroller { width: 100%; min-width: 0; min-height: 0; padding: 18px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scroll-behavior: smooth; background: linear-gradient(180deg, var(--cpu-surface-soft), var(--cpu-card)); box-sizing: border-box; }
-.message-row { display: flex; margin: 8px 0; justify-content: flex-start; }
-.message-row.mine { justify-content: flex-end; }
-.message-bubble { max-width: min(76%, 620px); padding: 10px 12px 8px; border-radius: 6px 16px 16px 16px; background: var(--cpu-card); border: 1px solid var(--cpu-border-soft); box-shadow: 0 3px 12px rgba(15, 23, 42, .06); }
-.mine .message-bubble { border-radius: 16px 6px 16px 16px; background: color-mix(in srgb, var(--cpu-primary) 14%, var(--cpu-card)); border-color: color-mix(in srgb, var(--cpu-primary) 30%, var(--cpu-border-soft)); }
-.message-bubble p { margin: 0; color: var(--cpu-text); line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
-.message-bubble span { display: block; margin-top: 5px; color: var(--cpu-text-muted); font-size: 10px; text-align: right; }
-.new-chat-tip { width: 100%; min-width: 0; min-height: 260px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10px; color: var(--cpu-text-secondary); text-align: center; box-sizing: border-box; }
-.new-chat-tip b { width: 100%; max-width: 440px; color: var(--cpu-text); overflow-wrap: anywhere; }
-.new-chat-tip > span { max-width: 440px; line-height: 1.6; }
-.load-more { display: flex; justify-content: center; }
-.composer { position: relative; z-index: 1; width: 100%; min-width: 0; padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 7px; border-top: 1px solid var(--cpu-border-soft); background: color-mix(in srgb, var(--cpu-card) 94%, transparent); box-shadow: 0 -8px 24px rgba(15, 23, 42, .04); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-sizing: border-box; overflow: hidden; }
-.composer-row { width: 100%; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 10px; }
-.composer-row :deep(.el-textarea) { min-width: 0; }
-.composer :deep(.el-textarea__inner) { min-height: 42px !important; padding: 10px 12px; line-height: 1.5; border-radius: 12px; }
-.composer-row :deep(.el-button) { min-width: 76px; min-height: 42px; margin-left: 0; }
-.composer-hint { min-width: 0; color: var(--cpu-text-secondary); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.report-message-options { display: grid; gap: 8px; max-height: 280px; overflow: auto; }
-.report-message-option { min-height: 44px; height: auto; margin: 0; padding: 10px; white-space: normal; text-align: left; overflow-wrap: anywhere; }
-.message-report-button { margin-left: 6px; padding: 0; border: 0; background: transparent; color: var(--el-color-danger); font: inherit; cursor: pointer; }
-.message-report-button:hover { text-decoration: underline; }
+:global(html[data-theme="dark"]) .dm {
+  --dm-warn-ink: var(--cpu-warn);
+}
 
+.dm-count {
+  display: inline-grid;
+  min-width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0 5px;
+  border-radius: 999px;
+  color: #fff;
+  background: #ef4444;
+  font-size: 10.5px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  box-sizing: border-box;
+}
+.dm-text-btn {
+  padding: 4px 8px;
+  border-radius: 8px;
+  color: var(--cpu-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+.dm-text-btn:hover {
+  background: var(--dm-hover);
+}
+.dm-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid var(--cpu-border);
+  border-radius: 999px;
+  color: var(--cpu-text-secondary);
+  background: var(--cpu-card);
+  font-size: 12.5px;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.dm-pill-btn:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--cpu-primary) 50%, var(--cpu-border));
+  color: var(--cpu-primary);
+}
+.dm-icon-btn {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--cpu-text-secondary);
+  font-size: 18px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.dm-icon-btn:hover {
+  color: var(--cpu-text);
+  background: var(--dm-hover);
+}
+.dm-spinner {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  border: 2px solid color-mix(in srgb, var(--cpu-primary) 22%, transparent);
+  border-top-color: var(--cpu-primary);
+  border-radius: 50%;
+  animation: dm-spin 0.8s linear infinite;
+}
+.dm-spinner--sm {
+  width: 13px;
+  height: 13px;
+}
+.dm-spinner--light {
+  border-color: color-mix(in srgb, currentColor 30%, transparent);
+  border-top-color: currentColor;
+}
+.dm-empty-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 14px;
+  color: var(--cpu-primary);
+  background: var(--cpu-primary-soft);
+  font-size: 21px;
+}
+.dm-empty-icon--lg {
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  font-size: 26px;
+}
+.dm-remark {
+  color: var(--cpu-text);
+  font: inherit;
+}
+
+/* ---------- 会话列表 ---------- */
+.dm-side {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid var(--cpu-border-soft);
+  background: var(--cpu-surface-soft);
+}
+.dm-side-head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 60px;
+  padding: 0 12px 0 18px;
+}
+.dm-side-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dm-side-title h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+}
+.dm-notice-link {
+  display: none;
+}
+.dm-search {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  margin: 0 12px 8px;
+  padding: 0 12px;
+  border: 1px solid var(--cpu-border-soft);
+  border-radius: 10px;
+  color: var(--cpu-text-muted);
+  background: var(--cpu-card);
+  transition: border-color 0.15s ease;
+}
+.dm-search:focus-within {
+  border-color: color-mix(in srgb, var(--cpu-primary) 50%, var(--cpu-border));
+}
+.dm-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: var(--cpu-text);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+}
+.dm-search input::placeholder {
+  color: var(--cpu-text-muted);
+}
+.dm-list {
+  flex: 1;
+  min-height: 0;
+  padding: 0 8px 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.dm-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border-radius: 12px;
+  text-align: left;
+  transition: background-color 0.12s ease;
+  touch-action: manipulation;
+}
+.dm-row + .dm-row {
+  margin-top: 2px;
+}
+.dm-row:hover {
+  background: var(--dm-hover);
+}
+.dm-row.is-active {
+  background: var(--cpu-primary-soft);
+}
+.dm-row-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.dm-row-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.dm-row-line b {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dm-row-line time {
+  flex: 0 0 auto;
+  color: var(--cpu-text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.dm-row-preview {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--cpu-text-muted);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dm-row.is-unread .dm-row-preview {
+  color: var(--cpu-text-secondary);
+}
+.dm-list-empty {
+  margin: 24px 12px;
+  color: var(--cpu-text-muted);
+  font-size: 12.5px;
+  text-align: center;
+}
+.dm-side-state,
+.dm-chat-state,
+.dm-thread-state {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 0;
+  padding: 24px;
+  color: var(--cpu-text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: center;
+}
+.dm-side-state b,
+.dm-chat-state b {
+  margin-top: 4px;
+  color: var(--cpu-text);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* ---------- 聊天区 ---------- */
+.dm-chat {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.dm-chat-state {
+  gap: 6px;
+}
+.dm-chat-state b {
+  margin-top: 8px;
+  font-size: 16px;
+}
+.dm-chat-state .dm-pill-btn {
+  margin-top: 8px;
+}
+.dm-chat-head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  height: 60px;
+  padding: 0 10px 0 12px;
+  border-bottom: 1px solid var(--cpu-border-soft);
+}
+.dm-back {
+  display: none;
+}
+.dm-peer {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 4px 8px 4px 4px;
+  border-radius: 12px;
+  text-align: left;
+  transition: background-color 0.12s ease;
+}
+.dm-peer:not(:disabled):hover {
+  background: var(--dm-hover);
+}
+.dm-peer-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.dm-peer-copy b {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dm-peer-copy b :deep(.display-nickname) {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dm-peer-copy small {
+  overflow: hidden;
+  color: var(--cpu-text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dm-head-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+}
+:global(.el-dropdown-menu__item.dm-danger-item) {
+  color: var(--cpu-danger);
+}
+
+.dm-scroller {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.dm-thread {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 16px 20px 20px;
+}
+.dm-load-more {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0 12px;
+}
+.dm-intro {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px 16px;
+  text-align: center;
+}
+.dm-intro b {
+  max-width: 420px;
+  margin-top: 6px;
+  font-size: 16px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.dm-intro > span {
+  max-width: 320px;
+  color: var(--cpu-text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.dm-day {
+  display: flex;
+  justify-content: center;
+  margin: 14px 0 10px;
+}
+.dm-day span {
+  padding: 2px 10px;
+  border-radius: 999px;
+  color: var(--cpu-text-muted);
+  background: var(--cpu-surface-soft);
+  font-size: 11.5px;
+}
+.dm-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-top: 3px;
+}
+.dm-msg.is-first {
+  margin-top: 12px;
+}
+.dm-msg.is-mine {
+  align-items: flex-end;
+}
+.dm-bubble-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: min(78%, 560px);
+}
+.dm-bubble {
+  min-width: 0;
+  margin: 0;
+  padding: 9px 14px;
+  border-radius: 6px 18px 18px 6px;
+  color: var(--cpu-text);
+  background: var(--dm-theirs);
+  font-size: 14.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.dm-msg.is-first .dm-bubble { border-top-left-radius: 18px; }
+.dm-msg.is-last .dm-bubble { border-bottom-left-radius: 18px; }
+.dm-msg.is-mine .dm-bubble {
+  border-radius: 18px 6px 6px 18px;
+  color: var(--dm-mine-ink);
+  background: var(--dm-mine);
+}
+.dm-msg.is-mine.is-first .dm-bubble { border-top-right-radius: 18px; }
+.dm-msg.is-mine.is-last .dm-bubble { border-bottom-right-radius: 18px; }
+.dm-msg.is-rejected .dm-bubble {
+  color: var(--cpu-text-secondary);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cpu-danger) 45%, var(--cpu-border));
+}
+.dm-msg-report {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--cpu-text-muted);
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease, background-color 0.12s ease;
+}
+.dm-msg:hover .dm-msg-report,
+.dm-msg-report:focus-visible {
+  opacity: 1;
+}
+.dm-msg-report:hover {
+  color: var(--cpu-danger);
+  background: color-mix(in srgb, var(--cpu-danger) 10%, transparent);
+}
+@media (hover: none) {
+  /* 触屏上逐条按钮太挤，举报统一走顶部“更多 → 举报” */
+  .dm-msg-report {
+    display: none;
+  }
+}
+.dm-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 4px 0;
+  color: var(--cpu-text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.dm-status.is-warn {
+  color: var(--dm-warn-ink);
+}
+.dm-status.is-danger {
+  color: var(--cpu-danger);
+}
+.dm-status.is-read {
+  color: var(--cpu-primary);
+}
+
+/* ---------- 输入区 ---------- */
+.dm-dock {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 6px 20px 12px;
+}
+.dm-notice {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  color: var(--cpu-text-secondary);
+  background: var(--cpu-surface-soft);
+  font-size: 12.5px;
+}
+.dm-notice .el-icon {
+  flex: 0 0 auto;
+  color: var(--cpu-primary);
+  font-size: 15px;
+}
+.dm-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 6px 6px 6px 16px;
+  border: 1px solid var(--cpu-border);
+  border-radius: 24px;
+  background: var(--cpu-surface);
+  cursor: text;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.dm-composer:focus-within {
+  border-color: color-mix(in srgb, var(--cpu-primary) 55%, var(--cpu-border));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--cpu-primary) 12%, transparent);
+}
+.dm-composer.is-disabled {
+  cursor: not-allowed;
+  background: var(--cpu-surface-soft);
+}
+.dm-composer textarea {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  max-height: 140px;
+  padding: 7px 0;
+  overflow-y: auto;
+  border: 0;
+  outline: 0;
+  color: var(--cpu-text);
+  background: transparent;
+  font: inherit;
+  font-size: 14.5px;
+  line-height: 22px;
+  resize: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.dm-composer textarea::placeholder {
+  color: var(--cpu-text-muted);
+}
+.dm-composer textarea:disabled {
+  cursor: not-allowed;
+}
+.dm-counter {
+  align-self: center;
+  color: var(--cpu-text-muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+.dm-send {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--cpu-button-on-primary);
+  background: var(--cpu-button-primary);
+  font-size: 18px;
+  transition: transform 0.12s ease, filter 0.15s ease;
+}
+.dm-send:not(:disabled):hover {
+  filter: brightness(1.06);
+}
+.dm-send:not(:disabled):active {
+  transform: scale(0.94);
+}
+.dm-send:disabled {
+  color: var(--cpu-text-muted);
+  background: var(--cpu-surface-subtle);
+}
+.dm-hint {
+  margin: 6px 0 0;
+  overflow: hidden;
+  color: var(--cpu-text-muted);
+  font-size: 11.5px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- 举报弹窗 ---------- */
+.dm-report-lead {
+  margin: 0 0 12px;
+  color: var(--cpu-text-secondary);
+}
+.dm-report-options {
+  display: grid;
+  gap: 6px;
+  max-height: 280px;
+  margin-bottom: 14px;
+  overflow: auto;
+}
+.dm-report-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--cpu-border-soft);
+  border-radius: 12px;
+  color: var(--cpu-text);
+  background: var(--cpu-surface);
+  text-align: left;
+  transition: border-color 0.15s ease;
+}
+.dm-report-option:hover {
+  border-color: color-mix(in srgb, var(--cpu-danger) 45%, var(--cpu-border));
+}
+.dm-report-option time {
+  color: var(--cpu-text-muted);
+  font-size: 11.5px;
+}
+.dm-report-option span {
+  overflow-wrap: anywhere;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.dm-report-foot {
+  margin: 14px 0 0;
+  color: var(--cpu-text-muted);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+@keyframes dm-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dm *,
+  .dm *::before,
+  .dm *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---------- 窄屏：列表与聊天二选一 ---------- */
 @media (max-width: 720px) {
-  .direct-messages { display: block; width: 100%; max-width: 100%; height: 100%; min-height: 0; border: 0; border-radius: 13px; background: color-mix(in srgb, var(--cpu-surface-soft) 58%, var(--cpu-card)); box-sizing: border-box; }
-  .conversation-sidebar { height: 100%; border-right: 0; background: transparent; }
-  .chat-pane { display: none; height: 100%; min-height: 0; }
-  .direct-messages.has-active .conversation-sidebar { display: none; }
-  .direct-messages.has-active .chat-pane { display: grid; }
-  .mobile-back { display: inline-flex; align-items: center; justify-content: center; gap: 2px; padding: 0 9px 0 7px; }
-  .sidebar-head { min-height: 62px; padding: 9px 12px; border-bottom: 1px solid var(--cpu-border-soft); background: var(--cpu-card); }
-  .sidebar-copy b { font-size: 16px; }
-  .sidebar-copy span { font-size: 10px; }
-  .notice-link { display: inline-flex; }
-  .conversation-list { gap: 7px; padding: 8px; scrollbar-gutter: auto; }
-  .conversation-row { min-height: 68px; padding: 11px; border: 1px solid var(--cpu-border-soft); border-radius: 11px; background: var(--cpu-card); box-shadow: var(--cpu-shadow-sm); }
-  .conversation-row:hover,
-  .conversation-row.active { background: var(--cpu-card); box-shadow: var(--cpu-shadow-sm); }
-  .conversation-row.active { border-color: color-mix(in srgb, var(--cpu-primary) 30%, var(--cpu-border-soft)); }
-  .conversation-line b { font-size: 14px; }
-  .conversation-preview { font-size: 11px; }
-  .sidebar-state,
-  .conversation-sidebar :deep(.el-empty) { margin: 10px; border: 1px solid var(--cpu-border-soft); border-radius: 11px; background: var(--cpu-card); }
-  .message-scroller { padding: 12px 10px 18px; background: color-mix(in srgb, var(--cpu-surface-soft) 72%, var(--cpu-card)); }
-  .message-row { margin: 6px 0; }
-  .message-bubble { max-width: 86%; padding: 9px 11px 7px; border-radius: 6px 15px 15px 15px; }
-  .mine .message-bubble { border-radius: 15px 6px 15px 15px; }
-  .chat-head { position: sticky; top: 0; z-index: 3; min-height: 58px; padding: 7px 9px; gap: 7px; background: color-mix(in srgb, var(--cpu-card) 96%, transparent); box-shadow: 0 5px 18px rgba(15, 23, 42, .05); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
-  .chat-head :deep(.user-avatar) { width: 36px !important; height: 36px !important; }
-  .chat-title b { font-size: 14px; }
-  .chat-title span { font-size: 10px; }
-  .chat-title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .profile-link { flex: 0 0 auto; min-width: 44px; margin-left: 0 !important; padding-left: 5px !important; padding-right: 5px !important; font-size: 12px; }
-  .composer { padding: 8px 9px max(9px, env(safe-area-inset-bottom)); gap: 6px; border-top-color: color-mix(in srgb, var(--cpu-primary) 12%, var(--cpu-border-soft)); }
-  .composer-row { gap: 7px; }
-  .composer :deep(.el-textarea__inner) { min-height: 40px !important; padding: 9px 11px; border-radius: 11px; }
-  .composer-row :deep(.el-button) { min-width: 62px; min-height: 40px; padding-inline: 13px; border-radius: 11px; }
-  .composer-hint { padding-inline: 2px; }
-  .new-chat-tip { min-height: 100%; padding: 24px 22px; }
+  .dm {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    min-height: 0;
+    border: 0;
+    border-radius: 14px;
+    box-sizing: border-box;
+  }
+  .dm-side {
+    height: 100%;
+    border-right: 0;
+    background: var(--cpu-card);
+  }
+  .dm-chat {
+    display: none;
+    height: 100%;
+  }
+  .dm.has-active .dm-side {
+    display: none;
+  }
+  .dm.has-active .dm-chat {
+    display: flex;
+  }
+  .dm-side-head {
+    height: 54px;
+    padding: 0 8px 0 16px;
+  }
+  .dm-notice-link {
+    display: inline-flex;
+  }
+  .dm-list {
+    padding: 0 6px 8px;
+  }
+  .dm-row {
+    padding: 10px 8px;
+  }
+  .dm-back {
+    display: grid;
+    margin-right: -4px;
+    color: var(--cpu-primary);
+    font-size: 20px;
+  }
+  .dm-chat-head {
+    height: 56px;
+    padding: 0 4px;
+  }
+  .dm-peer {
+    padding-right: 4px;
+  }
+  .dm-thread {
+    padding: 10px 12px 14px;
+  }
+  .dm-bubble-row {
+    max-width: 84%;
+  }
+  .dm-dock {
+    padding: 6px 8px max(8px, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--cpu-border-soft);
+  }
+  .dm-composer {
+    padding: 4px 4px 4px 14px;
+    border-radius: 22px;
+  }
+  .dm-composer textarea {
+    /* 16px 以下 iOS 会在聚焦时自动放大页面 */
+    font-size: 16px;
+    max-height: 112px;
+  }
+  .dm-hint {
+    margin-top: 5px;
+    font-size: 10.5px;
+  }
 }
 
 @media (max-width: 380px) {
-  .chat-head :deep(.user-avatar) { width: 34px !important; height: 34px !important; }
-  .profile-link { display: none; }
-  .message-bubble { max-width: 92%; }
-  .composer-hint { font-size: 10px; }
+  .dm-bubble-row {
+    max-width: 90%;
+  }
 }
 </style>
