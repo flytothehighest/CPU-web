@@ -1328,14 +1328,13 @@ html[data-theme="dark"] .mobile-actions {
   width: min(clamp(440px, 32vw, 560px), calc(100vw - 122px));
   height: min(clamp(560px, 82dvh, 860px), calc(100dvh - 52px));
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--cpu-primary) 30%, var(--cpu-border-soft));
-  border-radius: 24px;
+  border: 1px solid var(--cpu-border);
+  border-radius: 22px;
   color: var(--cpu-text);
-  background:
-    linear-gradient(155deg, color-mix(in srgb, var(--cpu-primary) 6%, var(--cpu-card)) 0%, var(--cpu-card) 32%);
+  background: var(--cpu-card);
   box-shadow:
-    0 28px 72px color-mix(in srgb, var(--cpu-primary-dark) 22%, transparent),
-    0 5px 20px rgba(15, 23, 42, 0.1);
+    0 24px 64px rgba(15, 23, 42, 0.16),
+    0 4px 16px rgba(15, 23, 42, 0.06);
   isolation: isolate;
 }
 
@@ -1527,12 +1526,7 @@ html[data-theme="dark"] .mobile-actions {
 .forum-post-fab:focus-visible { outline: 3px solid color-mix(in srgb, var(--cpu-primary) 28%, transparent); outline-offset: 3px; }
 
 html[data-theme="dark"] .assistant-widget {
-  border-color: color-mix(in srgb, var(--cpu-primary) 34%, var(--cpu-border-soft));
-  background:
-    linear-gradient(155deg, color-mix(in srgb, var(--cpu-primary) 9%, var(--cpu-card)) 0%, var(--cpu-card) 38%);
-  box-shadow:
-    0 30px 78px rgba(0, 0, 0, 0.48),
-    0 0 0 1px rgba(54, 208, 183, 0.05);
+  box-shadow: 0 30px 78px rgba(0, 0, 0, 0.5);
 }
 
 .mobile-login-btn {

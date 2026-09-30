@@ -1,270 +1,318 @@
 <template>
-  <div class="assistant-page" :class="{ 'assistant-page--embedded': embedded }">
-    <section
-      class="assistant-shell cpu-card"
-      :class="{ 'is-composer-focused': composerFocused }"
+  <div
+    class="sj"
+    :class="{
+      'sj--embedded': embedded,
+      'sj--docked': historyDocked,
+      'is-composer-focused': composerFocused,
+    }"
+  >
+    <aside
+      v-if="auth.isLoggedIn && (historyDocked || historyOpen)"
+      class="sj-history"
+      :class="{ 'sj-history--overlay': !historyDocked }"
+      :role="historyDocked ? undefined : 'dialog'"
+      aria-label="历史对话"
     >
-      <div class="assistant-head">
-        <span class="assistant-mark">
-          <el-icon v-if="embedded"><ChatDotRound /></el-icon>
-          <template v-else>拾</template>
-        </span>
-        <div class="assistant-head-copy">
+      <div class="sj-history-head">
+        <strong>历史对话</strong>
+        <button v-if="!historyDocked" type="button" class="sj-icon-btn" aria-label="关闭历史对话" @click="historyOpen = false">
+          <el-icon><Close /></el-icon>
+        </button>
+      </div>
+      <button type="button" class="sj-history-new" @click="startNewConversation">
+        <el-icon><EditPen /></el-icon>
+        <span>新对话</span>
+      </button>
+      <div v-if="sessions.length" class="sj-history-list">
+        <section v-for="group in sessionGroups" :key="group.label" class="sj-history-group">
+          <h3>{{ group.label }}</h3>
+          <div
+            v-for="session in group.items"
+            :key="session.id"
+            class="sj-history-item"
+            :class="{ 'is-active': session.id === activeSessionId }"
+          >
+            <button type="button" class="sj-history-open" :title="session.title" @click="openConversation(session.id)">
+              <span class="sj-history-title">{{ session.title }}</span>
+              <span class="sj-history-preview">{{ sessionPreview(session) }}</span>
+            </button>
+            <button type="button" class="sj-history-delete" aria-label="删除此对话" @click="deleteConversation(session.id)">
+              <el-icon><Delete /></el-icon>
+            </button>
+          </div>
+        </section>
+      </div>
+      <div v-else class="sj-history-empty">
+        <el-icon><ChatDotRound /></el-icon>
+        <span>还没有历史对话</span>
+      </div>
+      <p class="sj-history-caption">
+        <i :class="`is-${cloudSyncState}`"></i>{{ historyCaption }}
+      </p>
+    </aside>
+    <transition name="sj-fade">
+      <div
+        v-if="auth.isLoggedIn && historyOpen && !historyDocked"
+        class="sj-scrim"
+        aria-hidden="true"
+        @click="historyOpen = false"
+      ></div>
+    </transition>
+
+    <section class="sj-main">
+      <header class="sj-head">
+        <button
+          v-if="!historyDocked"
+          type="button"
+          class="sj-icon-btn"
+          aria-label="查看历史对话"
+          :disabled="!auth.isLoggedIn"
+          @click="historyOpen = true"
+        >
+          <el-icon><Expand /></el-icon>
+        </button>
+        <div class="sj-head-title">
+          <span class="sj-mark sj-mark--sm" aria-hidden="true"><SparkMark /></span>
           <h1>拾间AI</h1>
-          <p>问功能、找入口，也可以直接聊天</p>
         </div>
-        <div class="assistant-head-actions cpu-button-row">
-          <button data-cpu-button="icon" type="button" aria-label="查看历史对话" :disabled="!auth.isLoggedIn" @click="historyOpen = true">
-            <el-icon><Clock /></el-icon>
+        <div class="sj-head-actions">
+          <span
+            v-if="assistantQuota"
+            class="sj-quota"
+            :class="{ 'is-empty': assistantQuotaExhausted }"
+            :title="`Lv.${assistantQuota.level} ${assistantQuota.levelName} · 今日已用 ${assistantQuota.used} 次 · 点数 ${assistantQuota.points}`"
+          >
+            今日 {{ assistantQuota.remaining }}/{{ assistantQuota.dailyQuota }}<template v-if="assistantQuota.points"> · 点数 {{ assistantQuota.points }}</template>
+          </span>
+          <button type="button" class="sj-icon-btn" aria-label="新建对话" title="新建对话" :disabled="!messages.length" @click="startNewConversation">
+            <el-icon><EditPen /></el-icon>
           </button>
-          <button data-cpu-button="icon" type="button" aria-label="新建对话" :disabled="!messages.length" @click="startNewConversation">
-            <el-icon><Plus /></el-icon>
-          </button>
-          <button data-cpu-button="icon" v-if="embedded" type="button" aria-label="在完整页面打开拾间AI" @click="openFullPage">
+          <button v-if="embedded" type="button" class="sj-icon-btn" aria-label="在完整页面打开拾间AI" title="完整页面" @click="openFullPage">
             <el-icon><FullScreen /></el-icon>
           </button>
-          <button data-cpu-button="icon" v-if="embedded" type="button" aria-label="关闭拾间AI" @click="emit('close')">
+          <button v-if="embedded" type="button" class="sj-icon-btn" aria-label="关闭拾间AI" @click="emit('close')">
             <el-icon><Close /></el-icon>
           </button>
         </div>
+      </header>
+
+      <div v-if="!auth.isLoggedIn" class="sj-stage sj-gate">
+        <span class="sj-mark sj-mark--lg" aria-hidden="true"><SparkMark /></span>
+        <h2>登录后使用拾间AI</h2>
+        <p>登录后即可开始对话，历史记录和每日额度会跟随账号同步。</p>
+        <button type="button" class="sj-gate-btn" @click="goLogin">
+          <el-icon><Lock /></el-icon>
+          <span>登录并继续</span>
+        </button>
       </div>
 
-      <div v-if="!auth.isLoggedIn" class="assistant-auth-gate">
-        <span class="auth-gate-icon"><el-icon><Lock /></el-icon></span>
-        <strong>登录后使用拾间 AI</strong>
-        <p>登录后即可开始对话；历史记录和每日额度会跟随账号同步。</p>
-        <el-button type="primary" round @click="goLogin">登录并继续</el-button>
-      </div>
-
-      <div v-else-if="!messages.length" class="assistant-welcome">
-        <strong>想做什么？直接告诉我。</strong>
-        <span>可以询问站内功能、校园服务和操作步骤，也可以直接聊天。</span>
-        <small>
-          拾间AI不会读取你的课表、成绩或其他个人数据；涉及本人数据时会引导你进入对应页面自行查看。
-          <a href="/privacy.html" target="_blank" rel="noopener noreferrer">查看隐私说明</a>
-        </small>
-        <div class="welcome-prompts">
-          <button data-cpu-button="action" v-for="prompt in welcomePrompts" :key="prompt" type="button" @click="sendPrompt(prompt)">
-            {{ prompt }}
+      <div v-else-if="!messages.length" class="sj-stage sj-welcome">
+        <span class="sj-mark sj-mark--lg" aria-hidden="true"><SparkMark /></span>
+        <h2>{{ welcomeGreeting }}</h2>
+        <p>问站内功能、校园服务和操作步骤，也可以直接聊天。</p>
+        <div class="sj-prompts">
+          <button
+            v-for="prompt in welcomePrompts"
+            :key="prompt.text"
+            type="button"
+            class="sj-prompt"
+            :disabled="assistantQuotaExhausted"
+            @click="sendPrompt(prompt.text)"
+          >
+            <span class="sj-prompt-icon"><el-icon><component :is="prompt.icon" /></el-icon></span>
+            <span class="sj-prompt-copy">
+              <strong>{{ prompt.text }}</strong>
+              <small>{{ prompt.hint }}</small>
+            </span>
           </button>
         </div>
+        <small class="sj-privacy">
+          拾间AI不会读取你的课表、成绩等个人数据，涉及本人数据时会引导你到对应页面查看。
+          <a href="/privacy.html" target="_blank" rel="noopener noreferrer">隐私说明</a>
+        </small>
       </div>
 
       <div
         v-else
         ref="conversationRef"
-        class="conversation"
+        class="sj-thread"
         aria-live="polite"
         @scroll.passive="handleConversationScroll"
       >
-        <article
-          v-for="message in messages"
-          :key="message.id"
-          class="message"
-          :class="`message--${message.role}`"
-        >
-          <div class="message-label">{{ message.role === "user" ? "你" : "拾间AI" }}</div>
-          <div class="message-bubble">
-            <template v-if="message.content">
-              <p v-if="message.role === 'user'" class="user-message-content">
-                {{ message.content }}
-              </p>
-              <div
-                v-else
-                class="message-markdown"
-                :class="{ 'is-streaming': message.streaming }"
-                v-html="renderAssistantMarkdown(message.content)"
-              ></div>
-            </template>
-            <div v-if="message.role === 'assistant' && message.images?.length" class="generated-images">
-              <button data-cpu-button="media"
-                v-for="(image, index) in message.images"
-                :key="image.url"
-                type="button"
-                :aria-label="`查看图片 ${index + 1}`"
-                @click="openGeneratedImages(message.images || [], index)"
-              >
-                <img :src="image.url" :alt="image.alt" loading="lazy" />
-              </button>
-            </div>
-            <div v-if="message.role === 'assistant' && visibleLinks(message.sources).length" class="assistant-sources">
-              <span>参考来源</span>
-              <a
-                v-for="source in visibleLinks(message.sources)"
-                :key="source.url"
-                :href="source.url"
-                target="_blank"
-                rel="noopener noreferrer nofollow"
-              >{{ source.title }}</a>
-            </div>
-            <div v-if="!message.content && message.streaming" class="assistant-thinking" aria-label="拾间AI正在回答">
-              <i></i><i></i><i></i>
-              <span>{{ message.streamStatus || "正在生成回答…" }}</span>
-            </div>
-            <div v-if="message.streaming && message.content" class="assistant-stream-status">
-              <i></i>{{ message.streamStatus || "正在生成回答…" }}
-            </div>
-            <div v-if="visibleLinks(message.actions).length" class="action-list">
-              <button data-cpu-button="surface"
-                v-for="action in visibleLinks(message.actions)"
-                :key="action.id"
-                type="button"
-                class="action-card"
-                @click="open(action)"
-              >
-                <span class="action-icon"><AppIcon :legacy="action.icon" name="link" /></span>
-                <span class="action-copy">
-                  <strong>{{ action.label }}</strong>
-                  <small>{{ action.description }}</small>
-                </span>
-                <el-icon><Right /></el-icon>
-              </button>
-            </div>
-            <div v-if="message.suggestions?.length" class="suggestions">
-              <button data-cpu-button="action"
-                v-for="suggestion in message.suggestions"
-                :key="suggestion"
-                type="button"
-                @click="sendPrompt(suggestion)"
-              >
-                {{ suggestion }}
-              </button>
-            </div>
-          </div>
-        </article>
-      </div>
-
-      <div v-if="auth.isLoggedIn && assistantError && !assistantLoading" class="assistant-error">
-        <span>{{ assistantError }}</span>
-        <el-button text type="primary" @click="retryAssistant">重试</el-button>
-      </div>
-
-      <div v-if="auth.isLoggedIn" class="assistant-form" @pointerdown.capture="captureConversationAnchor">
-        <el-input
-          v-model="keywordInput"
-          type="textarea"
-          :autosize="{ minRows: 1, maxRows: 4 }"
-          resize="none"
-          maxlength="500"
-          :placeholder="assistantQuotaExhausted ? '今日额度和点数都已用完' : '给拾间AI发消息'"
-          @keydown="handleComposerKeydown"
-          @focus="handleComposerFocus"
-          @blur="handleComposerBlur"
-        />
-        <button data-cpu-button="primary"
-          type="button"
-          class="composer-send"
-          :aria-label="assistantLoading ? '正在回答' : '发送'"
-          :disabled="!keywordInput.trim() || assistantLoading || assistantQuotaExhausted"
-          @click="submitSearch"
-        >
-          <el-icon v-if="assistantLoading" class="is-loading"><Loading /></el-icon>
-          <el-icon v-else><Promotion /></el-icon>
-          <span>发送</span>
-        </button>
-      </div>
-      <p v-if="auth.isLoggedIn" class="assistant-disclaimer">
-        内容由 AI 生成，请注意甄别<span v-if="assistantQuota"> · Lv.{{ assistantQuota.level }} · 今日 {{ assistantQuota.remaining }}/{{ assistantQuota.dailyQuota }} · 点数 {{ assistantQuota.points }}</span>
-      </p>
-    </section>
-
-    <transition name="embedded-history">
-      <aside
-        v-if="embedded && historyOpen"
-        class="embedded-history-panel"
-        role="dialog"
-        aria-label="历史对话"
-      >
-        <div class="embedded-history-head">
-          <strong>历史对话</strong>
-          <button data-cpu-button="icon" type="button" aria-label="关闭历史对话" @click="historyOpen = false">
-            <el-icon><Close /></el-icon>
-          </button>
-        </div>
-        <div class="history-caption">{{ historyCaption }}</div>
-        <button data-cpu-button="action" type="button" class="history-new" @click="startNewConversation">
-          <el-icon><Plus /></el-icon>
-          <span>新对话</span>
-        </button>
-        <div v-if="sessions.length" class="history-list">
-          <div
-            v-for="session in sessions"
-            :key="session.id"
-            class="history-item"
-            :class="{ active: session.id === activeSessionId }"
+        <div class="sj-thread-inner">
+          <article
+            v-for="message in messages"
+            :key="message.id"
+            class="sj-msg"
+            :class="`sj-msg--${message.role}`"
           >
-            <button data-cpu-button="surface" type="button" class="history-open" @click="openConversation(session.id)">
-              <strong>{{ session.title }}</strong>
-              <span>{{ sessionPreview(session) }}</span>
-              <time>{{ formatSessionTime(session.updatedAt) }}</time>
+            <template v-if="message.role === 'user'">
+              <p class="sj-user-bubble">{{ message.content }}</p>
+            </template>
+            <template v-else>
+              <span class="sj-mark sj-mark--avatar" :class="{ 'is-busy': message.streaming }" aria-hidden="true"><SparkMark /></span>
+              <div class="sj-answer">
+                <div v-if="!message.content && message.streaming" class="sj-thinking" aria-label="拾间AI正在回答">
+                  {{ message.streamStatus || "正在思考…" }}
+                </div>
+                <div
+                  v-if="message.content"
+                  class="sj-markdown"
+                  :class="{ 'is-streaming': message.streaming }"
+                  v-html="renderAssistantMarkdown(message.content)"
+                ></div>
+                <div v-if="message.streaming && message.content && message.streamStatus?.startsWith('仍在')" class="sj-stream-note">
+                  {{ message.streamStatus }}
+                </div>
+
+                <div v-if="message.images?.length" class="sj-images">
+                  <button
+                    v-for="(image, index) in message.images"
+                    :key="image.url"
+                    type="button"
+                    :aria-label="`查看图片 ${index + 1}`"
+                    @click="openGeneratedImages(message.images || [], index)"
+                  >
+                    <img :src="image.url" :alt="image.alt" loading="lazy" />
+                  </button>
+                </div>
+
+                <div v-if="visibleLinks(message.actions).length" class="sj-actions">
+                  <button
+                    v-for="action in visibleLinks(message.actions)"
+                    :key="action.id"
+                    type="button"
+                    class="sj-action"
+                    @click="open(action)"
+                  >
+                    <span class="sj-action-icon"><AppIcon :legacy="action.icon" name="link" /></span>
+                    <span class="sj-action-copy">
+                      <strong>{{ action.label }}</strong>
+                      <small v-if="action.description">{{ action.description }}</small>
+                    </span>
+                    <el-icon class="sj-action-go"><Right /></el-icon>
+                  </button>
+                </div>
+
+                <div v-if="visibleLinks(message.sources).length" class="sj-sources">
+                  <span class="sj-sources-label">参考来源</span>
+                  <a
+                    v-for="(source, index) in visibleLinks(message.sources)"
+                    :key="source.url"
+                    :href="source.url"
+                    :title="source.url"
+                    target="_blank"
+                    rel="noopener noreferrer nofollow"
+                  ><b>{{ index + 1 }}</b>{{ source.title }}</a>
+                </div>
+
+                <div v-if="!message.streaming && message.content" class="sj-msg-tools">
+                  <button
+                    type="button"
+                    :aria-label="copiedMessageId === message.id ? '已复制' : '复制回答'"
+                    :title="copiedMessageId === message.id ? '已复制' : '复制'"
+                    @click="copyMessage(message)"
+                  >
+                    <el-icon><Check v-if="copiedMessageId === message.id" /><CopyDocument v-else /></el-icon>
+                  </button>
+                </div>
+
+                <div v-if="message.suggestions?.length && !message.streaming && message.id === lastAssistantMessageId" class="sj-followups">
+                  <button
+                    v-for="suggestion in message.suggestions"
+                    :key="suggestion"
+                    type="button"
+                    :disabled="assistantLoading || assistantQuotaExhausted"
+                    @click="sendPrompt(suggestion)"
+                  >
+                    <el-icon><Right /></el-icon>
+                    <span>{{ suggestion }}</span>
+                  </button>
+                </div>
+              </div>
+            </template>
+          </article>
+        </div>
+      </div>
+
+      <div v-if="auth.isLoggedIn" class="sj-dock">
+        <div v-if="assistantError && !assistantLoading" class="sj-error" role="alert">
+          <el-icon><WarningFilled /></el-icon>
+          <span>{{ assistantError }}</span>
+          <button type="button" @click="retryAssistant">重试</button>
+        </div>
+        <div
+          class="sj-composer"
+          :class="{ 'is-disabled': assistantQuotaExhausted }"
+          @pointerdown.capture="captureConversationAnchor"
+          @click="focusComposer"
+        >
+          <textarea
+            ref="composerRef"
+            v-model="keywordInput"
+            rows="1"
+            maxlength="500"
+            enterkeyhint="send"
+            :placeholder="assistantQuotaExhausted ? '今日额度和点数都已用完，明天 00:00 恢复' : '给拾间AI发消息'"
+            :disabled="assistantQuotaExhausted"
+            aria-label="给拾间AI发消息"
+            @input="resizeComposer"
+            @keydown="handleComposerKeydown"
+            @focus="handleComposerFocus"
+            @blur="handleComposerBlur"
+          ></textarea>
+          <div class="sj-composer-side">
+            <span v-if="keywordInput.length >= 400" class="sj-counter">{{ keywordInput.length }}/500</span>
+            <button
+              v-if="assistantLoading"
+              type="button"
+              class="sj-send is-stop"
+              aria-label="停止生成"
+              title="停止生成"
+              @click.stop="stopAssistant"
+            >
+              <i></i>
             </button>
-            <button data-cpu-button="danger" type="button" class="history-delete" aria-label="删除此对话" @click="deleteConversation(session.id)">
-              <el-icon><Delete /></el-icon>
+            <button
+              v-else
+              type="button"
+              class="sj-send"
+              aria-label="发送"
+              title="发送（Enter）"
+              :disabled="!keywordInput.trim() || assistantQuotaExhausted"
+              @click.stop="submitSearch"
+            >
+              <el-icon><Top /></el-icon>
             </button>
           </div>
         </div>
-        <div v-else class="history-empty">
-          <el-icon><ChatDotRound /></el-icon>
-          <span>还没有历史对话</span>
-        </div>
-      </aside>
-    </transition>
-
-    <el-drawer
-      v-if="!embedded"
-      v-model="historyOpen"
-      class="assistant-history-drawer"
-      direction="ltr"
-      size="min(86vw, 360px)"
-      title="历史对话"
-      append-to-body
-    >
-      <div class="history-caption">{{ historyCaption }}</div>
-      <button data-cpu-button="action" type="button" class="history-new" @click="startNewConversation">
-        <el-icon><Plus /></el-icon>
-        <span>新对话</span>
-      </button>
-      <div v-if="sessions.length" class="history-list">
-        <div
-          v-for="session in sessions"
-          :key="session.id"
-          class="history-item"
-          :class="{ active: session.id === activeSessionId }"
-        >
-          <button data-cpu-button="surface" type="button" class="history-open" @click="openConversation(session.id)">
-            <strong>{{ session.title }}</strong>
-            <span>{{ sessionPreview(session) }}</span>
-            <time>{{ formatSessionTime(session.updatedAt) }}</time>
-          </button>
-          <button data-cpu-button="danger" type="button" class="history-delete" aria-label="删除此对话" @click="deleteConversation(session.id)">
-            <el-icon><Delete /></el-icon>
-          </button>
-        </div>
+        <p class="sj-footnote">内容由 AI 生成，请注意甄别</p>
       </div>
-      <div v-else class="history-empty">
-        <el-icon><ChatDotRound /></el-icon>
-        <span>还没有历史对话</span>
-      </div>
-    </el-drawer>
-
+    </section>
   </div>
 </template>
 
 <script setup lang="ts">
 import AppIcon from "@/components/common/AppIcon.vue";
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   ChatDotRound,
-  Clock,
+  Check,
   Close,
+  Coin,
+  CopyDocument,
   Delete,
+  EditPen,
+  Expand,
   FullScreen,
-  Loading,
+  Headset,
+  Lightning,
   Lock,
-  Plus,
-  Promotion,
   Right,
+  Top,
+  WarningFilled,
 } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import {
@@ -353,15 +401,61 @@ let conversationAnchorRestoring = false;
 const conversationAnchorTimers: number[] = [];
 const CONVERSATION_BOTTOM_ANCHOR_THRESHOLD = 36;
 
-const welcomePrompts = ["宿舍电费在哪里查？", "怎么打开药苑之声？", "AI 额度怎么计算？"];
+const composerRef = ref<HTMLTextAreaElement | null>(null);
+const copiedMessageId = ref<number | null>(null);
+let copiedTimer = 0;
+
+// 拾间AI的品牌标：一大一小两颗星芒
+const SparkMark = () => h("svg", { viewBox: "0 0 24 24", "aria-hidden": "true" }, [
+  h("path", { d: "M12 2.5c.6 4.6 2.9 6.9 7.5 7.5-4.6.6-6.9 2.9-7.5 7.5-.6-4.6-2.9-6.9-7.5-7.5 4.6-.6 6.9-2.9 7.5-7.5Z" }),
+  h("path", { d: "M18.5 15.5c.25 1.9 1.1 2.75 3 3-1.9.25-2.75 1.1-3 3-.25-1.9-1.1-2.75-3-3 1.9-.25 2.75-1.1 3-3Z" }),
+]);
+
+// 完整页面在宽屏上把历史对话常驻在左侧；悬浮窗和窄屏仍然用抽屉
+const DOCKED_HISTORY_QUERY = "(min-width: 1024px)";
+const dockedHistoryMedia = typeof window !== "undefined" && window.matchMedia
+  ? window.matchMedia(DOCKED_HISTORY_QUERY)
+  : null;
+const wideViewport = ref(Boolean(dockedHistoryMedia?.matches));
+const historyDocked = computed(() => !embedded && wideViewport.value);
+
+const welcomePrompts = [
+  { text: "宿舍电费在哪里查？", hint: "校园服务", icon: Lightning },
+  { text: "怎么打开药苑之声？", hint: "站内功能", icon: Headset },
+  { text: "AI 额度怎么计算？", hint: "使用说明", icon: Coin },
+];
+const welcomeGreeting = computed(() => {
+  const name = auth.user?.nickname?.trim();
+  return name ? `${name}，想了解点什么？` : "想了解点什么？";
+});
+// 追问建议只挂在最新一条回答下，旧回答的建议已经过时
+const lastAssistantMessageId = computed(() => (
+  [...messages.value].reverse().find((item) => item.role === "assistant")?.id ?? null
+));
 const assistantQuotaExhausted = computed(() => (
   assistantQuota.value !== null && assistantQuota.value.totalRemaining <= 0
 ));
 const historyCaption = computed(() => {
-  if (!auth.isLoggedIn) return "记录保存在当前设备；登录后可同步到账号，最多保留 20 个对话。";
-  if (cloudSyncState.value === "syncing") return "正在同步当前账号的历史对话…";
-  if (cloudSyncState.value === "error") return "云同步暂时不可用，本机记录已保留。";
-  return "已与当前账号同步，最多保留 20 个对话。";
+  if (!auth.isLoggedIn) return "记录保存在当前设备，登录后可同步到账号";
+  if (cloudSyncState.value === "syncing") return "正在同步历史对话…";
+  if (cloudSyncState.value === "error") return "云同步暂时不可用，本机记录已保留";
+  return `已同步到账号，最多保留 ${MAX_SESSIONS} 个对话`;
+});
+const sessionGroups = computed(() => {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const today = startOfToday.getTime();
+  const day = 24 * 60 * 60 * 1000;
+  const buckets: { label: string; since: number; items: ConversationSession[] }[] = [
+    { label: "今天", since: today, items: [] },
+    { label: "昨天", since: today - day, items: [] },
+    { label: "近 7 天", since: today - 6 * day, items: [] },
+    { label: "更早", since: Number.NEGATIVE_INFINITY, items: [] },
+  ];
+  for (const session of sessions.value) {
+    buckets.find((bucket) => session.updatedAt >= bucket.since)!.items.push(session);
+  }
+  return buckets.filter((bucket) => bucket.items.length);
 });
 
 onMounted(() => {
@@ -370,6 +464,14 @@ onMounted(() => {
     void loadAssistantQuota();
   }
   window.visualViewport?.addEventListener("resize", handleComposerViewportChange);
+  dockedHistoryMedia?.addEventListener("change", handleDockedHistoryMediaChange);
+  resizeComposer();
+  // 悬浮窗打开时恢复的上一段对话要直接落在最新一条消息上
+  if (messages.value.length) scrollConversation();
+});
+
+watch(keywordInput, () => {
+  void nextTick(resizeComposer);
 });
 
 watch(() => auth.isLoggedIn, (loggedIn) => {
@@ -461,7 +563,7 @@ async function askAssistant(keyword: string, history: CampusAssistantMessage[]) 
     role: "assistant",
     content: "",
     streaming: true,
-    streamStatus: "正在连接 AI 服务…",
+    streamStatus: "正在思考…",
   });
   const assistantMessage = messages.value.find((item) => item.id === assistantMessageId)!;
   scrollConversation();
@@ -481,7 +583,7 @@ async function askAssistant(keyword: string, history: CampusAssistantMessage[]) 
         const seconds = Math.floor(elapsedMs / 1000);
         assistantMessage.streamStatus = seconds >= 5
           ? `仍在生成，已等待 ${seconds} 秒…`
-          : "正在生成回答…";
+          : "正在思考…";
         scrollConversation();
       },
     });
@@ -495,7 +597,16 @@ async function askAssistant(keyword: string, history: CampusAssistantMessage[]) 
     persistActiveConversation();
     scrollConversation();
   } catch (error) {
-    if (seq !== assistantSeq || controller.signal.aborted) return;
+    if (seq !== assistantSeq) return;
+    if (controller.signal.aborted) {
+      // 用户主动停止：保留已经生成的部分，空回答直接撤掉
+      assistantMessage.streaming = false;
+      if (!assistantMessage.content.trim()) {
+        messages.value = messages.value.filter((item) => item.id !== assistantMessage.id);
+      }
+      persistActiveConversation();
+      return;
+    }
     messages.value = messages.value.filter((item) => item.id !== assistantMessage.id);
     persistActiveConversation();
     assistantError.value = normalizeRequestError(error, "拾间AI暂时不可用");
@@ -549,6 +660,42 @@ function handleComposerKeydown(event: Event | KeyboardEvent) {
   if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
   event.preventDefault();
   void submitSearch();
+}
+
+function stopAssistant() {
+  if (!assistantLoading.value) return;
+  assistantController?.abort();
+}
+
+function resizeComposer() {
+  const element = composerRef.value;
+  if (!element) return;
+  element.style.height = "auto";
+  element.style.height = `${element.scrollHeight}px`;
+}
+
+function focusComposer(event: MouseEvent) {
+  if (event.target instanceof HTMLButtonElement) return;
+  composerRef.value?.focus();
+}
+
+async function copyMessage(message: ConversationMessage) {
+  try {
+    await navigator.clipboard.writeText(message.content);
+  } catch {
+    ElMessage.warning("复制失败，请长按文字手动复制");
+    return;
+  }
+  copiedMessageId.value = message.id;
+  window.clearTimeout(copiedTimer);
+  copiedTimer = window.setTimeout(() => {
+    copiedMessageId.value = null;
+  }, 1600);
+}
+
+function handleDockedHistoryMediaChange(event: MediaQueryListEvent) {
+  wideViewport.value = event.matches;
+  if (event.matches) historyOpen.value = false;
 }
 
 function captureConversationAnchor() {
@@ -698,16 +845,16 @@ async function deleteConversation(sessionId: string) {
 }
 
 function sessionPreview(session: ConversationSession) {
-  return [...session.messages].reverse().find((item) => item.content.trim())?.content.trim() || "空对话";
-}
-
-function formatSessionTime(timestamp: number) {
-  const date = new Date(timestamp);
-  const now = new Date();
-  if (date.toDateString() === now.toDateString()) {
-    return date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
-  }
-  return date.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
+  const content = [...session.messages].reverse().find((item) => item.content.trim())?.content || "";
+  // 列表里只显示一行纯文字，去掉 Markdown 标记和换行
+  const plain = content
+    .slice(0, 240)
+    .replace(/```[\s\S]*?(```|$)/g, " ")
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/[*_`#>|~]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return plain || "空对话";
 }
 
 function ensureActiveConversation(firstMessage: string) {
@@ -757,7 +904,7 @@ function scrollConversation() {
     void nextTick(() => {
       const element = conversationRef.value;
       if (!element) return;
-      const lastMessage = element.querySelector<HTMLElement>(".message:last-of-type");
+      const lastMessage = element.querySelector<HTMLElement>(".sj-msg:last-of-type");
       const maxScrollTop = Math.max(0, element.scrollHeight - element.clientHeight);
       const lastMessageScrollTop = lastMessage
         ? Math.max(0, lastMessage.offsetTop + lastMessage.offsetHeight - element.clientHeight + 12)
@@ -1124,1020 +1271,1248 @@ onBeforeUnmount(() => {
   if (scrollFrame) cancelAnimationFrame(scrollFrame);
   releaseConversationAnchor();
   window.visualViewport?.removeEventListener("resize", handleComposerViewportChange);
+  dockedHistoryMedia?.removeEventListener("change", handleDockedHistoryMediaChange);
+  window.clearTimeout(copiedTimer);
   window.clearTimeout(cloudSyncTimer);
   if (pendingCloudSession) void flushCloudSync();
 });
 </script>
 
 <style scoped>
-.assistant-page {
+/* 按钮统一在这里清掉浏览器默认样式；:where 保持零特异性，后面的具体类可以直接覆盖。 */
+.sj :where(button) {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.sj :where(button:disabled) {
+  cursor: default;
+}
+.sj :where(button:focus-visible) {
+  outline: 2px solid color-mix(in srgb, var(--cpu-primary) 60%, transparent);
+  outline-offset: 2px;
+}
+
+/* ---------- 外框 ---------- */
+.sj {
+  --sj-column: 768px;
+  --sj-radius: 20px;
+  --sj-user-bubble: color-mix(in srgb, var(--cpu-primary) 11%, var(--cpu-card));
+  --sj-hover: color-mix(in srgb, var(--cpu-text) 5%, transparent);
+  --sj-warn-ink: #a15c07;
+  position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 16px;
   width: 100%;
+  max-width: 1180px;
   height: 100%;
   min-height: 0;
-  max-width: 920px;
   margin: 0 auto;
-  overflow-y: auto;
-}
-.cpu-card {
+  overflow: hidden;
   color: var(--cpu-text);
   background: var(--cpu-card);
   border: 1px solid var(--cpu-border-soft);
-  border-radius: 14px;
-  padding: 18px 20px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  border-radius: var(--sj-radius);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 12px 32px rgba(15, 23, 42, 0.05);
 }
-.assistant-shell {
+:global(html[data-theme="dark"]) .sj {
+  --sj-warn-ink: var(--cpu-warn);
+  box-shadow: none;
+}
+
+.sj-main {
   display: flex;
-  flex: 1 0 auto;
-  flex-direction: column;
-  gap: 16px;
-  min-height: min(560px, 100%);
-  padding: 20px;
-  transform: none;
-  transition: background-color 0.18s ease, border-color 0.18s ease;
-}
-.assistant-shell:hover {
-  transform: none;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-}
-.assistant-head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.assistant-head-copy {
   flex: 1;
+  flex-direction: column;
   min-width: 0;
+  min-height: 0;
 }
-.assistant-head-actions {
+
+/* ---------- 顶栏 ---------- */
+.sj-head {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 6px;
+  height: 56px;
+  padding: 0 12px 0 14px;
+  border-bottom: 1px solid var(--cpu-border-soft);
 }
-.assistant-head-actions button {
-  position: relative;
-  display: grid;
-  width: 36px;
-  height: 36px;
-  place-items: center;
-  padding: 0;
-  border: 1px solid var(--cpu-border-soft);
-  border-radius: 11px;
-  color: var(--cpu-text-secondary);
-  background: var(--cpu-surface);
-  cursor: pointer;
-  font: inherit;
-}
-.assistant-head-actions button:hover {
-  color: var(--cpu-primary);
-  border-color: var(--cpu-primary);
-}
-.assistant-head-actions button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-.assistant-mark {
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 13px;
-  color: #fff;
-  background: linear-gradient(135deg, #0f8f78, #17aa8d);
-  box-shadow: 0 7px 18px rgba(22, 135, 118, 0.22);
-  font-size: 18px;
-  font-weight: 800;
-}
-.assistant-head h1 {
-  margin: 0;
-  font-size: 21px;
-}
-.assistant-head p {
-  margin: 3px 0 0;
-  color: var(--cpu-text-secondary);
-  font-size: 12px;
-}
-.assistant-welcome {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  padding: 24px 4px;
-  color: var(--cpu-text);
-}
-.assistant-welcome strong {
-  font-size: 20px;
-}
-.assistant-welcome > span {
-  color: var(--cpu-text-secondary);
-  font-size: 13px;
-  line-height: 1.7;
-}
-.assistant-welcome > small {
-  max-width: 680px;
-  color: var(--cpu-text-muted);
-  font-size: 12px;
-  line-height: 1.65;
-}
-.assistant-welcome > small a {
-  color: var(--cpu-primary);
-  text-decoration: none;
-}
-.assistant-auth-gate {
+.sj-head-title {
   display: flex;
   flex: 1;
-  min-height: 300px;
   align-items: center;
-  justify-content: center;
+  gap: 9px;
+  min-width: 0;
+  padding-left: 2px;
+}
+.sj-head-title h1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.sj-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.sj-quota {
+  margin-right: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: var(--cpu-text-secondary);
+  background: var(--cpu-surface-subtle);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sj-quota.is-empty {
+  color: var(--sj-warn-ink);
+  background: color-mix(in srgb, var(--cpu-warn) 12%, var(--cpu-card));
+}
+.sj-icon-btn {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--cpu-text-secondary);
+  font-size: 17px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.sj-icon-btn:not(:disabled):hover {
+  color: var(--cpu-text);
+  background: var(--sj-hover);
+}
+.sj-icon-btn:disabled {
+  opacity: 0.35;
+}
+
+/* ---------- 品牌标 ---------- */
+.sj-mark {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(140deg, var(--cpu-primary-light) 0%, var(--cpu-primary) 48%, var(--cpu-primary-dark) 100%);
+}
+.sj-mark :deep(svg) {
+  display: block;
+  fill: currentColor;
+}
+.sj-mark--sm {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+}
+.sj-mark--sm :deep(svg) {
+  width: 15px;
+  height: 15px;
+}
+.sj-mark--lg {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--cpu-primary) 28%, transparent);
+}
+.sj-mark--lg :deep(svg) {
+  width: 28px;
+  height: 28px;
+}
+.sj-mark--avatar {
+  width: 28px;
+  height: 28px;
+  margin-top: 1px;
+  border-radius: 9px;
+}
+.sj-mark--avatar :deep(svg) {
+  width: 16px;
+  height: 16px;
+}
+.sj-mark--avatar.is-busy :deep(svg) {
+  animation: sj-twinkle 1.4s ease-in-out infinite;
+}
+
+/* ---------- 空状态 / 登录引导 ---------- */
+.sj-stage {
+  display: flex;
+  flex: 1;
   flex-direction: column;
-  gap: 10px;
-  padding: 32px 20px;
+  align-items: center;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 40px 24px 24px;
   text-align: center;
 }
-.assistant-auth-gate .auth-gate-icon {
-  display: grid;
-  width: 48px;
-  height: 48px;
-  place-items: center;
-  border-radius: 16px;
-  color: var(--cpu-primary);
-  background: color-mix(in srgb, var(--cpu-primary) 10%, var(--cpu-card));
-  font-size: 22px;
+.sj-stage::before,
+.sj-stage::after {
+  content: "";
+  flex: 1 1 0;
 }
-.assistant-auth-gate strong {
-  color: var(--cpu-text);
-  font-size: 20px;
+.sj-stage h2 {
+  margin: 18px 0 6px;
+  font-size: 24px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
 }
-.assistant-auth-gate p {
-  max-width: 360px;
-  margin: 0 0 6px;
+.sj-stage > p {
+  max-width: 420px;
+  margin: 0;
   color: var(--cpu-text-secondary);
+  font-size: 14px;
   line-height: 1.65;
-  font-size: 13px;
 }
-.welcome-prompts,
-.suggestions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
-}
-.welcome-prompts button,
-.suggestions button {
-  border: 1px solid var(--cpu-border-soft);
+.sj-gate-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 42px;
+  margin-top: 22px;
+  padding: 0 22px;
   border-radius: 999px;
-  padding: 7px 11px;
-  color: var(--cpu-text-secondary);
-  background: var(--cpu-surface-subtle);
-  cursor: pointer;
-  font: inherit;
+  color: var(--cpu-button-on-primary);
+  background: var(--cpu-button-primary);
+  font-size: 14px;
+  font-weight: 600;
+  transition: filter 0.15s ease;
+}
+.sj-gate-btn:hover {
+  filter: brightness(1.06);
+}
+
+.sj-prompts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  width: min(100%, 680px);
+  margin-top: 30px;
+}
+.sj-prompt {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--cpu-border-soft);
+  border-radius: 14px;
+  background: var(--cpu-surface);
+  text-align: left;
+  transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+}
+.sj-prompt:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--cpu-primary) 40%, var(--cpu-border-soft));
+  background: color-mix(in srgb, var(--cpu-primary) 4%, var(--cpu-surface));
+  transform: translateY(-1px);
+}
+.sj-prompt:disabled {
+  opacity: 0.5;
+}
+.sj-prompt-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 9px;
+  color: var(--cpu-primary);
+  background: var(--cpu-primary-soft);
+  font-size: 16px;
+}
+.sj-prompt-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.sj-prompt-copy strong {
+  color: var(--cpu-text);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.sj-prompt-copy small {
+  color: var(--cpu-text-muted);
   font-size: 12px;
 }
-.welcome-prompts button:hover,
-.suggestions button:hover {
-  color: var(--cpu-primary);
-  border-color: var(--cpu-primary);
-}
-.conversation {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 14px;
-  min-height: 160px;
-  max-height: min(56vh, 560px);
-  overflow-y: auto;
-  padding: 2px 4px 8px;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-}
-.message {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  max-width: 86%;
-}
-.message--user {
-  align-self: flex-end;
-  align-items: flex-end;
-}
-.message--assistant {
-  align-self: stretch;
-  width: 100%;
-  max-width: 100%;
-}
-.message-label {
+.sj-privacy {
+  max-width: 440px;
+  margin-top: 26px;
   color: var(--cpu-text-muted);
-  font-size: 10px;
+  font-size: 12px;
+  line-height: 1.65;
 }
-.message-bubble {
-  min-width: 64px;
-  padding: 11px 13px;
-  border-radius: 14px;
-  background: var(--cpu-surface-subtle);
-  border: 1px solid var(--cpu-border-soft);
-}
-.message--user .message-label {
-  display: none;
-}
-.message--user .message-bubble {
-  min-width: 0;
-  padding: 2px 0;
-  border: 0;
-  border-radius: 0;
+.sj-privacy a {
   color: var(--cpu-primary);
-  background: transparent;
-  box-shadow: none;
-  text-align: right;
+  text-decoration: none;
+  white-space: nowrap;
 }
-.message--user .message-bubble p {
-  font-weight: 700;
+.sj-privacy a:hover {
+  text-decoration: underline;
 }
-.message--assistant .message-bubble {
-  min-width: 0;
-  padding: 0 2px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
+
+/* ---------- 对话 ---------- */
+.sj-thread {
+  /* scrollConversation 用 offsetTop 定位最后一条消息，必须以滚动容器为 offsetParent */
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--cpu-text) 16%, transparent) transparent;
 }
-.message-bubble p {
+.sj-thread-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  max-width: var(--sj-column);
+  margin: 0 auto;
+  padding: 28px 24px 20px;
+}
+.sj-msg--user {
+  display: flex;
+  justify-content: flex-end;
+}
+.sj-user-bubble {
+  max-width: min(82%, 580px);
   margin: 0;
+  padding: 10px 16px;
+  border-radius: 20px 20px 6px 20px;
+  color: var(--cpu-text);
+  background: var(--sj-user-bubble);
+  font-size: 15px;
+  line-height: 1.6;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  line-height: 1.65;
-  font-size: 14px;
 }
-.message-markdown {
-  max-width: 100%;
-  overflow-x: auto;
-  overflow-wrap: anywhere;
-  line-height: 1.7;
-  font-size: 14px;
-}
-.message-markdown :deep(> :first-child) {
-  margin-top: 0;
-}
-.message-markdown :deep(> :last-child) {
-  margin-bottom: 0;
-}
-.generated-images {
+.sj-msg--assistant {
   display: grid;
-  width: min(100%, 640px);
-  margin-top: 12px;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
 }
-.generated-images button {
-  display: block;
+.sj-answer {
+  min-width: 0;
+  padding-top: 3px;
+}
+
+.sj-thinking {
+  display: inline-block;
+  color: transparent;
+  background: linear-gradient(90deg, var(--cpu-text-muted) 0%, var(--cpu-text) 45%, var(--cpu-text-muted) 90%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  font-size: 14px;
+  line-height: 24px;
+  animation: sj-shimmer 1.8s linear infinite;
+}
+.sj-stream-note {
+  margin-top: 8px;
+  color: var(--cpu-text-muted);
+  font-size: 12px;
+}
+
+/* Markdown 正文 */
+.sj-markdown {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: 15px;
+  line-height: 1.75;
+}
+.sj-markdown :deep(> :first-child) { margin-top: 0; }
+.sj-markdown :deep(> :last-child) { margin-bottom: 0; }
+.sj-markdown :deep(p) {
+  margin: 0.7em 0;
+}
+.sj-markdown :deep(h1),
+.sj-markdown :deep(h2),
+.sj-markdown :deep(h3),
+.sj-markdown :deep(h4) {
+  margin: 1.2em 0 0.5em;
+  font-weight: 650;
+  line-height: 1.4;
+}
+.sj-markdown :deep(h1) { font-size: 1.3em; }
+.sj-markdown :deep(h2) { font-size: 1.18em; }
+.sj-markdown :deep(h3) { font-size: 1.06em; }
+.sj-markdown :deep(h4) { font-size: 1em; }
+.sj-markdown :deep(strong) {
+  font-weight: 650;
+}
+.sj-markdown :deep(ul),
+.sj-markdown :deep(ol) {
+  margin: 0.7em 0;
+  padding-left: 1.4em;
+}
+.sj-markdown :deep(li) {
+  padding-left: 0.2em;
+}
+.sj-markdown :deep(li + li) {
+  margin-top: 0.3em;
+}
+.sj-markdown :deep(li::marker) {
+  color: var(--cpu-text-muted);
+}
+.sj-markdown :deep(blockquote) {
+  margin: 0.9em 0;
+  padding: 0.55em 0.95em;
+  border-left: 3px solid color-mix(in srgb, var(--cpu-primary) 60%, transparent);
+  border-radius: 0 10px 10px 0;
+  color: var(--cpu-text-secondary);
+  background: color-mix(in srgb, var(--cpu-primary) 5%, transparent);
+}
+.sj-markdown :deep(blockquote p) {
+  margin: 0.3em 0;
+}
+.sj-markdown :deep(a) {
+  color: var(--cpu-primary);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--cpu-primary) 40%, transparent);
+  text-underline-offset: 3px;
+}
+.sj-markdown :deep(a:hover) {
+  text-decoration-color: currentColor;
+}
+.sj-markdown :deep(hr) {
+  margin: 1.4em 0;
+  border: 0;
+  border-top: 1px solid var(--cpu-border-soft);
+}
+.sj-markdown :deep(code) {
+  padding: 0.14em 0.4em;
+  border-radius: 6px;
+  background: var(--cpu-surface-subtle);
+  font-family: var(--cpu-font-mono);
+  font-size: 0.86em;
+}
+.sj-markdown :deep(pre) {
+  max-width: 100%;
+  margin: 0.9em 0;
+  overflow-x: auto;
+  padding: 13px 15px;
+  border: 1px solid var(--cpu-border-soft);
+  border-radius: 12px;
+  background: var(--cpu-surface-soft);
+  line-height: 1.6;
+}
+.sj-markdown :deep(pre code) {
   padding: 0;
+  background: transparent;
+  font-size: 0.85em;
+  white-space: pre;
+}
+.sj-markdown :deep(table) {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  margin: 0.9em 0;
+  overflow-x: auto;
+  border: 1px solid var(--cpu-border-soft);
+  border-radius: 12px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 14px;
+}
+.sj-markdown :deep(th),
+.sj-markdown :deep(td) {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--cpu-border-soft);
+  text-align: left;
+  vertical-align: top;
+}
+.sj-markdown :deep(th) {
+  color: var(--cpu-text-secondary);
+  background: var(--cpu-surface-soft);
+  font-size: 13px;
+  font-weight: 600;
+}
+.sj-markdown :deep(tr:last-child td) {
+  border-bottom: 0;
+}
+.sj-markdown :deep(img) {
+  max-width: 100%;
+  border-radius: 10px;
+}
+.sj-markdown :deep(.katex-display) {
+  max-width: 100%;
+  margin: 0.9em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25em 0;
+  text-align: left;
+}
+.sj-markdown :deep(.katex-display > .katex) {
+  text-align: left;
+}
+.sj-markdown :deep(.katex) {
+  color: inherit;
+  font-size: 1.02em;
+}
+.sj-markdown.is-streaming :deep(> p:last-child)::after,
+.sj-markdown.is-streaming :deep(> h1:last-child)::after,
+.sj-markdown.is-streaming :deep(> h2:last-child)::after,
+.sj-markdown.is-streaming :deep(> h3:last-child)::after,
+.sj-markdown.is-streaming :deep(> h4:last-child)::after,
+.sj-markdown.is-streaming :deep(> blockquote:last-child > p:last-child)::after,
+.sj-markdown.is-streaming :deep(> ul:last-child > li:last-child)::after,
+.sj-markdown.is-streaming :deep(> ol:last-child > li:last-child)::after {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 5px;
+  border-radius: 50%;
+  vertical-align: 0.05em;
+  background: var(--cpu-primary);
+  animation: sj-pulse 1s ease-in-out infinite;
+}
+
+/* 生成的图片 */
+.sj-images {
+  display: grid;
+  width: min(100%, 560px);
+  margin-top: 14px;
+}
+.sj-images button {
+  display: block;
   overflow: hidden;
   border: 1px solid var(--cpu-border-soft);
   border-radius: 14px;
   background: var(--cpu-surface-subtle);
   cursor: zoom-in;
 }
-.generated-images img {
+.sj-images img {
   display: block;
   width: 100%;
   height: auto;
-  max-height: 720px;
+  max-height: 640px;
   object-fit: contain;
 }
-.assistant-sources {
+
+/* 站内入口卡片 */
+.sj-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 8px;
+  margin-top: 16px;
+}
+.sj-action {
   display: flex;
-  max-width: 720px;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  padding: 10px 12px 10px 10px;
+  border: 1px solid var(--cpu-border-soft);
+  border-radius: 14px;
+  background: var(--cpu-surface);
+  text-align: left;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.sj-action:hover {
+  border-color: color-mix(in srgb, var(--cpu-primary) 40%, var(--cpu-border-soft));
+  background: color-mix(in srgb, var(--cpu-primary) 4%, var(--cpu-surface));
+}
+.sj-action-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--cpu-primary);
+  background: var(--cpu-primary-soft);
+  font-size: 17px;
+}
+.sj-action-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.sj-action-copy strong {
+  overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sj-action-copy small {
+  overflow: hidden;
+  color: var(--cpu-text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sj-action-go {
+  flex: 0 0 auto;
+  color: var(--cpu-text-muted);
+  font-size: 14px;
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+.sj-action:hover .sj-action-go {
+  color: var(--cpu-primary);
+  transform: translateX(2px);
+}
+
+/* 参考来源 */
+.sj-sources {
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  margin-top: 10px;
+  margin-top: 14px;
+}
+.sj-sources-label {
+  margin-right: 2px;
+  color: var(--cpu-text-muted);
   font-size: 12px;
 }
-.assistant-sources > span {
-  color: var(--cpu-text-muted);
-}
-.assistant-sources a {
+.sj-sources a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   max-width: min(100%, 280px);
+  padding: 3px 10px 3px 3px;
   overflow: hidden;
-  padding: 4px 8px;
-  border: 1px solid var(--cpu-border-soft);
   border-radius: 999px;
-  color: var(--cpu-primary);
+  color: var(--cpu-text-secondary);
   background: var(--cpu-surface-subtle);
+  font-size: 12px;
+  line-height: 18px;
   text-decoration: none;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: color 0.15s ease, background-color 0.15s ease;
 }
-.assistant-sources a:hover {
-  border-color: var(--cpu-primary);
-}
-.message-markdown :deep(p) {
-  margin: 0.65em 0;
-  white-space: normal;
-}
-.message-markdown :deep(h1),
-.message-markdown :deep(h2),
-.message-markdown :deep(h3),
-.message-markdown :deep(h4) {
-  margin: 1em 0 0.45em;
-  line-height: 1.35;
-}
-.message-markdown :deep(h1) { font-size: 1.35em; }
-.message-markdown :deep(h2) { font-size: 1.22em; }
-.message-markdown :deep(h3) { font-size: 1.1em; }
-.message-markdown :deep(ul),
-.message-markdown :deep(ol) {
-  margin: 0.65em 0;
-  padding-left: 1.5em;
-}
-.message-markdown :deep(li + li) {
-  margin-top: 0.3em;
-}
-.message-markdown :deep(blockquote) {
-  margin: 0.75em 0;
-  padding: 0.2em 0 0.2em 0.85em;
-  border-left: 3px solid var(--cpu-primary);
-  color: var(--cpu-text-secondary);
-}
-.message-markdown :deep(a) {
-  color: var(--cpu-primary);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-.message-markdown :deep(code) {
-  padding: 0.12em 0.35em;
-  border-radius: 5px;
-  background: var(--cpu-surface);
-  font-family: var(--cpu-font-mono);
-  font-size: 0.92em;
-}
-.message-markdown :deep(pre) {
-  max-width: 100%;
-  margin: 0.75em 0;
-  overflow-x: auto;
-  padding: 11px 12px;
-  border: 1px solid var(--cpu-border-soft);
-  border-radius: 9px;
-  background: var(--cpu-surface);
-}
-.message-markdown :deep(pre code) {
-  padding: 0;
-  background: transparent;
-  white-space: pre;
-}
-.message-markdown :deep(table) {
-  width: 100%;
-  margin: 0.75em 0;
-  border-collapse: collapse;
-}
-.message-markdown :deep(th),
-.message-markdown :deep(td) {
-  padding: 6px 8px;
-  border: 1px solid var(--cpu-border-soft);
-  text-align: left;
-}
-.message-markdown :deep(.katex-display) {
-  max-width: 100%;
-  margin: 0.85em 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding: 0.25em 0;
+.sj-sources a:hover {
   color: var(--cpu-text);
-  text-align: left;
+  background: color-mix(in srgb, var(--cpu-primary) 10%, var(--cpu-surface-subtle));
 }
-.message-markdown :deep(.katex-display > .katex) {
-  text-align: left;
-}
-.message-markdown :deep(.katex) {
-  color: inherit;
-  font-size: 1.02em;
-}
-.action-list {
+.sj-sources b {
   display: grid;
-  gap: 8px;
-  margin-top: 11px;
-}
-.action-card {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 10px;
-  border: 1px solid var(--cpu-border-soft);
-  border-radius: 10px;
-  color: var(--cpu-text);
-  background: var(--cpu-card);
-  cursor: pointer;
-  font: inherit;
-  text-align: left;
-}
-.action-card:hover {
-  border-color: var(--cpu-primary);
-}
-.action-icon {
+  width: 18px;
+  height: 18px;
   flex: 0 0 auto;
-  font-size: 21px;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--cpu-primary);
+  background: var(--cpu-card);
+  font-size: 10.5px;
+  font-weight: 650;
 }
-.action-copy {
+
+/* 消息工具条与追问 */
+.sj-msg-tools {
   display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
+  gap: 2px;
+  margin: 10px 0 0 -6px;
 }
-.action-copy strong {
+.sj-msg-tools button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--cpu-text-muted);
+  font-size: 15px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.sj-msg-tools button:hover {
+  color: var(--cpu-text);
+  background: var(--sj-hover);
+}
+.sj-followups {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 10px;
+}
+.sj-followups button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 7px 13px 7px 11px;
+  border: 1px solid var(--cpu-border-soft);
+  border-radius: 12px;
+  color: var(--cpu-text-secondary);
+  font-size: 13.5px;
+  line-height: 1.45;
+  text-align: left;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.sj-followups button .el-icon {
+  flex: 0 0 auto;
+  color: var(--cpu-text-muted);
   font-size: 13px;
 }
-.action-copy small {
-  margin-top: 2px;
-  color: var(--cpu-text-secondary);
-  line-height: 1.45;
-  font-size: 11px;
+.sj-followups button:not(:disabled):hover {
+  border-color: var(--cpu-border);
+  color: var(--cpu-text);
+  background: var(--sj-hover);
 }
-.assistant-thinking {
+.sj-followups button:not(:disabled):hover .el-icon {
+  color: var(--cpu-primary);
+}
+.sj-followups button:disabled {
+  opacity: 0.5;
+}
+
+/* ---------- 输入区 ---------- */
+.sj-dock {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: calc(var(--sj-column) + 48px);
+  margin: 0 auto;
+  padding: 6px 24px 12px;
+}
+.sj-error {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 14px 16px;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 8px 8px 8px 12px;
+  border-radius: 12px;
+  color: var(--sj-warn-ink);
+  background: color-mix(in srgb, var(--cpu-warn) 11%, var(--cpu-card));
+  font-size: 13px;
+  line-height: 1.5;
 }
-.assistant-thinking i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--cpu-text-muted);
-  animation: thinking 1s infinite ease-in-out;
+.sj-error > span {
+  flex: 1;
+  min-width: 0;
 }
-.assistant-thinking i:nth-child(2) { animation-delay: 0.15s; }
-.assistant-thinking i:nth-child(3) { animation-delay: 0.3s; }
-.assistant-thinking span {
-  margin-left: 5px;
-  color: var(--cpu-text-muted);
-  font-size: 12px;
+.sj-error > .el-icon {
+  flex: 0 0 auto;
+  font-size: 15px;
 }
-.assistant-stream-status {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 8px;
-  color: var(--cpu-text-muted);
-  font-size: 11px;
+.sj-error button {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border-radius: 8px;
+  color: var(--cpu-primary);
+  font-weight: 600;
 }
-.assistant-stream-status i {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--cpu-primary);
-  animation: thinking 1s infinite ease-in-out;
+.sj-error button:hover {
+  background: var(--sj-hover);
 }
-.message-markdown.is-streaming :deep(> p:last-child)::after,
-.message-markdown.is-streaming :deep(> h1:last-child)::after,
-.message-markdown.is-streaming :deep(> h2:last-child)::after,
-.message-markdown.is-streaming :deep(> h3:last-child)::after,
-.message-markdown.is-streaming :deep(> h4:last-child)::after,
-.message-markdown.is-streaming :deep(> blockquote:last-child)::after,
-.message-markdown.is-streaming :deep(> ul:last-child > li:last-child)::after,
-.message-markdown.is-streaming :deep(> ol:last-child > li:last-child)::after {
-  content: "";
-  display: inline-block;
-  width: 2px;
-  height: 1em;
-  margin-left: 2px;
-  vertical-align: -0.1em;
-  background: currentColor;
-  animation: cursor-blink 0.8s steps(2, start) infinite;
-}
-@keyframes thinking {
-  0%, 60%, 100% { opacity: 0.35; transform: translateY(0); }
-  30% { opacity: 1; transform: translateY(-3px); }
-}
-@keyframes cursor-blink {
-  50% { opacity: 0; }
-}
-.assistant-error {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 8px 11px;
-  border-radius: 9px;
-  color: #b45309;
-  background: rgba(245, 158, 11, 0.12);
-  font-size: 12px;
-}
-.assistant-form {
+.sj-composer {
   display: flex;
   align-items: flex-end;
-  gap: 10px;
-  margin-top: auto;
-  padding: 12px 2px 0;
-  border-top: 1px solid var(--cpu-border-soft);
-}
-.assistant-disclaimer {
-  margin: -8px 0 0;
-  color: var(--cpu-text-muted);
-  text-align: center;
-  font-size: 11px;
-  line-height: 1.4;
-}
-.assistant-form .el-input {
-  flex: 1;
-  min-width: 0;
-}
-.assistant-form :deep(.el-textarea) {
-  flex: 1;
-  min-width: 0;
-}
-.assistant-form :deep(.el-textarea__inner) {
-  min-height: 44px !important;
-  max-height: 112px;
-  padding: 11px 14px;
-  border: 1px solid var(--cpu-border-soft);
-  border-radius: 15px;
-  color: var(--cpu-text);
+  gap: 8px;
+  padding: 7px 7px 7px 18px;
+  border: 1px solid var(--cpu-border);
+  border-radius: 26px;
   background: var(--cpu-surface);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
+  cursor: text;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.sj-composer:focus-within {
+  border-color: color-mix(in srgb, var(--cpu-primary) 55%, var(--cpu-border));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--cpu-primary) 12%, transparent), 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+.sj-composer.is-disabled {
+  cursor: not-allowed;
+  background: var(--cpu-surface-soft);
+}
+:global(html[data-theme="dark"]) .sj-composer {
   box-shadow: none;
-  line-height: 20px;
 }
-.assistant-form :deep(.el-textarea__inner:focus) {
-  border-color: var(--cpu-primary);
-  box-shadow: 0 0 0 3px rgba(20, 143, 123, 0.1);
+.sj-composer textarea {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  max-height: 176px;
+  padding: 7px 0;
+  overflow-y: auto;
+  border: 0;
+  outline: 0;
+  color: var(--cpu-text);
+  background: transparent;
+  font: inherit;
+  font-size: 15px;
+  line-height: 22px;
+  resize: none;
+  -webkit-appearance: none;
+  appearance: none;
 }
-.composer-send {
-  display: inline-flex;
-  height: 44px;
+.sj-composer textarea::placeholder {
+  color: var(--cpu-text-muted);
+}
+.sj-composer textarea:disabled {
+  cursor: not-allowed;
+}
+.sj-composer-side {
+  display: flex;
   flex: 0 0 auto;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 0 17px;
-  border: 0;
-  border-radius: 14px;
-  color: #fff;
-  background: var(--cpu-primary);
-  cursor: pointer;
-  font: inherit;
+  gap: 8px;
+}
+.sj-counter {
+  color: var(--cpu-text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.sj-send {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--cpu-button-on-primary);
+  background: var(--cpu-button-primary);
+  font-size: 18px;
+  transition: background-color 0.15s ease, transform 0.12s ease, opacity 0.15s ease;
+}
+.sj-send:not(:disabled):hover {
+  filter: brightness(1.06);
+}
+.sj-send:not(:disabled):active {
+  transform: scale(0.94);
+}
+.sj-send:disabled {
+  color: var(--cpu-text-muted);
+  background: var(--cpu-surface-subtle);
+}
+.sj-send.is-stop {
+  color: var(--cpu-card);
+  background: var(--cpu-text);
+}
+.sj-send.is-stop i {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  background: currentColor;
+}
+.sj-footnote {
+  margin: 8px 0 0;
+  color: var(--cpu-text-muted);
+  font-size: 11.5px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+/* ---------- 历史对话 ---------- */
+.sj-history {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 6px 10px 12px;
+  background: var(--cpu-surface-soft);
+}
+.sj--docked .sj-history {
+  width: 268px;
+  flex: 0 0 268px;
+  border-right: 1px solid var(--cpu-border-soft);
+}
+.sj-history--overlay {
+  position: absolute;
+  z-index: 6;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: min(300px, 86%);
+  background: var(--cpu-card);
+  box-shadow: 16px 0 48px rgba(15, 23, 42, 0.16);
+  animation: sj-slide-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.sj-scrim {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.26);
+}
+:global(html[data-theme="dark"]) .sj-scrim {
+  background: rgba(0, 0, 0, 0.45);
+}
+.sj-history-head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  height: 44px;
+  padding: 0 0 0 8px;
+}
+.sj-history-head strong {
   font-size: 14px;
   font-weight: 650;
 }
-.composer-send:hover {
-  filter: brightness(1.05);
-}
-.composer-send:disabled {
-  opacity: 0.45;
-  cursor: default;
-  filter: none;
-}
-:global(.assistant-history-drawer) {
+.sj-history-new {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  margin: 4px 0 8px;
+  padding: 0 12px;
+  border: 1px solid var(--cpu-border);
+  border-radius: 12px;
   color: var(--cpu-text);
   background: var(--cpu-card);
+  font-size: 13.5px;
+  font-weight: 600;
+  transition: border-color 0.15s ease, color 0.15s ease;
 }
-:global(.assistant-history-drawer .el-drawer__header) {
-  margin-bottom: 0;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--cpu-border-soft);
-  color: var(--cpu-text);
-  font-weight: 700;
+.sj-history-new .el-icon {
+  font-size: 15px;
 }
-:global(.assistant-history-drawer .el-drawer__body) {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-}
-.history-caption {
-  color: var(--cpu-text-muted);
-  font-size: 11px;
-  line-height: 1.5;
-}
-.history-new {
-  display: flex;
-  width: 100%;
-  height: 42px;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  border: 1px solid rgba(20, 143, 123, 0.35);
-  border-radius: 12px;
+.sj-history-new:hover {
+  border-color: color-mix(in srgb, var(--cpu-primary) 50%, var(--cpu-border));
   color: var(--cpu-primary);
-  background: rgba(20, 143, 123, 0.08);
-  cursor: pointer;
-  font: inherit;
-  font-weight: 650;
 }
-.history-list {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
+.sj-history-list {
+  flex: 1;
   min-height: 0;
+  margin: 0 -4px;
+  padding: 0 4px;
   overflow-y: auto;
+  scrollbar-width: thin;
 }
-.history-item {
+.sj-history-group h3 {
+  margin: 14px 8px 4px;
+  color: var(--cpu-text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.sj-history-group:first-child h3 {
+  margin-top: 6px;
+}
+.sj-history-item {
   display: flex;
   align-items: center;
-  border: 1px solid transparent;
-  border-radius: 12px;
-  background: var(--cpu-surface-subtle);
+  border-radius: 10px;
+  transition: background-color 0.12s ease;
 }
-.history-item.active {
-  border-color: rgba(20, 143, 123, 0.35);
-  background: rgba(20, 143, 123, 0.09);
+.sj-history-item:hover {
+  background: var(--sj-hover);
 }
-.history-open {
+.sj-history-item.is-active {
+  background: var(--cpu-primary-soft);
+}
+.sj-history-open {
   display: flex;
   flex: 1;
   flex-direction: column;
+  gap: 1px;
   min-width: 0;
-  padding: 11px 6px 11px 12px;
-  border: 0;
-  color: inherit;
-  background: transparent;
-  cursor: pointer;
-  font: inherit;
+  padding: 7px 4px 7px 10px;
   text-align: left;
 }
-.history-open strong,
-.history-open span {
+.sj-history-title,
+.sj-history-preview {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.history-open strong {
-  font-size: 13px;
+.sj-history-title {
+  color: var(--cpu-text);
+  font-size: 13.5px;
+  line-height: 1.45;
 }
-.history-open span {
-  margin-top: 3px;
-  color: var(--cpu-text-secondary);
-  font-size: 11px;
+.sj-history-item.is-active .sj-history-title {
+  font-weight: 600;
 }
-.history-open time {
-  margin-top: 5px;
+.sj-history-preview {
   color: var(--cpu-text-muted);
-  font-size: 10px;
+  font-size: 12px;
+  line-height: 1.45;
 }
-.history-delete {
+.sj-history-delete {
   display: grid;
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   flex: 0 0 auto;
   place-items: center;
-  margin-right: 6px;
-  padding: 0;
-  border: 0;
-  border-radius: 9px;
+  margin-right: 4px;
+  border-radius: 8px;
   color: var(--cpu-text-muted);
-  background: transparent;
-  cursor: pointer;
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease, background-color 0.12s ease;
 }
-.history-delete:hover {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.09);
+.sj-history-item:hover .sj-history-delete,
+.sj-history-item.is-active .sj-history-delete,
+.sj-history-delete:focus-visible {
+  opacity: 1;
 }
-.history-empty {
+.sj-history-delete:hover {
+  color: var(--cpu-danger);
+  background: color-mix(in srgb, var(--cpu-danger) 10%, transparent);
+}
+@media (hover: none) {
+  .sj-history-delete {
+    opacity: 1;
+  }
+}
+.sj-history-empty {
   display: flex;
   flex: 1;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   color: var(--cpu-text-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
-.history-empty .el-icon {
-  font-size: 32px;
+.sj-history-empty .el-icon {
+  font-size: 26px;
 }
+.sj-history-caption {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: baseline;
+  gap: 7px;
+  margin: 10px 6px 0;
+  color: var(--cpu-text-muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+.sj-history-caption i {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  transform: translateY(-1px);
+  background: var(--cpu-text-muted);
+}
+.sj-history-caption i.is-ready { background: var(--cpu-success); }
+.sj-history-caption i.is-syncing { background: var(--cpu-warn); animation: sj-pulse 1s ease-in-out infinite; }
+.sj-history-caption i.is-error { background: var(--cpu-danger); }
 
-.assistant-page--embedded {
-  position: relative;
+/* ---------- 悬浮窗（嵌入模式） ---------- */
+.sj--embedded {
   max-width: none;
-  overflow: hidden;
-}
-.assistant-page--embedded .assistant-shell {
-  height: 100%;
-  min-height: 0;
-  gap: 12px;
-  padding: 18px 16px 13px;
   border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
 }
-.assistant-page--embedded .assistant-head {
-  padding-bottom: 13px;
-  border-bottom: 1px solid color-mix(in srgb, var(--cpu-primary) 20%, var(--cpu-border-soft));
+.sj--embedded .sj-head {
+  height: 54px;
+  padding: 0 10px 0 12px;
 }
-.assistant-page--embedded .assistant-mark {
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  color: #fff;
-  background: linear-gradient(145deg, var(--cpu-primary), var(--cpu-primary-dark));
-  box-shadow: 0 7px 18px color-mix(in srgb, var(--cpu-primary-dark) 25%, transparent);
+.sj--embedded .sj-stage {
+  padding: 28px 18px 16px;
 }
-.assistant-page--embedded .assistant-mark .el-icon {
-  font-size: 19px;
+.sj--embedded .sj-stage h2 {
+  margin-top: 14px;
+  font-size: 20px;
 }
-.assistant-page--embedded .assistant-head h1 {
-  color: var(--cpu-text);
-  font-size: 18px;
+.sj--embedded .sj-stage > p {
+  font-size: 13px;
 }
-.assistant-page--embedded .assistant-head p {
-  margin-top: 1px;
-  font-size: 11px;
+.sj--embedded .sj-mark--lg {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
 }
-.assistant-page--embedded .assistant-welcome {
-  padding: 24px 4px 14px;
+.sj--embedded .sj-mark--lg :deep(svg) {
+  width: 24px;
+  height: 24px;
 }
-.assistant-page--embedded .assistant-welcome strong {
-  font-size: 18px;
+.sj--embedded .sj-prompts {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 22px;
 }
-.assistant-page--embedded .conversation {
-  min-height: 0;
-  max-height: none;
-  padding-right: 3px;
-  scrollbar-gutter: auto;
-}
-.assistant-page--embedded .message {
-  max-width: 100%;
-}
-.assistant-page--embedded .message-label {
-  display: none;
-}
-.assistant-page--embedded .assistant-form {
-  gap: 6px;
-  padding-top: 10px;
-  border-top-color: color-mix(in srgb, var(--cpu-primary) 18%, var(--cpu-border-soft));
-}
-.assistant-page--embedded .assistant-form :deep(.el-textarea__inner) {
-  min-height: 46px !important;
-  padding: 12px 14px;
-  border-radius: 20px;
-  background: color-mix(in srgb, var(--cpu-primary) 3%, var(--cpu-surface));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--cpu-primary) 18%, var(--cpu-border-soft)) inset;
-}
-.assistant-page--embedded .composer-send {
-  width: 46px;
-  height: 46px;
-  padding: 0;
-  border-radius: 50%;
-  color: #fff;
-  background: linear-gradient(145deg, var(--cpu-primary), var(--cpu-primary-dark));
-  box-shadow: 0 7px 18px color-mix(in srgb, var(--cpu-primary-dark) 22%, transparent);
-}
-.assistant-page--embedded .composer-send span {
-  display: none;
-}
-.assistant-page--embedded .assistant-disclaimer {
-  margin: -5px 0 0;
-  font-size: 10px;
-}
-
-:global(html[data-theme="dark"]) .assistant-page--embedded .assistant-form :deep(.el-textarea__inner) {
-  background: color-mix(in srgb, var(--cpu-primary) 5%, var(--cpu-surface));
-}
-
-.embedded-history-panel {
-  position: absolute;
-  z-index: 4;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-height: 0;
-  padding: 18px 16px 16px;
-  color: var(--cpu-text);
-  background:
-    linear-gradient(155deg, color-mix(in srgb, var(--cpu-primary) 7%, var(--cpu-card)) 0%, var(--cpu-card) 38%);
-}
-.embedded-history-head {
-  display: flex;
+.sj--embedded .sj-prompt {
   align-items: center;
-  justify-content: space-between;
-  padding-bottom: 13px;
-  border-bottom: 1px solid color-mix(in srgb, var(--cpu-primary) 20%, var(--cpu-border-soft));
+  padding: 11px 12px;
 }
-.embedded-history-head strong {
-  font-size: 18px;
+.sj--embedded .sj-privacy {
+  margin-top: 18px;
 }
-.embedded-history-head button {
-  display: grid;
-  width: 36px;
-  height: 36px;
-  place-items: center;
-  padding: 0;
-  border: 1px solid var(--cpu-border-soft);
-  border-radius: 11px;
-  color: var(--cpu-text-secondary);
-  background: var(--cpu-surface);
-  cursor: pointer;
+.sj--embedded .sj-thread-inner {
+  gap: 24px;
+  padding: 20px 16px 16px;
 }
-.embedded-history-panel .history-list {
-  min-height: 0;
-  overflow-y: auto;
+.sj--embedded .sj-msg--assistant {
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 11px;
 }
-.embedded-history-panel .history-empty {
-  min-height: 0;
+.sj--embedded .sj-mark--avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
 }
-.embedded-history-enter-active,
-.embedded-history-leave-active {
-  transition: opacity 0.16s ease, transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+.sj--embedded .sj-mark--avatar :deep(svg) {
+  width: 14px;
+  height: 14px;
 }
-.embedded-history-enter-from,
-.embedded-history-leave-to {
+.sj--embedded .sj-markdown,
+.sj--embedded .sj-user-bubble {
+  font-size: 14.5px;
+}
+.sj--embedded .sj-actions {
+  grid-template-columns: minmax(0, 1fr);
+}
+.sj--embedded .sj-dock {
+  padding: 4px 12px 10px;
+}
+.sj--embedded .sj-quota {
+  display: none;
+}
+
+/* ---------- 动效 ---------- */
+.sj-fade-enter-active,
+.sj-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.sj-fade-enter-from,
+.sj-fade-leave-to {
   opacity: 0;
-  transform: translateX(-14px);
+}
+@keyframes sj-shimmer {
+  from { background-position: 110% 0; }
+  to { background-position: -110% 0; }
+}
+@keyframes sj-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1); }
+}
+@keyframes sj-twinkle {
+  0%, 100% { transform: scale(1) rotate(0deg); opacity: 1; }
+  50% { transform: scale(0.82) rotate(18deg); opacity: 0.75; }
+}
+@keyframes sj-slide-in {
+  from { transform: translateX(-16px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sj *,
+  .sj *::before,
+  .sj *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---------- 窄屏 ---------- */
+@media (max-width: 860px) {
+  .sj-prompts {
+    grid-template-columns: minmax(0, 1fr);
+    width: min(100%, 440px);
+    gap: 8px;
+  }
+  .sj-prompt {
+    align-items: center;
+    padding: 11px 12px;
+  }
 }
 
 @media (max-width: 640px) {
-  .assistant-page {
-    gap: 0;
-    margin: 0;
-    overflow: hidden;
-  }
-  .assistant-shell {
-    position: relative;
-    height: 100%;
-    min-height: 0;
-    gap: 0;
-    padding: 0;
+  .sj:not(.sj--embedded) {
     border: 0;
     border-radius: 0;
     background: transparent;
     box-shadow: none;
-  }
-  .assistant-head {
-    gap: 8px;
-    flex: 0 0 auto;
-    padding: 1px 2px 10px;
-  }
-  .assistant-mark {
-    width: 30px;
-    height: 30px;
-    border-radius: 9px;
-    box-shadow: none;
-    font-size: 14px;
-  }
-  .assistant-head h1 {
-    font-size: 16px;
-  }
-  .assistant-head p {
-    display: none;
-  }
-  .assistant-welcome {
-    padding: 24px 3px 16px;
-  }
-  .assistant-welcome strong {
-    font-size: 20px;
-  }
-  .assistant-welcome > span {
-    max-width: 310px;
-  }
-  .assistant-auth-gate {
-    min-height: 0;
-    padding: 28px 18px;
-  }
-  .conversation {
-    min-height: 0;
-    max-height: none;
-    gap: 17px;
-    padding: 10px 2px 12px;
-    scrollbar-width: none;
-    scrollbar-gutter: auto;
-  }
-  .conversation::-webkit-scrollbar {
-    display: none;
-    width: 0;
-    height: 0;
-  }
-  .assistant-shell.is-composer-focused .conversation {
-    padding-bottom: 12px;
-  }
-  .message {
-    max-width: 82%;
-  }
-  .message--assistant {
-    width: 100%;
-    max-width: 100%;
-  }
-  .message-label {
-    display: none;
-  }
-  .message-bubble {
-    padding: 9px 12px;
-  }
-  .message--assistant .message-bubble {
-    padding: 0 2px;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-  }
-  .message-bubble p {
-    font-size: 14px;
-    line-height: 1.7;
-  }
-  .message--user .message-bubble {
-    padding: 2px 1px;
-    border: 0;
-    border-radius: 0;
-    color: var(--cpu-primary);
-    background: transparent;
-    box-shadow: none;
-  }
-  .message--user .message-bubble p {
-    line-height: 1.5;
-  }
-  .action-list {
-    gap: 6px;
-    margin-top: 12px;
-  }
-  .action-card {
-    padding: 9px 10px;
-    border-radius: 11px;
-    box-shadow: none;
-  }
-  .action-icon {
-    font-size: 19px;
-  }
-  .action-copy strong {
-    font-size: 14px;
-  }
-  .suggestions {
-    flex-wrap: wrap;
-    gap: 6px;
-    margin: 11px 0 0;
-    padding: 0;
     overflow: visible;
   }
-  .suggestions button {
-    padding: 6px 9px;
-    white-space: normal;
-    text-align: left;
-  }
-  .assistant-form {
-    position: relative;
-    z-index: 2;
-    gap: 5px;
-    flex: 0 0 auto;
-    margin: auto 0 0;
-    padding: 5px 5px 5px 13px;
-    border: 1px solid var(--cpu-border-soft);
-    border-radius: 18px;
-    background: var(--cpu-surface);
-    transition: border-color 0.16s ease, box-shadow 0.16s ease;
-    overscroll-behavior: contain;
-  }
-  .assistant-disclaimer {
-    height: 14px;
-    min-height: 14px;
-    flex: 0 0 14px;
+  .sj:not(.sj--embedded) .sj-main {
     overflow: hidden;
-    margin: 5px 0 0;
-    font-size: 10px;
-    line-height: 14px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
-  .assistant-shell.is-composer-focused .assistant-disclaimer {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    min-height: 0;
-    margin: 0;
-    overflow: hidden;
-    clip-path: inset(50%);
-    visibility: hidden;
-    opacity: 0;
+  .sj-head {
+    height: 46px;
+    padding: 0 0 0 2px;
+    border-bottom: 0;
   }
-  .assistant-form:focus-within {
-    border-color: var(--cpu-primary);
-    box-shadow: 0 0 0 3px rgba(20, 143, 123, 0.09);
-  }
-  .assistant-form :deep(.el-textarea__inner) {
-    display: block;
-    width: 100%;
-    min-height: 38px !important;
-    max-height: 104px;
-    padding: 9px 0;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    color: var(--cpu-text);
+  .sj-head-title h1 {
     font-size: 16px;
-    line-height: 20px;
-    outline: none;
-    resize: none;
-    -webkit-appearance: none;
-    -webkit-text-size-adjust: 100%;
   }
-  .assistant-form :deep(.el-textarea__inner:focus) {
-    border-color: transparent;
+  .sj-quota {
+    padding: 3px 8px;
+    font-size: 11.5px;
+  }
+  .sj-stage {
+    padding: 24px 6px 12px;
+  }
+  .sj-stage h2 {
+    font-size: 21px;
+  }
+  .sj-stage > p {
+    max-width: 300px;
+    font-size: 13.5px;
+  }
+  .sj-mark--lg {
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+  }
+  .sj-mark--lg :deep(svg) {
+    width: 25px;
+    height: 25px;
+  }
+  .sj-prompts {
+    margin-top: 22px;
+  }
+  .sj-privacy {
+    margin-top: 18px;
+  }
+  .sj-thread {
+    scrollbar-width: none;
+  }
+  .sj-thread::-webkit-scrollbar {
+    display: none;
+  }
+  .sj-thread-inner {
+    gap: 22px;
+    padding: 12px 2px 14px;
+  }
+  .sj-msg--assistant {
+    display: block;
+  }
+  .sj-msg--assistant > .sj-mark--avatar {
+    display: none;
+  }
+  .sj-answer {
+    padding-top: 0;
+  }
+  .sj-user-bubble {
+    max-width: 86%;
+  }
+  .sj-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sj-dock {
+    padding: 4px 0 2px;
+  }
+  .sj-composer {
+    padding: 5px 5px 5px 15px;
+    border-radius: 23px;
     box-shadow: none;
   }
-  .composer-send {
-    width: 38px;
-    height: 38px;
-    padding: 0;
-    border-radius: 13px;
-    font-size: 17px;
+  .sj-composer textarea {
+    /* 16px 以下 iOS 会在聚焦时自动放大页面 */
+    font-size: 16px;
+    max-height: 132px;
   }
-  .composer-send span {
+  .sj-footnote {
+    height: 14px;
+    margin-top: 5px;
+    overflow: hidden;
+    font-size: 10.5px;
+    line-height: 14px;
+    white-space: nowrap;
+  }
+  .sj.is-composer-focused .sj-footnote {
     display: none;
+  }
+  .sj-history--overlay {
+    width: min(320px, 88%);
   }
 }
 </style>
