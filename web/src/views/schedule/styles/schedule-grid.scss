@@ -200,6 +200,10 @@
 .week-slot-cell.today {
   background: rgba(232, 246, 243, 0.48);
 }
+// 浅色的今日底色在深色模式下会变成一列发亮的灰块，改用主题强调色的暗色调。
+.schedule-page.is-dark .week-slot-cell.today {
+  background: color-mix(in srgb, var(--schedule-accent) 14%, var(--schedule-cell-bg));
+}
 .week-course {
   min-width: 0;
   min-height: 0;
