@@ -98,6 +98,7 @@ model User {
   liveActivityDevices           LiveActivityDevice[]
   iosClientInstalls            IosClientInstall[]
   scheduleSharesOwned          ScheduleShare[]              @relation("ScheduleShareOwner")
+  coupleMembership             CoupleMember?
   toolPermissions              ToolPermission[]
   createdQuestionnaires        Questionnaire[]               @relation("QuestionnaireCreatedBy")
   questionnaireResponses       QuestionnaireResponse[]
@@ -695,6 +696,46 @@ model ScheduleShare {
 
   @@index([ownerId, updatedAt])
   @@index([revokedAt])
+}
+
+// 情侣课表：一条关系最多两名成员。CoupleMember.userId 为主键，数据库层面保证
+// 每个账号同时只属于一条关系（含待接受的邀请）。解绑直接删除关系，成员与课表
+// 快照随之级联删除，对方立即无法再读取。
+model CoupleLink {
+  id              Int       @id @default(autoincrement())
+  inviteCode      String?   @unique
+  inviteExpiresAt DateTime?
+  anniversary     String? // YYYY-MM-DD，任意一方可修改
+  acceptedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  members CoupleMember[]
+}
+
+model CoupleMember {
+  userId   Int      @id
+  linkId   Int
+  role     String // inviter / invitee
+  joinedAt DateTime @default(now())
+
+  user     User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  link     CoupleLink              @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  snapshot CoupleScheduleSnapshot?
+
+  @@index([linkId])
+}
+
+// 成员最近一次在课表页加载成功后自动上传的当前学期快照（含自定义修改）。
+model CoupleScheduleSnapshot {
+  userId      Int      @id
+  semester    String
+  payload     String
+  contentHash String
+  syncedAt    DateTime @default(now())
+  changedAt   DateTime @default(now())
+
+  member CoupleMember @relation(fields: [userId], references: [userId], onDelete: Cascade)
 }
 
 // iOS Live Activity 的远程更新注册。APNs token 使用服务端加密信封保存，

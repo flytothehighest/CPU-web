@@ -20,7 +20,7 @@ function randomCode() {
   return crypto.randomBytes(8).toString("base64url").replace(/[-_]/g, "").toUpperCase().replace(/[01IO]/g, "X").slice(0, 8);
 }
 
-function normalizePayload(input: ScheduleShareInput) {
+export function normalizeSchedulePayload(input: ScheduleShareInput) {
   const semester = String(input.semester || "").trim();
   if (!semester || semester.length > 80) throw new Error("学期 ID 无效");
   const schedule = input.schedule && typeof input.schedule === "object" ? input.schedule as Record<string, unknown> : null;
@@ -55,7 +55,7 @@ function publicShare(row: any) {
 }
 
 export async function createScheduleShare(userId: number, input: ScheduleShareInput) {
-  const normalized = normalizePayload(input);
+  const normalized = normalizeSchedulePayload(input);
   const ownerName = String(input.ownerName || "").trim().slice(0, 40) || "同学";
   let code = randomCode();
   for (let attempt = 0; attempt < 5; attempt += 1) {

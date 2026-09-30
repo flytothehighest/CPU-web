@@ -130,6 +130,13 @@
                 <span>{{ hasScheduleBackground ? "背景自定义（已启用）" : "背景自定义" }}</span>
                 <el-icon class="more-chevron"><ArrowRight /></el-icon>
               </button>
+              <button v-if="parsed" type="button" class="more-action" @click="openCoupleSchedule">
+                <el-icon>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 20.3l-1.3-1.2C6 14.9 3 12.2 3 8.9 3 6.2 5.1 4 7.8 4c1.5 0 3 .7 4.2 1.9C13.2 4.7 14.7 4 16.2 4 18.9 4 21 6.2 21 8.9c0 3.3-3 6-7.7 10.2L12 20.3z" /></svg>
+                </el-icon>
+                <span>情侣课表</span>
+                <el-icon class="more-chevron"><ArrowRight /></el-icon>
+              </button>
               <button
                 v-if="canShowAndroidClientDownload"
                 type="button"
@@ -791,6 +798,7 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import { Aim, ArrowLeft, ArrowRight, Download, InfoFilled, Iphone, Lock, Moon, MoreFilled, Picture, QuestionFilled, Refresh, Share, Tools } from "@element-plus/icons-vue";
 import { jwxtApi } from "@/api/jwxt";
 import { scheduleShareApi, type ScheduleShare } from "@/api/scheduleShares";
+import { syncCoupleScheduleIfBound } from "@/views/schedule/coupleSync";
 import { useAuthStore } from "@/stores/auth";
 import { useAppearanceStore } from "@/stores/appearance";
 import { useJwxtStore } from "@/stores/jwxt";
@@ -1153,6 +1161,37 @@ watch(
   queueAndroidWidgetLocalDaysSync,
 );
 watch(scheduleEdits, queueAndroidWidgetLocalDaysSync, { deep: true });
+
+// 情侣课表：已绑定时把当前学期课表（含自定义修改）同步给对方，见 docs/couple-schedule.md。
+let coupleSyncTimer = 0;
+function syncCoupleSchedule() {
+  coupleSyncTimer = 0;
+  if (disposed || loading.value || !auth.isLoggedIn || !auth.user?.id) return;
+  if (scheduleSource.value === "graduate-debug") return;
+  const data = parsed.value;
+  const source = calendar.value;
+  if (!data?.currentSemester || !source?.weeks?.length) return;
+  if (source.currentSemester && source.currentSemester !== data.currentSemester) return;
+  // 对方看到的永远是当前学期；翻看往年学期时不覆盖。
+  const currentSemester = data.semesters?.find((item) => item.current)?.value;
+  if (currentSemester && currentSemester !== data.currentSemester) return;
+  const complete = data.scope === "semester" || scheduleStorageScope() === "graduate";
+  void syncCoupleScheduleIfBound({
+    userId: auth.user.id,
+    semester: data.currentSemester,
+    parsed: complete ? { ...data, scope: "semester" } : data,
+    calendar: source,
+    edits: scheduleEdits.value,
+    loadSemesterSchedule: scheduleSource.value === "jwxt" ? () => loadSemesterCompleteSchedule(data.currentSemester) : undefined,
+  });
+}
+function queueCoupleScheduleSync() {
+  if (coupleSyncTimer) window.clearTimeout(coupleSyncTimer);
+  // 等教务课表与自定义修改都加载完再同步，避免同一次打开上传两次。
+  coupleSyncTimer = window.setTimeout(syncCoupleSchedule, 4000);
+}
+watch(() => [parsed.value, calendar.value, scheduleSource.value, auth.isLoggedIn], queueCoupleScheduleSync);
+watch(scheduleEdits, queueCoupleScheduleSync, { deep: true });
 
 const scriptableWidgetScript = ref("");
 const widgetCopyMessage = ref("");
@@ -1708,6 +1747,8 @@ onBeforeUnmount(() => {
   disposed = true;
   if (androidWidgetSyncTimer) window.clearTimeout(androidWidgetSyncTimer);
   androidWidgetSyncTimer = 0;
+  if (coupleSyncTimer) window.clearTimeout(coupleSyncTimer);
+  coupleSyncTimer = 0;
   semesterLoader.clear();
   scheduleMounted = false;
   scheduleRequestSeq += 1;
@@ -1976,6 +2017,11 @@ async function manualRefreshSchedule() {
   }
 }
 
+function openCoupleSchedule() {
+  moreMenuOpen.value = false;
+  void router.push({ name: "schedule-couple" });
+}
+
 function openShareDialog() {
   shareResult.value = null;
   shareDialogOpen.value = true;
@@ -1990,11 +2036,7 @@ async function createShare() {
     // The normal page request is weekly for fast navigation. A share must be
     // semester-complete so the reader can move through every teaching week.
     if (scheduleSource.value === "jwxt" && source.scope !== "semester") {
-      const all = await jwxt.withSessionRetry(() => jwxtApi.schedule(
-        { semester: semester.value || source.currentSemester, week: "all" },
-        { silent: true },
-      ));
-      source = all.parsed;
+      source = await loadSemesterCompleteSchedule(semester.value || source.currentSemester);
     }
     const schedule: ScheduleResult = {
       ...source,
@@ -2012,6 +2054,14 @@ async function createShare() {
   } finally {
     shareCreating.value = false;
   }
+}
+
+async function loadSemesterCompleteSchedule(targetSemester: string) {
+  const all = await jwxt.withSessionRetry(() => jwxtApi.schedule(
+    { semester: targetSemester, week: "all" },
+    { silent: true },
+  ));
+  return all.parsed;
 }
 
 async function copyShareUrl() {

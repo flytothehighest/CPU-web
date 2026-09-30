@@ -36,6 +36,7 @@ import { revokedCredentialGate } from "../middleware/revokedCredential";
 import { scheduleShareRouter } from "./scheduleShares";
 import { liveActivityRouter } from "./liveActivities";
 import { appClientRouter } from "./appClients";
+import { coupleRouter } from "./couple";
 
 export const router = Router();
 router.use("/privacy", privacyRouter);
@@ -75,6 +76,7 @@ router.use("/user", authRequired, userRouter);
 router.use("/likes", authRequired, likeRouter);
 router.use("/messages", authRequired, messageRouter);
 router.use("/direct-messages", authRequired, directMessageRouter);
+router.use("/couple", authRequired, coupleRouter);
 router.use("/forum-reports", authRequired, forumReportRouter);
 router.use("/account-verification", authRequired, accountVerificationRouter);
 router.use("/uploads", authOptional, uploadRouter);

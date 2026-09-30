@@ -9,6 +9,7 @@ import { invalidateForumCaches } from "./cacheInvalidation";
 import { refreshBoardTopicCounts, refreshTopicReplyStats } from "./forumStats";
 import { voiceHubProxyConfig } from "./voiceHubProxy";
 import { purgeAccountMediaCaches } from "./accountDeletionCdn";
+import { deleteCoupleDataForUser } from "./coupleSchedule";
 
 export const ACCOUNT_DELETION_CONFIRMATION = "删除我的账户";
 type DeletionPayload = { username: string; tokens: string[]; sessionKeys: string[]; mediaPaths: string[]; receipt: string };
@@ -99,6 +100,7 @@ async function eraseAccountData(tx: Prisma.TransactionClient, userId: number, pa
   await tx.notification.deleteMany({ where: { category: "direct-message", link: { in: directConversations.map((row) => `/messages?tab=private&conversation=${row.id}`) } } });
   await tx.directMessageRemark.deleteMany({ where: { OR: [{ ownerId: userId }, { targetUserId: userId }] } });
   await tx.userBlock.deleteMany({ where: { OR: [{ ownerId: userId }, { targetId: userId }] } });
+  await deleteCoupleDataForUser(tx, userId);
   await tx.forumReport.deleteMany({ where: { OR: [{ reporterId: userId }, { targetAuthorId: userId }] } });
   await tx.questionnaireResponse.deleteMany({ where: { respondentId: userId } });
   await tx.questionnaire.deleteMany({ where: { createdById: userId, isSystem: false } });
