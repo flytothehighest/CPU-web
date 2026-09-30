@@ -15,6 +15,7 @@ import {
   sendQqMessage,
   updateQqBotConfig,
 } from "../../services/qqbot";
+import { MAX_JOIN_AUTO_APPROVE_KEYWORDS, normalizeJoinAutoApproveKeywords } from "../../services/qqbot/joinRequestAutoApprove";
 
 export const qqBotAdminRouter = Router();
 
@@ -114,6 +115,7 @@ const groupUpsertSchema = z.object({
   adFilterWhitelistBlockGroupCardEnabled: z.boolean().optional(),
   adFilterReportThreshold: z.number().int().min(0).max(100).optional(),
   joinReviewEnabled: z.boolean().optional(),
+  joinAutoApproveKeywords: z.array(z.string().trim().max(40)).max(MAX_JOIN_AUTO_APPROVE_KEYWORDS).optional(),
   allowMute: z.boolean().optional(),
   allowKick: z.boolean().optional(),
   allowKickAndBlock: z.boolean().optional(),
@@ -147,6 +149,9 @@ qqBotAdminRouter.post("/groups", validate(groupUpsertSchema), async (req, res, n
       adFilterWhitelistBlockGroupCardEnabled: req.body.adFilterWhitelistBlockGroupCardEnabled,
       adFilterReportThreshold: req.body.adFilterReportThreshold,
       joinReviewEnabled: req.body.joinReviewEnabled,
+      joinAutoApproveKeywords: req.body.joinAutoApproveKeywords === undefined
+        ? undefined
+        : JSON.stringify(normalizeJoinAutoApproveKeywords(req.body.joinAutoApproveKeywords)),
       allowMute: req.body.allowMute,
       allowKick: req.body.allowKick,
       allowKickAndBlock: req.body.allowKickAndBlock,

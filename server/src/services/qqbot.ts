@@ -99,6 +99,7 @@ import {
 } from "./qqbotGroupAdReview";
 export { resolveQqGroupWhitelistReviewPlan };
 import { containsQqGroupCard } from "./qqbot/groupCard";
+import { matchJoinAutoApproveKeyword, normalizeJoinAutoApproveKeywords } from "./qqbot/joinRequestAutoApprove";
 import {
   appendQqBotAiDisclosure,
   getQqBotDailyAssistantDebounceMs,
@@ -173,6 +174,7 @@ export type QqBotGroupView = {
   adFilterWhitelistBlockGroupCardEnabled: boolean;
   adFilterReportThreshold: number;
   joinReviewEnabled: boolean;
+  joinAutoApproveKeywords: string[];
   allowMute: boolean;
   allowKick: boolean;
   allowKickAndBlock: boolean;
@@ -426,6 +428,7 @@ export function formatQqBotGroup(group: {
   adFilterWhitelistBlockGroupCardEnabled?: boolean;
   adFilterReportThreshold?: number;
   joinReviewEnabled: boolean;
+  joinAutoApproveKeywords?: string | null;
   allowMute: boolean;
   allowKick: boolean;
   allowKickAndBlock: boolean;
@@ -457,6 +460,7 @@ export function formatQqBotGroup(group: {
     adFilterWhitelistBlockGroupCardEnabled: group.adFilterWhitelistBlockGroupCardEnabled ?? false,
     adFilterReportThreshold: Math.max(0, Number(group.adFilterReportThreshold || 0)),
     joinReviewEnabled: group.joinReviewEnabled,
+    joinAutoApproveKeywords: normalizeJoinAutoApproveKeywords(parseStringArray(group.joinAutoApproveKeywords || "", [])),
     allowMute: group.allowMute,
     allowKick: group.allowKick,
     allowKickAndBlock: group.allowKickAndBlock,
@@ -1162,6 +1166,59 @@ async function handleQqBotGroupJoinRequestEvent(
       rawPayload: event,
     });
     return { ignored: true };
+  }
+
+  const matchedKeyword = matchJoinAutoApproveKeyword(
+    target.comment,
+    normalizeJoinAutoApproveKeywords(parseStringArray(group.joinAutoApproveKeywords || "", [])),
+  );
+  if (matchedKeyword) {
+    const autoApproved = await callQqBotAction("set_group_add_request", {
+      flag: target.flag,
+      sub_type: "add",
+      approve: true,
+    }).then(() => true).catch(async (error) => {
+      await logQqBotMessage({
+        direction: "outbound",
+        eventType: "group-join-request",
+        status: "error",
+        qqId: target.qqId,
+        groupId: target.groupId,
+        content: `${target.nickname || ""} ${target.comment || ""}`.trim().slice(0, 500),
+        result: `命中关键词“${matchedKeyword}”但自动通过失败，转人工审核：${String((error as any)?.message || error || "")}`.slice(0, 500),
+        rawPayload: event,
+      });
+      return false;
+    });
+    if (autoApproved) {
+      const handledAt = new Date();
+      const record = {
+        qqId: target.qqId,
+        nickname: target.nickname || null,
+        comment: target.comment || null,
+        status: "approved",
+        handledAction: "auto-keyword",
+        handledByQqId: null,
+        handledAt,
+        rawPayload: JSON.stringify(event).slice(0, 8000),
+      };
+      await prisma.qqBotGroupJoinRequest.upsert({
+        where: { flag: target.flag },
+        create: { ...record, groupId: target.groupId, flag: target.flag },
+        update: record,
+      });
+      await logQqBotMessage({
+        direction: "inbound",
+        eventType: "group-join-request",
+        status: "ok",
+        qqId: target.qqId,
+        groupId: target.groupId,
+        content: `${target.nickname || ""} ${target.comment || ""}`.trim().slice(0, 500),
+        result: `回答命中关键词“${matchedKeyword}”，已自动通过加群申请`,
+        rawPayload: event,
+      });
+      return { ok: true, autoApproved: "keyword" };
+    }
   }
 
   await prisma.qqBotGroupJoinRequest.upsert({
@@ -3269,6 +3326,7 @@ async function renderGroupStatus(
     `广告过滤：${group.enabled && group.adFilterEnabled ? "已开启" : "未开启"}`,
     `白名单规则：${describeQqGroupWhitelistPolicy(group)}`,
     `快速审核加群：${group.enabled && group.joinReviewEnabled ? "已开启" : "未开启"}`,
+    `加群自动通过：${group.enabled && group.joinReviewEnabled && group.joinAutoApproveKeywords.length ? `已开启（${group.joinAutoApproveKeywords.length} 个关键词）` : "未开启"}`,
     `禁言：${group.enabled && group.allowMute ? "已开启" : "未开启"}`,
     `踢出：${group.enabled && group.allowKick ? "已开启" : "未开启"}`,
     `踢黑：${group.enabled && group.allowKickAndBlock ? "已开启" : "未开启"}`,
@@ -4347,6 +4405,7 @@ function buildQqBotGroupFallbackView(groupId: string, event?: OneBotEvent) {
     adFilterWhitelistBlockGroupCardEnabled: false,
     adFilterReportThreshold: 0,
     joinReviewEnabled: false,
+    joinAutoApproveKeywords: "[]",
     allowMute: false,
     allowKick: false,
     allowKickAndBlock: false,
@@ -4376,6 +4435,7 @@ function buildQqGroupAdminCommandLines(group: QqBotGroupView) {
   if (group.joinReviewEnabled) {
     lines.push("• 待审加群：查看待审核列表");
     lines.push("• 通过加群 QQ号 / 拒绝加群 QQ号");
+    if (group.joinAutoApproveKeywords.length) lines.push("• 入群回答命中后台关键词会自动通过，未命中仍等待人工");
   } else {
     lines.push("• 快速审核加群：未开启");
   }
@@ -4492,6 +4552,7 @@ function renderQqGroupAdminHelp(group: QqBotGroupView, qrCodeSendingEnabled = fa
     `当前群：${group.name || group.groupId}`,
     `群管配置：${group.enabled ? "开" : "关"}`,
     `加群快审：${group.joinReviewEnabled ? "开" : "关"}`,
+    `加群自动通过：${group.joinReviewEnabled && group.joinAutoApproveKeywords.length ? "开" : "关"}`,
     `禁言：${group.allowMute ? "开" : "关"}`,
     `踢出：${group.allowKick ? "开" : "关"}`,
     `踢黑：${group.allowKickAndBlock ? "开" : "关"}`,

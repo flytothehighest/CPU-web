@@ -2076,6 +2076,7 @@ model QqBotGroup {
   adFilterWhitelistBlockGroupCardEnabled Boolean @default(false)
   adFilterReportThreshold Int  @default(0)
   joinReviewEnabled    Boolean  @default(false)
+  joinAutoApproveKeywords String @default("[]")
   allowMute            Boolean  @default(false)
   allowKick            Boolean  @default(false)
   allowKickAndBlock    Boolean  @default(false)

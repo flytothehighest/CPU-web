@@ -233,6 +233,7 @@
             <span>通知受众：{{ formatGroupNotifyAudiences(row.notifyAudiences).join(" / ") || "未设置" }}</span>
             <span>新成员欢迎：{{ row.memberWelcomeEnabled ? "开启" : "关闭" }}</span>
             <span>群管授权：{{ row.commandUserQqIds.length ? `${row.commandUserQqIds.length} 人` : "未设置" }}</span>
+            <span v-if="row.joinReviewEnabled">加群自动通过：{{ row.joinAutoApproveKeywords?.length ? `${row.joinAutoApproveKeywords.length} 个关键词` : "未设置" }}</span>
           </div>
           <div class="record-actions cpu-button-row">
             <el-button link type="primary" :disabled="isGroupBusy(row)" @click="openGroupDialog(row)">编辑</el-button>
@@ -447,6 +448,20 @@
           />
           <div class="form-tip">这些用户可在当前群执行已开启的群管命令；新增/移除授权用户仍建议由群管理员或超级管理员执行。</div>
         </el-form-item>
+        <el-form-item label="自动通过关键词">
+          <el-select
+            v-model="groupDialog.form.joinAutoApproveKeywords"
+            multiple
+            filterable
+            allow-create
+            default-first-option
+            clearable
+            :multiple-limit="50"
+            :disabled="!groupDialog.form.joinReviewEnabled"
+            placeholder="输入入群问题答案中的关键词，回车添加"
+          />
+          <div class="form-tip">需开启“快速审核加群”。申请人对入群问题的回答包含任一关键词（忽略大小写、全半角、空格和标点，4 字以上允许个别错字）即自动通过；未命中或无关键词时照常在群内通知等待人工审核。只比对“答案”部分，不会被问题文本误触发。</div>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button :disabled="savingGroup" @click="groupDialog.visible = false">取消</el-button>
@@ -541,6 +556,7 @@ const groupDialog = reactive({
     adFilterWhitelistBlockGroupCardEnabled: false,
     adFilterReportThreshold: 0,
     joinReviewEnabled: false,
+    joinAutoApproveKeywords: [] as string[],
     allowMute: false,
     allowKick: false,
     allowKickAndBlock: false,
@@ -816,6 +832,7 @@ function openGroupDialog(row?: any) {
     adFilterWhitelistBlockGroupCardEnabled: row?.adFilterWhitelistBlockGroupCardEnabled ?? false,
     adFilterReportThreshold: row?.adFilterReportThreshold ?? 0,
     joinReviewEnabled: row?.joinReviewEnabled ?? false,
+    joinAutoApproveKeywords: row?.joinAutoApproveKeywords?.length ? [...row.joinAutoApproveKeywords] : [],
     allowMute: row?.allowMute ?? false,
     allowKick: row?.allowKick ?? false,
     allowKickAndBlock: row?.allowKickAndBlock ?? false,

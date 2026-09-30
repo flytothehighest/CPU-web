@@ -869,6 +869,7 @@ export type QqBotGroup = {
   adFilterWhitelistBlockGroupCardEnabled: boolean;
   adFilterReportThreshold: number;
   joinReviewEnabled: boolean;
+  joinAutoApproveKeywords: string[];
   allowMute: boolean;
   allowKick: boolean;
   allowKickAndBlock: boolean;
@@ -1492,6 +1493,7 @@ export const adminApi = {
     adFilterWhitelistBlockGroupCardEnabled?: boolean;
     adFilterReportThreshold?: number;
     joinReviewEnabled?: boolean;
+    joinAutoApproveKeywords?: string[];
     allowMute?: boolean;
     allowKick?: boolean;
     allowKickAndBlock?: boolean;
