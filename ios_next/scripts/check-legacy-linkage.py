@@ -16,6 +16,10 @@ for bundle in [args.app, *args.app.glob('PlugIns/*.appex')]:
     info = plistlib.loads((bundle / 'Info.plist').read_bytes())
     if bundle == args.app and info.get('MinimumOSVersion') != '15.0':
         raise SystemExit(f'Unexpected minimum OS: {info.get("MinimumOSVersion")}')
+    if bundle == args.app:
+        for key in ['NSCalendarsUsageDescription', 'NSCalendarsFullAccessUsageDescription']:
+            if not info.get(key, '').strip():
+                raise SystemExit(f'Missing calendar purpose string: {key}')
     binary = bundle / info['CFBundleExecutable']
     # Archives may strip undefined entries from the symbol table; dyld's
     # import table is the authoritative source for runtime weak imports.
