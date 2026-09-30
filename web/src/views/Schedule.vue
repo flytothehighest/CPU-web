@@ -130,7 +130,7 @@
                 <span>{{ hasScheduleBackground ? "背景自定义（已启用）" : "背景自定义" }}</span>
                 <el-icon class="more-chevron"><ArrowRight /></el-icon>
               </button>
-              <button v-if="parsed" type="button" class="more-action" @click="openCoupleSchedule">
+              <button v-if="parsed" type="button" class="more-action" @click="openCoupleDialog()">
                 <el-icon>
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 20.3l-1.3-1.2C6 14.9 3 12.2 3 8.9 3 6.2 5.1 4 7.8 4c1.5 0 3 .7 4.2 1.9C13.2 4.7 14.7 4 16.2 4 18.9 4 21 6.2 21 8.9c0 3.3-3 6-7.7 10.2L12 20.3z" /></svg>
                 </el-icon>
@@ -292,6 +292,24 @@
       </button>
     </section>
 
+    <section v-if="parsed && couple.status.value?.status === 'active'" class="couple-bar" aria-label="情侣课表">
+      <button type="button" class="couple-bar-main" @click="openCoupleDialog()">
+        <UserAvatar :size="22" :src="couple.status.value.partner.avatar" :name="couple.status.value.partner.nickname" :seed="couple.status.value.partner.id" />
+        <span class="couple-bar-text">{{ coupleBarText }}</span>
+        <span v-if="couple.togetherDays.value" class="couple-bar-days"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 20.3l-1.3-1.2C6 14.9 3 12.2 3 8.9 3 6.2 5.1 4 7.8 4c1.5 0 3 .7 4.2 1.9C13.2 4.7 14.7 4 16.2 4 18.9 4 21 6.2 21 8.9c0 3.3-3 6-7.7 10.2L12 20.3z" /></svg>{{ couple.togetherDays.value }} 天</span>
+      </button>
+      <button
+        type="button"
+        class="couple-bar-toggle"
+        :class="{ active: couple.visible.value }"
+        :aria-pressed="couple.visible.value"
+        :title="couple.visible.value ? '只看我的课' : '显示 TA 的课'"
+        @click="couple.setVisible(!couple.visible.value)"
+      >
+        {{ couple.visible.value ? "双人" : "只看我" }}
+      </button>
+    </section>
+
     <section v-if="parsed && viewMode === 'day'" class="week-strip">
       <button
         v-for="d in dayTabs"
@@ -359,7 +377,7 @@
             :aria-hidden="page.delta !== 0"
           >
             <div class="schedule-body-scroll">
-              <section v-if="viewMode === 'week'" class="week-overview" aria-label="整周课表">
+              <section v-if="viewMode === 'week'" class="week-overview" :class="{ 'couple-on': couple.active.value }" aria-label="整周课表">
                 <div class="week-grid-head">
                   <div class="time-head">节次</div>
                   <div
@@ -385,7 +403,7 @@
                       :key="`bg-${page.key}-${slot.no}-${day}`"
                       class="week-slot-cell"
                       :style="{ gridColumn: `${day + 1} / ${day + 2}`, gridRow: `${slot.no} / ${slot.no + 1}` }"
-                      :class="{ today: page.dayTabs[day - 1]?.isToday }"
+                      :class="{ today: page.dayTabs[day - 1]?.isToday, 'couple-free': coupleDataFor(page).freeSlots.has(`${day}-${slot.no}`) }"
                       @click="onWeekSlotClick($event, day, slot.no, page.weekValue)"
                     />
                   </template>
@@ -401,11 +419,23 @@
                     <span v-if="block.course.location">@{{ block.course.location }}</span>
                     <em>{{ block.course.slotNote || block.course.weeks }}</em>
                   </article>
+                  <article
+                    v-for="block in coupleDataFor(page).partnerBlocks"
+                    :key="`ta-${page.weekValue}-${block.day}-${block.startSlot}-${block.endSlot}-${block.index}-${block.course.name}`"
+                    class="week-course couple-partner"
+                    :style="courseBlockStyle(block)"
+                    :title="`TA · ${courseTitle(block.course)}`"
+                    @click.stop="onPartnerCourseClick($event, block)"
+                  >
+                    <strong>{{ block.course.name }}</strong>
+                    <span v-if="block.course.location">@{{ block.course.location }}</span>
+                  </article>
                 </div>
               </section>
 
-              <div v-else class="day-pane">
-                <section v-if="page.dayCourseBlocks.length" class="day-timeline" aria-label="当日课表">
+              <div v-else class="day-pane" :class="{ 'couple-on': couple.active.value }">
+                <section v-if="page.dayCourseBlocks.length || coupleDataFor(page).partnerBlocks.length" class="day-timeline" aria-label="当日课表">
+                  <div v-if="couple.active.value" class="couple-day-head"><span /><b>我</b><b>TA</b></div>
                   <div class="day-grid-body">
                     <template v-for="slot in smallSlots" :key="`day-axis-${page.key}-${slot.no}`">
                       <div class="slot-axis day-axis" :style="{ gridRow: `${slot.no} / ${slot.no + 1}` }">
@@ -415,7 +445,7 @@
                       </div>
                       <div
                         class="day-slot-cell"
-                        :style="{ gridColumn: '2 / 3', gridRow: `${slot.no} / ${slot.no + 1}` }"
+                        :style="{ gridColumn: couple.active.value ? '2 / 4' : '2 / 3', gridRow: `${slot.no} / ${slot.no + 1}` }"
                         @click="onDaySlotClick($event, page.day, slot.no, page.weekValue)"
                       />
                     </template>
@@ -426,6 +456,21 @@
                       :style="dayCourseBlockStyle(block)"
                       :title="courseTitle(block.course)"
                       @click.stop="onCourseBlockClick($event, block, page.weekValue)"
+                    >
+                      <div class="day-course-name">{{ block.course.name }}</div>
+                      <div class="day-course-meta">
+                        <span v-if="block.course.location">@{{ block.course.location }}</span>
+                        <span v-if="block.course.teacher">{{ block.course.teacher }}</span>
+                      </div>
+                      <div class="day-course-note">{{ block.course.slotNote || block.course.weeks }}</div>
+                    </article>
+                    <article
+                      v-for="block in coupleDataFor(page).partnerBlocks"
+                      :key="`ta-${page.weekValue}-${page.day}-${block.startSlot}-${block.endSlot}-${block.index}-${block.course.name}`"
+                      class="day-course-block couple-partner"
+                      :style="{ ...dayCourseBlockStyle(block), gridColumn: '3 / 4' }"
+                      :title="`TA · ${courseTitle(block.course)}`"
+                      @click.stop="onPartnerCourseClick($event, block)"
                     >
                       <div class="day-course-name">{{ block.course.name }}</div>
                       <div class="day-course-meta">
@@ -684,6 +729,26 @@
       </template>
     </el-dialog>
 
+    <CoupleDialog :couple="couple" :page-style="pageStyle" :initial-code="coupleInviteCode" @changed="onCoupleStatusChanged" />
+
+    <el-dialog
+      v-model="partnerCourseOpen"
+      :title="partnerCourse?.course.name || 'TA 的课'"
+      :width="340"
+      align-center
+      append-to-body
+      class="schedule-themed-dialog"
+      :style="pageStyle"
+    >
+      <template v-if="partnerCourse">
+        <div class="share-preview-line"><span>谁的课</span><strong>{{ couple.status.value?.status === "active" ? couple.status.value.partner.nickname : "TA" }}</strong></div>
+        <div class="share-preview-line"><span>时间</span><strong>{{ partnerCourseTime }}</strong></div>
+        <div v-if="partnerCourse.course.location" class="share-preview-line"><span>地点</span><strong>{{ partnerCourse.course.location }}</strong></div>
+        <div v-if="partnerCourse.course.teacher" class="share-preview-line"><span>老师</span><strong>{{ partnerCourse.course.teacher }}</strong></div>
+        <div v-if="partnerCourse.course.weeks" class="share-preview-line"><span>周次</span><strong>{{ partnerCourse.course.weeks }}</strong></div>
+      </template>
+    </el-dialog>
+
     <Teleport to="body">
       <Transition name="course-editor">
         <div v-if="editDialogOpen" class="course-editor-overlay" :style="pageStyle" @click.self="closeCourseEditor">
@@ -799,6 +864,10 @@ import { Aim, ArrowLeft, ArrowRight, Download, InfoFilled, Iphone, Lock, Moon, M
 import { jwxtApi } from "@/api/jwxt";
 import { scheduleShareApi, type ScheduleShare } from "@/api/scheduleShares";
 import { syncCoupleScheduleIfBound } from "@/views/schedule/coupleSync";
+import { occupiedSlots } from "@/views/schedule/couple";
+import { useCoupleOverlay } from "@/views/schedule/useCoupleOverlay";
+import CoupleDialog from "@/views/schedule/CoupleDialog.vue";
+import UserAvatar from "@/components/common/UserAvatar.vue";
 import { useAuthStore } from "@/stores/auth";
 import { useAppearanceStore } from "@/stores/appearance";
 import { useJwxtStore } from "@/stores/jwxt";
@@ -874,6 +943,7 @@ import {
   extendScheduleWeeksToCalendar,
   formatCacheTime,
   hydrateCalendar,
+  normalizeCalendarWeekDays,
   resolveGraduateActiveDay,
   resolveGraduateInitialWeek,
   resolveScheduleCurrentWeek,
@@ -909,6 +979,8 @@ import type {
 } from "@/views/schedule/types";
 
 const auth = useAuthStore();
+const couple = useCoupleOverlay(() => auth.user?.id);
+watch(() => auth.user?.id, () => { void couple.refresh(); });
 const appearance = useAppearanceStore();
 const jwxt = useJwxtStore();
 const route = useRoute();
@@ -1669,6 +1741,19 @@ async function writeClipboard(text: string): Promise<boolean> {
 
 onMounted(() => {
   disposed = false;
+  couple.start();
+  void couple.refresh();
+  // 旧的 /schedule/couple 链接和邀请链接都会带 couple=1 打开情侣课表弹窗。
+  if (route.query.couple === "1") {
+    const code = typeof route.query.code === "string" ? route.query.code : "";
+    const { couple: _couple, code: _code, ...rest } = route.query;
+    void router.replace({ query: rest });
+    // 课表是公开页，进入时站内登录状态可能还没恢复完。
+    void (async () => {
+      if (!auth.user && auth.token) await auth.fetchMe().catch(() => undefined);
+      if (!disposed) openCoupleDialog(code);
+    })();
+  }
   document.documentElement.classList.add("schedule-scroll-lock");
   document.body.classList.add("schedule-scroll-lock");
   jwxt.hydrate();
@@ -1745,6 +1830,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   disposed = true;
+  couple.stop();
   if (androidWidgetSyncTimer) window.clearTimeout(androidWidgetSyncTimer);
   androidWidgetSyncTimer = 0;
   if (coupleSyncTimer) window.clearTimeout(coupleSyncTimer);
@@ -1938,6 +2024,87 @@ const carouselPages = computed<SchedulePageModel[]>(() => {
   return deltas.map((delta) => (viewMode.value === "week" ? weekPageModel(delta) : dayPageModel(delta)));
 });
 
+// 情侣课表叠加层：TA 的课按日期对齐到当前网格，见 docs/couple-schedule.md。
+type CouplePageData = { partnerBlocks: WeekCourseBlock[]; freeSlots: Set<string> };
+const EMPTY_COUPLE_PAGE: CouplePageData = { partnerBlocks: [], freeSlots: new Set() };
+const couplePageData = computed(() => {
+  const pages = new Map<string, CouplePageData>();
+  if (!couple.active.value) return pages;
+  const reader = couple.partnerReader.value;
+  for (const page of carouselPages.value) {
+    const dates = normalizeCalendarWeekDays(weekInfoFor(page.weekValue)?.days ?? []).slice(0, 7);
+    const days = viewMode.value === "week" ? [1, 2, 3, 4, 5, 6, 7] : [page.day];
+    const data: CouplePageData = { partnerBlocks: [], freeSlots: new Set() };
+    for (const day of days) {
+      const theirs = dates[day - 1] ? reader.blocksForDate(dates[day - 1]) : null;
+      if (!theirs) continue;
+      data.partnerBlocks.push(...theirs.map((block) => ({ ...block, day })));
+      const mine = page.weekCourseBlocks.filter((block) => block.day === day);
+      // 两人都没课的整天（通常是周末）不标记，免得把真正有用的空档淹没。
+      if (viewMode.value !== "week" || (!mine.length && !theirs.length)) continue;
+      const busy = new Set([...occupiedSlots(mine), ...occupiedSlots(theirs)]);
+      for (const slot of smallSlots) if (!busy.has(slot.no)) data.freeSlots.add(`${day}-${slot.no}`);
+    }
+    pages.set(page.key, data);
+  }
+  return pages;
+});
+function coupleDataFor(page: SchedulePageModel) {
+  return couplePageData.value.get(page.key) ?? EMPTY_COUPLE_PAGE;
+}
+const coupleBarText = computed(() => {
+  const value = couple.status.value;
+  if (value?.status !== "active") return "";
+  const name = value.partner.nickname || "TA";
+  const now = couple.partnerNow.value;
+  switch (now.kind) {
+    case "no-data": return `${name} 还没有同步课表`;
+    case "out-of-term": return `${name} 今天不在学期内`;
+    case "free-day": return `${name} 今天没有课`;
+    case "in-class": return `${name} 在上《${now.current.course.name}》· ${now.current.end} 下课`;
+    case "between": return `${name} 下一节《${now.next.course.name}》· ${now.next.start}`;
+    case "done": return `${name} 今天的课都上完了`;
+  }
+});
+const partnerCourseOpen = ref(false);
+const partnerCourse = ref<WeekCourseBlock | null>(null);
+const partnerCourseTime = computed(() => {
+  const block = partnerCourse.value;
+  if (!block) return "";
+  const first = smallSlots.find((slot) => slot.no === block.startSlot);
+  const last = smallSlots.find((slot) => slot.no === block.endSlot);
+  const time = block.course.customStartTime && block.course.customEndTime
+    ? `${block.course.customStartTime}-${block.course.customEndTime}`
+    : first && last ? `${first.start}-${last.end}` : "";
+  return [`${dayLabel(block.day)} ${block.startSlot}-${block.endSlot} 节`, time].filter(Boolean).join(" · ");
+});
+function onPartnerCourseClick(event: MouseEvent, block: WeekCourseBlock) {
+  if (dragState.suppressClick || dragState.dragging || dragState.settling) {
+    event.preventDefault();
+    return;
+  }
+  partnerCourse.value = block;
+  partnerCourseOpen.value = true;
+}
+function openCoupleDialog(code = "") {
+  moreMenuOpen.value = false;
+  if (!auth.isLoggedIn) {
+    ElMessage.info("登录后才能使用情侣课表");
+    void router.push({ name: "login", query: { redirect: "/schedule?couple=1" } });
+    return;
+  }
+  coupleInviteCode.value = code;
+  couple.dialogOpen.value = true;
+}
+const coupleInviteCode = ref("");
+function onCoupleStatusChanged(next: string) {
+  // 刚绑定时立即同步自己的课表，TA 马上就能看到。
+  if (next === "active") {
+    if (coupleSyncTimer) window.clearTimeout(coupleSyncTimer);
+    coupleSyncTimer = window.setTimeout(syncCoupleSchedule, 300);
+  }
+}
+
 watch(activePageScrollKey, (value, previousValue) => {
   if (!previousValue || value === previousValue) return;
   void nextTick(() => resetActiveScheduleBodyScroll());
@@ -2015,11 +2182,6 @@ async function manualRefreshSchedule() {
   } catch {
     ElMessage.warning("课表刷新失败，请检查网络连接后重试。");
   }
-}
-
-function openCoupleSchedule() {
-  moreMenuOpen.value = false;
-  void router.push({ name: "schedule-couple" });
 }
 
 function openShareDialog() {
@@ -3163,3 +3325,4 @@ function saveScheduleCache() {
 <style scoped lang="scss" src="./schedule/styles/schedule-grid.scss"></style>
 <style scoped lang="scss" src="./schedule/styles/schedule-editor.scss"></style>
 <style scoped lang="scss" src="./schedule/styles/schedule-responsive.scss"></style>
+<style scoped lang="scss" src="./schedule/styles/schedule-couple.scss"></style>

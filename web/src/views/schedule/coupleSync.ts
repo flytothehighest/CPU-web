@@ -37,6 +37,12 @@ export function rememberCoupleStatus(userId: number | null | undefined, status: 
   }
 }
 
+/** 未过期的“未绑定”缓存返回 "none"，其余情况都需要问服务端。 */
+export function readCachedCoupleStatus(userId: number, now = Date.now()) {
+  const cached = readJson<StoredStatus>(STATUS_KEY);
+  return cached?.userId === userId && cached.status === "none" && now - cached.checkedAt < UNBOUND_STATUS_TTL_MS ? "none" : null;
+}
+
 type CoupleSyncApi = Pick<typeof coupleApi, "status" | "syncSchedule">;
 
 async function isBound(api: CoupleSyncApi, userId: number, now: number) {

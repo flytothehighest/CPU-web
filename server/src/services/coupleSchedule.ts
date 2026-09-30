@@ -9,7 +9,7 @@ export const COUPLE_INVITE_TTL_MS = 24 * 60 * 60 * 1000;
 const INVITE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const INVITE_LENGTH = 6;
 const INVITE_PATTERN = new RegExp(`^[${INVITE_ALPHABET}]{${INVITE_LENGTH}}$`, "u");
-const COUPLE_LINK = "/schedule/couple";
+const COUPLE_LINK = "/schedule?couple=1";
 
 const memberUserSelect = { id: true, nickname: true, avatar: true } as const;
 

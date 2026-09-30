@@ -1,0 +1,148 @@
+// 情侣课表叠加层。颜色全部取自课表主题变量，只有代表 TA 的强调色是固定的粉色。
+.schedule-page {
+  --couple-accent: #e2568a;
+}
+
+.couple-bar {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 720px;
+  margin: -4px auto 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.couple-bar-main,
+.couple-bar-toggle {
+  height: 34px;
+  border: 1px solid var(--schedule-border);
+  border-radius: 12px;
+  background: var(--schedule-surface-bg);
+  color: var(--schedule-text);
+  font: inherit;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+}
+.couple-bar-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 0 6px;
+  text-align: left;
+}
+.couple-bar-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.couple-bar-days {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--couple-accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+.couple-bar-days svg {
+  width: 13px;
+  height: 13px;
+}
+.couple-bar-toggle {
+  flex: 0 0 auto;
+  min-width: 58px;
+  padding: 0 10px;
+  color: var(--schedule-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+.couple-bar-toggle.active {
+  border-color: color-mix(in srgb, var(--couple-accent) 45%, var(--schedule-border));
+  background: color-mix(in srgb, var(--couple-accent) 12%, var(--schedule-surface-bg));
+  color: var(--couple-accent);
+}
+
+// 周视图：同一格里左半是我、右半是 TA。
+.week-overview.couple-on .week-course {
+  justify-self: start;
+  width: calc(50% - 2px);
+  padding: 4px 2px;
+}
+.week-overview.couple-on .week-course.couple-partner {
+  justify-self: end;
+}
+.week-overview.couple-on .week-course em {
+  display: none;
+}
+.week-overview.couple-on .week-course strong {
+  -webkit-line-clamp: 5;
+}
+.week-course.couple-partner,
+.day-course-block.couple-partner {
+  position: relative;
+  border-style: dashed;
+}
+.week-course.couple-partner::after,
+.day-course-block.couple-partner::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--couple-accent);
+}
+// 共同空闲只做轻提示：虚线边框加极淡底色，不和课程色块抢注意力。
+.week-slot-cell.couple-free {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--couple-accent) 30%, var(--schedule-cell-border));
+  background: color-mix(in srgb, var(--couple-accent) 4%, var(--schedule-cell-bg));
+}
+
+// 日视图：我 | TA 两列。
+.couple-day-head {
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr) minmax(0, 1fr);
+  gap: 5px;
+  margin-bottom: 6px;
+  color: var(--schedule-text-secondary);
+  font-size: 12px;
+  text-align: center;
+}
+.couple-day-head b:last-child {
+  color: var(--couple-accent);
+}
+.day-pane.couple-on .day-grid-body {
+  grid-template-columns: 50px minmax(0, 1fr) minmax(0, 1fr);
+}
+.day-pane.couple-on .day-course-block {
+  padding: 10px;
+  gap: 5px;
+}
+.day-pane.couple-on .day-course-name {
+  font-size: 15px;
+}
+.day-pane.couple-on .day-course-meta {
+  font-size: 12px;
+}
+
+@media (max-width: 520px) {
+  .couple-bar {
+    margin-top: -6px;
+  }
+  .week-overview.couple-on .week-course span {
+    display: none;
+  }
+  .day-pane.couple-on .day-course-name {
+    font-size: 14px;
+  }
+}

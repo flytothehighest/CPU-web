@@ -2,12 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   chinaClock,
-  commonFreeRanges,
   createSnapshotDayReader,
   daysTogether,
   describeNow,
-  nextAnniversary,
-  periodsFor,
+  occupiedSlots,
   snapshotFingerprint,
   type CoupleScheduleSnapshot,
 } from "../src/views/schedule/couple";
@@ -87,27 +85,24 @@ test("holiday adjustments hide classes on days off", () => {
   assert.equal(createSnapshotDayReader(data).blocksForDate("2026-09-15")?.length, 1);
 });
 
-test("commonFreeRanges merges free periods and splits at meal breaks", () => {
-  const periods = periodsFor(null);
-  const mine = createSnapshotDayReader(snapshot([{ day: 2, bigSlot: 1, courses: [course("A", 1, 2)] }])).blocksForDate("2026-09-08");
-  const theirs = createSnapshotDayReader(snapshot([{ day: 2, bigSlot: 3, courses: [course("B", 5, 6)] }])).blocksForDate("2026-09-08");
-  const ranges = commonFreeRanges(2, mine, theirs, periods)!;
-  assert.deepEqual(ranges.map((item) => [item.startSlot, item.endSlot]), [[3, 4], [7, 8], [9, 12]]);
-  assert.equal(ranges[0].start, "09:55");
-  assert.equal(ranges[0].end, "11:35");
+test("occupiedSlots covers every period a merged block spans", () => {
+  const blocks = createSnapshotDayReader(snapshot([
+    { day: 2, bigSlot: 1, courses: [course("A", 1, 2)] },
+    { day: 2, bigSlot: 3, courses: [course("B", 5, 8)] },
+  ])).blocksForDate("2026-09-08");
+  assert.deepEqual([...occupiedSlots(blocks)].sort((a, b) => a - b), [1, 2, 5, 6, 7, 8]);
+  assert.equal(occupiedSlots(null).size, 0);
 });
 
-test("commonFreeRanges refuses to guess when either side is unknown", () => {
-  assert.equal(commonFreeRanges(1, null, [], periodsFor(null)), null);
+test("dates outside the partner's term read as unknown, not free", () => {
+  assert.equal(createSnapshotDayReader(snapshot([])).blocksForDate("2027-03-01"), null);
+  assert.equal(createSnapshotDayReader(null).blocksForDate("2026-09-08"), null);
 });
 
-test("anniversary helpers count days and find the next yearly date", () => {
+test("daysTogether counts the anniversary itself as day one", () => {
   assert.equal(daysTogether("2026-09-08", "2026-09-08"), 1);
   assert.equal(daysTogether("2025-09-08", "2026-09-08"), 366);
   assert.equal(daysTogether("2026-10-01", "2026-09-08"), null);
-  assert.deepEqual(nextAnniversary("2025-10-01", "2026-09-30"), { date: "2026-10-01", years: 1, daysLeft: 1 });
-  assert.deepEqual(nextAnniversary("2024-02-29", "2027-02-01"), { date: "2027-02-28", years: 3, daysLeft: 27 });
-  assert.deepEqual(nextAnniversary("2026-09-01", "2026-09-30"), { date: "2027-09-01", years: 1, daysLeft: 336 });
 });
 
 test("snapshotFingerprint changes with content", () => {

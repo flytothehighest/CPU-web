@@ -1,5 +1,5 @@
 import { emptyScheduleEdits } from "@/utils/scheduleEdits";
-import { addDaysToCalendarYmd, dayOfWeekForCalendarYmd, normalizeCalendarWeekDays } from "./calendar";
+import { dayOfWeekForCalendarYmd, normalizeCalendarWeekDays } from "./calendar";
 import { smallSlots } from "./slots";
 import { createScheduleViewModelHelpers } from "./viewModels";
 import type { CalendarResult, ScheduleCourse, ScheduleResult, WeekCourseBlock } from "./types";
@@ -33,17 +33,6 @@ export type CoupleNowStatus =
   | { kind: "between"; next: TimedCourse; doneCount: number }
   | { kind: "done"; doneCount: number }
   | { kind: "free-day" };
-
-export interface FreeRange {
-  day: number;
-  startSlot: number;
-  endSlot: number;
-  start: string;
-  end: string;
-}
-
-// 两节课之间间隔超过这个分钟数（午饭、晚饭）就把空闲拆成两段，读起来更自然。
-const MEAL_BREAK_MINUTES = 60;
 
 export function periodsFor(calendar: CalendarResult | null | undefined): SlotTime[] {
   const configured = calendar?.periods;
@@ -152,65 +141,12 @@ export function occupiedSlots(blocks: WeekCourseBlock[] | null) {
   return slots;
 }
 
-/**
- * 两人在某天都没课的连续小节。任何一方当天不在学期内（快照缺失或日期
- * 超出校历）时返回 null，避免把“不知道”显示成“有空”。
- */
-export function commonFreeRanges(
-  day: number,
-  mine: WeekCourseBlock[] | null,
-  partner: WeekCourseBlock[] | null,
-  periods: SlotTime[],
-): FreeRange[] | null {
-  if (!mine || !partner) return null;
-  const busy = new Set([...occupiedSlots(mine), ...occupiedSlots(partner)]);
-  const ranges: FreeRange[] = [];
-  let open: FreeRange | null = null;
-  let previous: SlotTime | null = null;
-  for (const period of periods) {
-    const gap = previous ? toMinutes(period.start) - toMinutes(previous.end) : 0;
-    if (open && (busy.has(period.no) || gap > MEAL_BREAK_MINUTES)) {
-      ranges.push(open);
-      open = null;
-    }
-    if (!busy.has(period.no)) {
-      if (open) {
-        open.endSlot = period.no;
-        open.end = period.end;
-      } else {
-        open = { day, startSlot: period.no, endSlot: period.no, start: period.start, end: period.end };
-      }
-    }
-    previous = period;
-  }
-  if (open) ranges.push(open);
-  return ranges;
-}
-
 export function daysTogether(anniversary: string | null | undefined, todayYmd: string) {
   if (!anniversary || !/^\d{4}-\d{2}-\d{2}$/u.test(anniversary)) return null;
   const start = Date.parse(`${anniversary}T00:00:00Z`);
   const today = Date.parse(`${todayYmd}T00:00:00Z`);
   if (!Number.isFinite(start) || !Number.isFinite(today) || today < start) return null;
   return Math.round((today - start) / 86_400_000) + 1;
-}
-
-/** 下一个周年纪念日；2 月 29 日在平年按 2 月 28 日算。 */
-export function nextAnniversary(anniversary: string | null | undefined, todayYmd: string) {
-  const match = String(anniversary || "").match(/^(\d{4})-(\d{2})-(\d{2})$/u);
-  const today = String(todayYmd).match(/^(\d{4})-\d{2}-\d{2}$/u);
-  if (!match || !today) return null;
-  const [, startYear, month, day] = match;
-  for (let year = Number(today[1]); year <= Number(today[1]) + 1; year += 1) {
-    const years = year - Number(startYear);
-    if (years <= 0) continue;
-    let date = `${year}-${month}-${day}`;
-    if (month === "02" && day === "29" && addDaysToCalendarYmd(`${year}-02-28`, 1) !== date) date = `${year}-02-28`;
-    if (date < todayYmd) continue;
-    const daysLeft = Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${todayYmd}T00:00:00Z`)) / 86_400_000);
-    return { date, years, daysLeft };
-  }
-  return null;
 }
 
 /** 课表内容指纹：用于判断快照是否变化，从而跳过重复上传。 */
