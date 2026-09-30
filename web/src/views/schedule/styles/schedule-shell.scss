@@ -464,6 +464,44 @@
   border: 1px solid rgba(255, 255, 255, 0.82);
   box-shadow: inset 0 0 0 1px rgba(24, 34, 51, 0.08);
 }
+// 更多菜单顶部的常用操作：刷新、分享、情侣课表等，原来都挤在顶栏里。
+.more-quick {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.more-quick button {
+  min-width: 0;
+  min-height: 58px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 6px 4px;
+  border: 1px solid var(--schedule-border);
+  border-radius: 10px;
+  background: var(--schedule-surface-bg);
+  color: var(--schedule-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.more-quick button:active {
+  background: var(--schedule-surface-bg-soft);
+}
+.more-quick button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.more-quick .el-icon {
+  color: var(--schedule-accent);
+  font-size: 18px;
+}
+.more-quick .couple-quick .el-icon {
+  color: var(--couple-accent, #e2568a);
+}
 .more-action {
   width: 100%;
   min-height: 42px;

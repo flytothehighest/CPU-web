@@ -54,49 +54,8 @@
         >
           <el-icon><Aim /></el-icon>
         </button>
-        <button
-          v-if="parsed"
-          type="button"
-          class="icon-btn"
-          :disabled="loading"
-          aria-label="刷新课表"
-          title="刷新课表"
-          @click="void manualRefreshSchedule()"
-        >
-          <el-icon><Refresh /></el-icon>
-        </button>
-        <button
-          v-if="parsed && calendar"
-          type="button"
-          class="icon-btn"
-          aria-label="分享课表"
-          title="分享课表"
-          @click="openShareDialog"
-        >
-          <el-icon><Share /></el-icon>
-        </button>
-        <button
-          v-if="installPromptRef && (installPromptRef as any).canShow"
-          type="button"
-          class="icon-btn install-btn"
-          aria-label="把课表添加到桌面"
-          title="添加到桌面"
-          @click="openInstallPrompt"
-        >
-          <el-icon><Download /></el-icon>
-        </button>
-        <button
-          v-if="isDev"
-          type="button"
-          class="icon-btn"
-          aria-label="研究生课表调试"
-          title="研究生课表调试"
-          @click="gradDebugDialogOpen = true"
-        >
-          <el-icon><Tools /></el-icon>
-        </button>
         <el-popover
-          v-if="parsed || canShowAndroidClientDownload"
+          v-if="parsed || canShowAndroidClientDownload || canShowInstallAction || isDev"
           v-model:visible="moreMenuOpen"
           trigger="click"
           placement="bottom-end"
@@ -120,6 +79,28 @@
           </template>
           <div class="more-panel" :style="pageStyle">
             <template v-if="moreMenuView === 'menu'">
+              <div v-if="parsed || canShowInstallAction || isDev" class="more-quick">
+                <button v-if="parsed" type="button" :disabled="loading" @click="runMoreAction(manualRefreshSchedule)">
+                  <el-icon><Refresh /></el-icon>
+                  <span>刷新</span>
+                </button>
+                <button v-if="parsed && calendar" type="button" @click="runMoreAction(openShareDialog)">
+                  <el-icon><Share /></el-icon>
+                  <span>分享</span>
+                </button>
+                <button v-if="parsed" type="button" class="couple-quick" @click="openCoupleDialog()">
+                  <el-icon><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 20.3l-1.3-1.2C6 14.9 3 12.2 3 8.9 3 6.2 5.1 4 7.8 4c1.5 0 3 .7 4.2 1.9C13.2 4.7 14.7 4 16.2 4 18.9 4 21 6.2 21 8.9c0 3.3-3 6-7.7 10.2L12 20.3z" /></svg></el-icon>
+                  <span>情侣课表</span>
+                </button>
+                <button v-if="canShowInstallAction" type="button" @click="runMoreAction(openInstallPrompt)">
+                  <el-icon><Download /></el-icon>
+                  <span>添加到桌面</span>
+                </button>
+                <button v-if="isDev" type="button" @click="runMoreAction(() => { gradDebugDialogOpen = true; })">
+                  <el-icon><Tools /></el-icon>
+                  <span>研究生调试</span>
+                </button>
+              </div>
               <button type="button" class="more-action" @click="moreMenuView = 'theme'">
                 <span class="more-theme-swatch current" :style="{ background: currentThemePreview }" />
                 <span>主题选择</span>
@@ -128,13 +109,6 @@
               <button type="button" class="more-action" @click="moreMenuView = 'background'">
                 <el-icon><Picture /></el-icon>
                 <span>{{ hasScheduleBackground ? "背景自定义（已启用）" : "背景自定义" }}</span>
-                <el-icon class="more-chevron"><ArrowRight /></el-icon>
-              </button>
-              <button v-if="parsed" type="button" class="more-action" @click="openCoupleDialog()">
-                <el-icon>
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 20.3l-1.3-1.2C6 14.9 3 12.2 3 8.9 3 6.2 5.1 4 7.8 4c1.5 0 3 .7 4.2 1.9C13.2 4.7 14.7 4 16.2 4 18.9 4 21 6.2 21 8.9c0 3.3-3 6-7.7 10.2L12 20.3z" /></svg>
-                </el-icon>
-                <span>情侣课表</span>
                 <el-icon class="more-chevron"><ArrowRight /></el-icon>
               </button>
               <button
@@ -292,21 +266,30 @@
       </button>
     </section>
 
-    <section v-if="parsed && couple.status.value?.status === 'active'" class="couple-bar" aria-label="情侣课表">
+    <section
+      v-if="parsed && couple.status.value?.status === 'active'"
+      class="couple-bar"
+      :style="coupleBarStyle"
+      aria-label="情侣课表"
+    >
       <button type="button" class="couple-bar-main" @click="openCoupleDialog()">
-        <UserAvatar :size="22" :src="couple.status.value.partner.avatar" :name="couple.status.value.partner.nickname" :seed="couple.status.value.partner.id" />
+        <span class="couple-bar-avatar">
+          <UserAvatar :size="22" :src="couple.status.value.partner.avatar" :name="couple.status.value.partner.nickname" :seed="couple.status.value.partner.id" />
+        </span>
         <span class="couple-bar-text">{{ coupleBarText }}</span>
-        <span v-if="couple.togetherDays.value" class="couple-bar-days"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 20.3l-1.3-1.2C6 14.9 3 12.2 3 8.9 3 6.2 5.1 4 7.8 4c1.5 0 3 .7 4.2 1.9C13.2 4.7 14.7 4 16.2 4 18.9 4 21 6.2 21 8.9c0 3.3-3 6-7.7 10.2L12 20.3z" /></svg>{{ couple.togetherDays.value }} 天</span>
+        <span v-if="couple.togetherDays.value" class="couple-bar-days"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 20.3l-1.3-1.2C6 14.9 3 12.2 3 8.9 3 6.2 5.1 4 7.8 4c1.5 0 3 .7 4.2 1.9C13.2 4.7 14.7 4 16.2 4 18.9 4 21 6.2 21 8.9c0 3.3-3 6-7.7 10.2L12 20.3z" /></svg>{{ couple.togetherDays.value }}</span>
       </button>
       <button
         type="button"
         class="couple-bar-toggle"
         :class="{ active: couple.visible.value }"
         :aria-pressed="couple.visible.value"
+        :aria-label="couple.visible.value ? '只看我的课' : '显示 TA 的课'"
         :title="couple.visible.value ? '只看我的课' : '显示 TA 的课'"
         @click="couple.setVisible(!couple.visible.value)"
       >
-        {{ couple.visible.value ? "双人" : "只看我" }}
+        <svg v-if="couple.visible.value" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2" fill="currentColor" /><circle cx="16.5" cy="9" r="2.6" fill="currentColor" opacity=".75" /><path fill="currentColor" d="M3 19c0-3.3 2.7-5.6 6-5.6s6 2.3 6 5.6v.6H3V19z" /><path fill="currentColor" opacity=".75" d="M16 13.4c2.9 0 5 2 5 4.9v1.3h-4.4V19c0-2.1-.8-4-2.2-5.3.5-.2 1-.3 1.6-.3z" /></svg>
+        <svg v-else viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.4" fill="currentColor" /><path fill="currentColor" d="M5.5 19.2c0-3.5 2.9-6 6.5-6s6.5 2.5 6.5 6v.6h-13v-.6z" /></svg>
       </button>
     </section>
 
@@ -403,7 +386,7 @@
                       :key="`bg-${page.key}-${slot.no}-${day}`"
                       class="week-slot-cell"
                       :style="{ gridColumn: `${day + 1} / ${day + 2}`, gridRow: `${slot.no} / ${slot.no + 1}` }"
-                      :class="{ today: page.dayTabs[day - 1]?.isToday, 'couple-free': coupleDataFor(page).freeSlots.has(`${day}-${slot.no}`) }"
+                      :class="{ today: page.dayTabs[day - 1]?.isToday }"
                       @click="onWeekSlotClick($event, day, slot.no, page.weekValue)"
                     />
                   </template>
@@ -411,7 +394,8 @@
                     v-for="block in page.weekCourseBlocks"
                     :key="`${page.weekValue}-${block.day}-${block.startSlot}-${block.endSlot}-${block.index}-${block.course.name}`"
                     class="week-course"
-                    :style="courseBlockStyle(block)"
+                    :class="{ 'couple-shared': isCoupleShared(page, block) }"
+                    :style="courseBlockStyle(block, 'me', isCoupleShared(page, block))"
                     :title="courseTitle(block.course)"
                     @click.stop="onCourseBlockClick($event, block, page.weekValue)"
                   >
@@ -423,7 +407,7 @@
                     v-for="block in coupleDataFor(page).partnerBlocks"
                     :key="`ta-${page.weekValue}-${block.day}-${block.startSlot}-${block.endSlot}-${block.index}-${block.course.name}`"
                     class="week-course couple-partner"
-                    :style="courseBlockStyle(block)"
+                    :style="courseBlockStyle(block, 'ta')"
                     :title="`TA · ${courseTitle(block.course)}`"
                     @click.stop="onPartnerCourseClick($event, block)"
                   >
@@ -453,7 +437,8 @@
                       v-for="block in page.dayCourseBlocks"
                       :key="`${page.weekValue}-${page.day}-${block.startSlot}-${block.endSlot}-${block.index}-${block.course.name}`"
                       class="day-course-block"
-                      :style="dayCourseBlockStyle(block)"
+                      :class="{ 'couple-shared': isCoupleShared(page, block) }"
+                      :style="dayCourseBlockStyle(block, 'me', isCoupleShared(page, block))"
                       :title="courseTitle(block.course)"
                       @click.stop="onCourseBlockClick($event, block, page.weekValue)"
                     >
@@ -468,7 +453,7 @@
                       v-for="block in coupleDataFor(page).partnerBlocks"
                       :key="`ta-${page.weekValue}-${page.day}-${block.startSlot}-${block.endSlot}-${block.index}-${block.course.name}`"
                       class="day-course-block couple-partner"
-                      :style="{ ...dayCourseBlockStyle(block), gridColumn: '3 / 4' }"
+                      :style="dayCourseBlockStyle(block, 'ta')"
                       :title="`TA · ${courseTitle(block.course)}`"
                       @click.stop="onPartnerCourseClick($event, block)"
                     >
@@ -864,7 +849,7 @@ import { Aim, ArrowLeft, ArrowRight, Download, InfoFilled, Iphone, Lock, Moon, M
 import { jwxtApi } from "@/api/jwxt";
 import { scheduleShareApi, type ScheduleShare } from "@/api/scheduleShares";
 import { syncCoupleScheduleIfBound } from "@/views/schedule/coupleSync";
-import { occupiedSlots } from "@/views/schedule/couple";
+import { coupleCourseTone } from "@/views/schedule/couple";
 import { useCoupleOverlay } from "@/views/schedule/useCoupleOverlay";
 import CoupleDialog from "@/views/schedule/CoupleDialog.vue";
 import UserAvatar from "@/components/common/UserAvatar.vue";
@@ -2025,8 +2010,11 @@ const carouselPages = computed<SchedulePageModel[]>(() => {
 });
 
 // 情侣课表叠加层：TA 的课按日期对齐到当前网格，见 docs/couple-schedule.md。
-type CouplePageData = { partnerBlocks: WeekCourseBlock[]; freeSlots: Set<string> };
-const EMPTY_COUPLE_PAGE: CouplePageData = { partnerBlocks: [], freeSlots: new Set() };
+type CouplePageData = { partnerBlocks: WeekCourseBlock[]; shared: Set<string> };
+const EMPTY_COUPLE_PAGE: CouplePageData = { partnerBlocks: [], shared: new Set() };
+function coupleBlockKey(block: WeekCourseBlock) {
+  return `${block.day}|${block.startSlot}|${block.endSlot}|${block.course.name.replace(/\s+/gu, "")}`;
+}
 const couplePageData = computed(() => {
   const pages = new Map<string, CouplePageData>();
   if (!couple.active.value) return pages;
@@ -2034,16 +2022,18 @@ const couplePageData = computed(() => {
   for (const page of carouselPages.value) {
     const dates = normalizeCalendarWeekDays(weekInfoFor(page.weekValue)?.days ?? []).slice(0, 7);
     const days = viewMode.value === "week" ? [1, 2, 3, 4, 5, 6, 7] : [page.day];
-    const data: CouplePageData = { partnerBlocks: [], freeSlots: new Set() };
+    const data: CouplePageData = { partnerBlocks: [], shared: new Set() };
     for (const day of days) {
       const theirs = dates[day - 1] ? reader.blocksForDate(dates[day - 1]) : null;
       if (!theirs) continue;
-      data.partnerBlocks.push(...theirs.map((block) => ({ ...block, day })));
       const mine = page.weekCourseBlocks.filter((block) => block.day === day);
-      // 两人都没课的整天（通常是周末）不标记，免得把真正有用的空档淹没。
-      if (viewMode.value !== "week" || (!mine.length && !theirs.length)) continue;
-      const busy = new Set([...occupiedSlots(mine), ...occupiedSlots(theirs)]);
-      for (const slot of smallSlots) if (!busy.has(slot.no)) data.freeSlots.add(`${day}-${slot.no}`);
+      const mineKeys = new Set(mine.map(coupleBlockKey));
+      for (const block of theirs) {
+        const placed = { ...block, day };
+        // 同一节同一门课（一起上的课）只画一格。
+        if (mineKeys.has(coupleBlockKey(placed))) data.shared.add(coupleBlockKey(placed));
+        else data.partnerBlocks.push(placed);
+      }
     }
     pages.set(page.key, data);
   }
@@ -2051,6 +2041,21 @@ const couplePageData = computed(() => {
 });
 function coupleDataFor(page: SchedulePageModel) {
   return couplePageData.value.get(page.key) ?? EMPTY_COUPLE_PAGE;
+}
+function isCoupleShared(page: SchedulePageModel, block: WeekCourseBlock) {
+  return coupleDataFor(page).shared.has(coupleBlockKey(block));
+}
+const coupleBarStyle = computed(() => {
+  const value = couple.status.value;
+  if (value?.status !== "active") return {};
+  return {
+    "--couple-partner-color": coupleCourseTone(value.partner.color, "", appearance.isDark).border,
+  };
+});
+const canShowInstallAction = computed(() => Boolean(installPromptRef.value && (installPromptRef.value as any).canShow));
+function runMoreAction(action: () => unknown) {
+  moreMenuOpen.value = false;
+  void action();
 }
 const coupleBarText = computed(() => {
   const value = couple.status.value;
@@ -3142,8 +3147,19 @@ function persistScheduleTheme(value = scheduleTheme.value) {
   syncNativeWidgetTheme();
 }
 
-function courseBlockStyle(block: WeekCourseBlock) {
-  const colors = toneFor(block.course.name);
+// 双人模式按人配色；两人同一节上同一门课时合并成一格，用双方颜色的渐变。
+function coupleTone(owner: "me" | "ta", name: string, shared: boolean) {
+  const value = couple.status.value;
+  if (!couple.active.value || value?.status !== "active") return toneFor(name);
+  const mine = coupleCourseTone(value.me.color, name, appearance.isDark);
+  if (owner === "ta") return coupleCourseTone(value.partner.color, name, appearance.isDark);
+  if (!shared) return mine;
+  const theirs = coupleCourseTone(value.partner.color, name, appearance.isDark);
+  return { ...mine, bg: `linear-gradient(120deg, ${mine.bg} 0%, ${mine.bg} 38%, ${theirs.bg} 62%, ${theirs.bg} 100%)` };
+}
+
+function courseBlockStyle(block: WeekCourseBlock, owner: "me" | "ta" = "me", shared = false) {
+  const colors = coupleTone(owner, block.course.name, shared);
   return {
     gridColumn: `${block.day + 1} / ${block.day + 2}`,
     gridRow: `${block.startSlot} / ${block.endSlot + 1}`,
@@ -3153,10 +3169,11 @@ function courseBlockStyle(block: WeekCourseBlock) {
   };
 }
 
-function dayCourseBlockStyle(block: WeekCourseBlock) {
-  const colors = toneFor(block.course.name);
+function dayCourseBlockStyle(block: WeekCourseBlock, owner: "me" | "ta" = "me", shared = false) {
+  const colors = coupleTone(owner, block.course.name, shared);
+  const coupled = couple.active.value;
   return {
-    gridColumn: "2 / 3",
+    gridColumn: !coupled ? "2 / 3" : shared ? "2 / 4" : owner === "ta" ? "3 / 4" : "2 / 3",
     gridRow: `${block.startSlot} / ${block.endSlot + 1}`,
     "--course-bg": colors.bg,
     "--course-border": colors.border,

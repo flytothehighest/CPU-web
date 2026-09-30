@@ -706,6 +706,7 @@ model CoupleLink {
   inviteCode      String?   @unique
   inviteExpiresAt DateTime?
   anniversary     String? // YYYY-MM-DD，任意一方可修改
+  inviterColor    String    @default("blue") // blue / pink；接受方自动取另一种，双方看到的配色一致
   acceptedAt      DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt

@@ -1,0 +1,1 @@
+ALTER TABLE "CoupleLink" ADD COLUMN IF NOT EXISTS "inviterColor" TEXT NOT NULL DEFAULT 'blue';

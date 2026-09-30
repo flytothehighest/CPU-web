@@ -11,14 +11,17 @@ import {
   getCoupleStatus,
   saveCoupleScheduleSnapshot,
   unbindCouple,
-  updateCoupleAnniversary,
+  updateCoupleSettings,
 } from "../services/coupleSchedule";
 
 // 挂载在 authRequired 之后，req.user 一定存在。
 export const coupleRouter = Router();
 
 const acceptSchema = z.object({ code: z.string().trim().min(1).max(20) }).strict();
-const anniversarySchema = z.object({ anniversary: z.string().trim().max(10).nullable() }).strict();
+const settingsSchema = z.object({
+  anniversary: z.string().trim().max(10).nullable().optional(),
+  myColor: z.enum(["blue", "pink"]).optional(),
+}).strict();
 const snapshotSchema = z.object({
   semester: z.string().trim().min(1).max(80),
   schedule: z.unknown(),
@@ -49,8 +52,8 @@ coupleRouter.delete("/", async (req: any, res, next) => {
   try { ok(res, await unbindCouple(req.user.userId)); } catch (error) { next(error); }
 });
 
-coupleRouter.patch("/", validate(anniversarySchema), async (req: any, res, next) => {
-  try { ok(res, await updateCoupleAnniversary(req.user.userId, req.body.anniversary)); } catch (error) { next(error); }
+coupleRouter.patch("/", validate(settingsSchema), async (req: any, res, next) => {
+  try { ok(res, await updateCoupleSettings(req.user.userId, req.body)); } catch (error) { next(error); }
 });
 
 coupleRouter.get("/schedules", async (req: any, res, next) => {

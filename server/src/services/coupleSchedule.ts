@@ -12,6 +12,15 @@ const INVITE_PATTERN = new RegExp(`^[${INVITE_ALPHABET}]{${INVITE_LENGTH}}$`, "u
 const COUPLE_LINK = "/schedule?couple=1";
 
 const memberUserSelect = { id: true, nickname: true, avatar: true } as const;
+export const COUPLE_COLORS = ["blue", "pink"] as const;
+export type CoupleColor = (typeof COUPLE_COLORS)[number];
+
+/** 邀请方用关系上保存的颜色，接受方自动取另一种。 */
+export function coupleMemberColor(role: string, inviterColor: string): CoupleColor {
+  const inviter: CoupleColor = inviterColor === "pink" ? "pink" : "blue";
+  if (role === "inviter") return inviter;
+  return inviter === "blue" ? "pink" : "blue";
+}
 
 export function generateCoupleInviteCode() {
   let code = "";
@@ -78,9 +87,10 @@ async function membershipOf(userId: number) {
 
 type Membership = NonNullable<Awaited<ReturnType<typeof membershipOf>>>;
 
-function presentMember(member: Membership["link"]["members"][number]) {
+function presentMember(member: Membership["link"]["members"][number], inviterColor: string) {
   return {
     id: member.user.id,
+    color: coupleMemberColor(member.role, inviterColor),
     nickname: member.user.nickname,
     avatar: publicAvatarValue(member.user),
     snapshot: member.snapshot ? {
@@ -110,8 +120,8 @@ function presentStatus(membership: Membership | null, userId: number, now = new 
     status: "active" as const,
     since: (link.acceptedAt ?? link.createdAt).toISOString(),
     anniversary: link.anniversary,
-    me: presentMember(me),
-    partner: presentMember(partner),
+    me: presentMember(me, link.inviterColor),
+    partner: presentMember(partner, link.inviterColor),
   };
 }
 
@@ -204,10 +214,17 @@ export async function unbindCouple(userId: number) {
   return { status: "none" as const };
 }
 
-export async function updateCoupleAnniversary(userId: number, value: unknown) {
-  const anniversary = normalizeAnniversary(value);
+export async function updateCoupleSettings(userId: number, input: { anniversary?: unknown; myColor?: unknown }) {
+  const data: { anniversary?: string | null; inviterColor?: CoupleColor } = {};
+  if (input.anniversary !== undefined) data.anniversary = normalizeAnniversary(input.anniversary);
   const membership = await activeMembership(userId);
-  await prisma.coupleLink.update({ where: { id: membership.linkId }, data: { anniversary } });
+  if (input.myColor !== undefined) {
+    if (!COUPLE_COLORS.includes(input.myColor as CoupleColor)) throw Errors.badRequest("颜色只能是蓝色或粉色");
+    const mine = input.myColor as CoupleColor;
+    // 颜色保存在关系上：设定自己的颜色等于决定邀请方的颜色。
+    data.inviterColor = membership.role === "inviter" ? mine : (mine === "blue" ? "pink" : "blue");
+  }
+  if (Object.keys(data).length) await prisma.coupleLink.update({ where: { id: membership.linkId }, data });
   return getCoupleStatus(userId);
 }
 

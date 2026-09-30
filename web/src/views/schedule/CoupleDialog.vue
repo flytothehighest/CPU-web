@@ -38,6 +38,14 @@
         <strong>{{ status.me.snapshot ? `同步于 ${relative(status.me.snapshot.syncedAt)}` : "打开课表后自动同步" }}</strong>
       </div>
       <div class="line">
+        <span>配色</span>
+        <div class="colors">
+          <span class="swatch" :class="status.me.color">我</span>
+          <span class="swatch" :class="status.partner.color">TA</span>
+          <el-button data-cpu-button-theme="schedule" size="small" text :loading="busy" @click="swapColors">互换</el-button>
+        </div>
+      </div>
+      <div class="line">
         <span>在课表里显示 TA 的课</span>
         <el-switch :model-value="couple.visible.value" @update:model-value="(value: string | number | boolean) => couple.setVisible(Boolean(value))" />
       </div>
@@ -56,7 +64,7 @@
           @update:model-value="(value: string | null) => act(() => coupleApi.setAnniversary(value || null), value ? '纪念日已保存' : '纪念日已清除')"
         />
       </div>
-      <p class="note">左半边是你的课，右半边是 TA 的课；两个人都没课的格子会被轻轻标出来。</p>
+      <p class="note">每一格左半是你的课、右半是 TA 的课，一起上的课合并成一格。配色双方看到的一样，任意一方都可以互换。</p>
     </template>
 
     <template v-else>
@@ -169,6 +177,12 @@ async function act(task: () => Promise<CoupleStatus>, success?: string) {
   }
 }
 
+function swapColors() {
+  const value = status.value;
+  if (value?.status !== "active") return;
+  void act(() => coupleApi.setMyColor(value.me.color === "blue" ? "pink" : "blue"), "配色已互换");
+}
+
 async function accept() {
   const value = code.value.trim();
   if (!value) return;
@@ -244,7 +258,11 @@ onBeforeUnmount(onClosed);
 .line { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; padding: 6px 0; border-bottom: 1px solid var(--schedule-border); font-size: 13px; }
 .line span { flex: 0 0 auto; color: var(--schedule-text-muted); }
 .line strong { min-width: 0; color: var(--schedule-text); font-weight: 600; text-align: right; }
-.anniversary-picker { --el-date-editor-width: 150px; width: 150px; }
+.colors { display: flex; align-items: center; gap: 6px; }
+.swatch { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+.swatch.blue { background: hsl(214 88% 92%); color: hsl(214 58% 30%); box-shadow: inset 0 0 0 1px hsl(214 72% 76%); }
+.swatch.pink { background: hsl(338 88% 93%); color: hsl(338 58% 30%); box-shadow: inset 0 0 0 1px hsl(338 72% 78%); }
+.line :deep(.anniversary-picker.el-date-editor) { --el-date-editor-width: 150px; flex: 0 0 150px; width: 150px; }
 .note { margin: 12px 0 0; color: var(--schedule-text-secondary); font-size: 12px; line-height: 1.6; }
 .note.lead { margin: 0 0 6px; font-size: 13px; }
 .note.center { margin-top: 4px; text-align: center; }

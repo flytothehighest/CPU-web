@@ -1,26 +1,22 @@
-// 情侣课表叠加层。颜色全部取自课表主题变量，只有代表 TA 的强调色是固定的粉色。
+// 情侣课表叠加层。课程颜色由 coupleCourseTone 按人给出（蓝 / 粉两个色系），
+// 其余颜色全部取自课表主题变量。
 .schedule-page {
   --couple-accent: #e2568a;
 }
 
+// 周次切换下方的一条胶囊：TA 此刻的状态、在一起天数、双人/单人开关。
 .couple-bar {
   flex: 0 0 auto;
   width: 100%;
   max-width: 720px;
+  height: 34px;
   margin: -4px auto 10px;
+  padding: 0 3px 0 0;
   display: flex;
   align-items: center;
-  gap: 6px;
-}
-.couple-bar-main,
-.couple-bar-toggle {
-  height: 34px;
   border: 1px solid var(--schedule-border);
-  border-radius: 12px;
+  border-radius: 999px;
   background: var(--schedule-surface-bg);
-  color: var(--schedule-text);
-  font: inherit;
-  cursor: pointer;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
   backdrop-filter: blur(12px) saturate(140%);
   -webkit-backdrop-filter: blur(12px) saturate(140%);
@@ -28,11 +24,24 @@
 .couple-bar-main {
   flex: 1 1 auto;
   min-width: 0;
+  height: 100%;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 10px 0 6px;
+  padding: 0 10px 0 5px;
+  border: 0;
+  background: transparent;
+  color: var(--schedule-text);
+  font: inherit;
   text-align: left;
+  cursor: pointer;
+}
+.couple-bar-avatar {
+  flex: 0 0 auto;
+  display: grid;
+  padding: 1.5px;
+  border-radius: 50%;
+  background: var(--couple-partner-color, var(--couple-accent));
 }
 .couple-bar-text {
   flex: 1 1 auto;
@@ -53,24 +62,33 @@
   font-weight: 700;
 }
 .couple-bar-days svg {
-  width: 13px;
-  height: 13px;
+  width: 12px;
+  height: 12px;
 }
 .couple-bar-toggle {
   flex: 0 0 auto;
-  min-width: 58px;
-  padding: 0 10px;
-  color: var(--schedule-text-secondary);
-  font-size: 12px;
-  font-weight: 700;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--schedule-text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.couple-bar-toggle svg {
+  width: 18px;
+  height: 18px;
 }
 .couple-bar-toggle.active {
-  border-color: color-mix(in srgb, var(--couple-accent) 45%, var(--schedule-border));
-  background: color-mix(in srgb, var(--couple-accent) 12%, var(--schedule-surface-bg));
+  background: color-mix(in srgb, var(--couple-accent) 14%, transparent);
   color: var(--couple-accent);
 }
 
-// 周视图：同一格里左半是我、右半是 TA。
+// 周视图：同一格左半是我、右半是 TA；一起上的课占满整格。
 .week-overview.couple-on .week-course {
   justify-self: start;
   width: calc(50% - 2px);
@@ -79,33 +97,37 @@
 .week-overview.couple-on .week-course.couple-partner {
   justify-self: end;
 }
+.week-overview.couple-on .week-course.couple-shared {
+  justify-self: stretch;
+  width: auto;
+}
 .week-overview.couple-on .week-course em {
   display: none;
 }
 .week-overview.couple-on .week-course strong {
   -webkit-line-clamp: 5;
 }
-.week-course.couple-partner,
-.day-course-block.couple-partner {
+.week-course.couple-shared,
+.day-course-block.couple-shared {
   position: relative;
-  border-style: dashed;
 }
-.week-course.couple-partner::after,
-.day-course-block.couple-partner::after {
+.week-course.couple-shared::after,
+.day-course-block.couple-shared::after {
   content: "";
   position: absolute;
   top: 4px;
   right: 4px;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
+  width: 9px;
+  height: 9px;
   background: var(--couple-accent);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 20.3l-1.3-1.2C6 14.9 3 12.2 3 8.9 3 6.2 5.1 4 7.8 4c1.5 0 3 .7 4.2 1.9C13.2 4.7 14.7 4 16.2 4 18.9 4 21 6.2 21 8.9c0 3.3-3 6-7.7 10.2L12 20.3z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 20.3l-1.3-1.2C6 14.9 3 12.2 3 8.9 3 6.2 5.1 4 7.8 4c1.5 0 3 .7 4.2 1.9C13.2 4.7 14.7 4 16.2 4 18.9 4 21 6.2 21 8.9c0 3.3-3 6-7.7 10.2L12 20.3z'/%3E%3C/svg%3E") center / contain no-repeat;
 }
-// 共同空闲只做轻提示：虚线边框加极淡底色，不和课程色块抢注意力。
-.week-slot-cell.couple-free {
-  border-style: dashed;
-  border-color: color-mix(in srgb, var(--couple-accent) 30%, var(--schedule-cell-border));
-  background: color-mix(in srgb, var(--couple-accent) 4%, var(--schedule-cell-bg));
+.day-course-block.couple-shared::after {
+  top: 8px;
+  right: 8px;
+  width: 13px;
+  height: 13px;
 }
 
 // 日视图：我 | TA 两列。
@@ -117,9 +139,6 @@
   color: var(--schedule-text-secondary);
   font-size: 12px;
   text-align: center;
-}
-.couple-day-head b:last-child {
-  color: var(--couple-accent);
 }
 .day-pane.couple-on .day-grid-body {
   grid-template-columns: 50px minmax(0, 1fr) minmax(0, 1fr);
@@ -135,12 +154,20 @@
   font-size: 12px;
 }
 
-@media (max-width: 520px) {
+@media (max-width: 760px) {
   .couple-bar {
-    margin-top: -6px;
+    height: 32px;
+    margin: -6px auto 8px;
   }
   .week-overview.couple-on .week-course span {
     display: none;
+  }
+  .week-overview.couple-on .week-course.couple-shared span {
+    display: -webkit-box;
+  }
+  .couple-day-head,
+  .day-pane.couple-on .day-grid-body {
+    grid-template-columns: 36px minmax(0, 1fr) minmax(0, 1fr);
   }
   .day-pane.couple-on .day-course-name {
     font-size: 14px;

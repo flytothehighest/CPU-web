@@ -77,6 +77,13 @@ test("couple schedule lifecycle on isolated PostgreSQL", { skip: process.env.COU
     assert.equal((await call(bob, "PATCH", "/", { anniversary: "2099-01-01" })).status, 400);
     assert.equal((await call(bob, "PATCH", "/", { anniversary: "2025-05-20" })).body.data.anniversary, "2025-05-20");
     assert.equal((await call(alice, "GET", "/")).body.data.anniversary, "2025-05-20");
+    let colors = (await call(alice, "GET", "/")).body.data;
+    assert.deepEqual([colors.me.color, colors.partner.color], ["blue", "pink"]);
+    // Bob（接受方）把自己设成蓝色，双方看到的配色同时互换，纪念日不受影响。
+    assert.equal((await call(bob, "PATCH", "/", { myColor: "blue" })).body.data.me.color, "blue");
+    colors = (await call(alice, "GET", "/")).body.data;
+    assert.deepEqual([colors.me.color, colors.partner.color, colors.anniversary], ["pink", "blue", "2025-05-20"]);
+    assert.equal((await call(bob, "PATCH", "/", { myColor: "green" })).status, 400);
 
     assert.equal((await call(bob, "DELETE", "/")).body.data.status, "none");
     assert.equal((await call(alice, "GET", "/")).body.data.status, "none");

@@ -1,11 +1,14 @@
 import { request } from "./request";
 import type { CalendarResult, ScheduleResult } from "@/views/schedule/types";
-import type { CoupleScheduleSnapshot } from "@/views/schedule/couple";
+import type { CoupleColor, CoupleScheduleSnapshot } from "@/views/schedule/couple";
 
 export type CoupleMemberSnapshotMeta = { semester: string; syncedAt: string; changedAt: string };
 
+export type { CoupleColor };
+
 export type CoupleMember = {
   id: number;
+  color: CoupleColor;
   nickname: string;
   avatar: string | null;
   snapshot: CoupleMemberSnapshotMeta | null;
@@ -29,6 +32,7 @@ export const coupleApi = {
   accept: (code: string) => request.post<CoupleStatus>("/couple/accept", { code }),
   unbind: () => request.delete<CoupleStatus>("/couple"),
   setAnniversary: (anniversary: string | null) => request.patch<CoupleStatus>("/couple", { anniversary }),
+  setMyColor: (myColor: CoupleColor) => request.patch<CoupleStatus>("/couple", { myColor }),
   schedules: () => request.get<CoupleSchedules>("/couple/schedules", undefined, noCache),
   syncSchedule: (payload: { semester: string; schedule: ScheduleResult; calendar: CalendarResult }) =>
     request.put<{ changed: boolean; semester: string; syncedAt: string; changedAt: string }>("/couple/schedule", payload, backgroundOptions),

@@ -4,6 +4,8 @@ import { smallSlots } from "./slots";
 import { createScheduleViewModelHelpers } from "./viewModels";
 import type { CalendarResult, ScheduleCourse, ScheduleResult, WeekCourseBlock } from "./types";
 
+export type CoupleColor = "blue" | "pink";
+
 export interface CoupleScheduleSnapshot {
   semester: string;
   syncedAt: string;
@@ -132,15 +134,6 @@ export function describeNow(snapshot: CoupleScheduleSnapshot | null, now: Date):
   return { kind: "done", doneCount };
 }
 
-/** 某一天被占用的小节集合；课程块跨越的每一节都算占用。 */
-export function occupiedSlots(blocks: WeekCourseBlock[] | null) {
-  const slots = new Set<number>();
-  for (const block of blocks ?? []) {
-    for (let slot = block.startSlot; slot <= block.endSlot; slot += 1) slots.add(slot);
-  }
-  return slots;
-}
-
 export function daysTogether(anniversary: string | null | undefined, todayYmd: string) {
   if (!anniversary || !/^\d{4}-\d{2}-\d{2}$/u.test(anniversary)) return null;
   const start = Date.parse(`${anniversary}T00:00:00Z`);
@@ -158,4 +151,29 @@ export function snapshotFingerprint(value: unknown) {
     hash = Math.imul(hash, 0x01000193);
   }
   return `${text.length.toString(36)}-${(hash >>> 0).toString(36)}`;
+}
+
+const COUPLE_COLOR_FAMILIES: Record<CoupleColor, { hue: number; spread: number }> = {
+  blue: { hue: 214, spread: 14 },
+  pink: { hue: 338, spread: 10 },
+};
+
+function nameHash(value: string) {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) hash = (Math.imul(hash, 31) + value.charCodeAt(i)) >>> 0;
+  return hash;
+}
+
+/**
+ * 双人模式按人配色：同一个人的课都在一个色系里，课程之间只在色相和明暗上
+ * 稍有差别，方便一眼分清是谁的课，又能区分相邻的两门课。
+ */
+export function coupleCourseTone(color: CoupleColor, name: string, dark: boolean) {
+  const family = COUPLE_COLOR_FAMILIES[color] ?? COUPLE_COLOR_FAMILIES.blue;
+  const hash = nameHash(name);
+  const hue = Math.round(family.hue + ((hash % 5) - 2) * (family.spread / 2));
+  const shift = ((hash >>> 4) % 3) - 1;
+  return dark
+    ? { bg: `hsl(${hue} 48% ${29 + shift * 3}%)`, border: `hsl(${hue} 62% ${50 + shift * 3}%)`, text: "#f5f7ff" }
+    : { bg: `hsl(${hue} 88% ${93 - shift * 2}%)`, border: `hsl(${hue} 72% ${77 - shift * 3}%)`, text: `hsl(${hue} 58% 27%)` };
 }

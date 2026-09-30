@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { generateCoupleInviteCode, normalizeAnniversary, normalizeCoupleInviteCode } from "../src/services/coupleSchedule";
+import { coupleMemberColor, generateCoupleInviteCode, normalizeAnniversary, normalizeCoupleInviteCode } from "../src/services/coupleSchedule";
 
 test("invite codes are six unambiguous characters", () => {
   for (let i = 0; i < 200; i += 1) {
@@ -25,4 +25,12 @@ test("anniversary must be a real date no later than today in China", () => {
   assert.throws(() => normalizeAnniversary("2026-10-02", now), /晚于今天/u);
   assert.throws(() => normalizeAnniversary("2026-02-30", now), /有效日期/u);
   assert.throws(() => normalizeAnniversary("2026/01/01", now), /格式/u);
+});
+
+test("the invitee always gets the other colour", () => {
+  assert.equal(coupleMemberColor("inviter", "blue"), "blue");
+  assert.equal(coupleMemberColor("invitee", "blue"), "pink");
+  assert.equal(coupleMemberColor("inviter", "pink"), "pink");
+  assert.equal(coupleMemberColor("invitee", "pink"), "blue");
+  assert.equal(coupleMemberColor("inviter", "unexpected"), "blue");
 });

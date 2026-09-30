@@ -5,7 +5,7 @@ import {
   createSnapshotDayReader,
   daysTogether,
   describeNow,
-  occupiedSlots,
+  coupleCourseTone,
   snapshotFingerprint,
   type CoupleScheduleSnapshot,
 } from "../src/views/schedule/couple";
@@ -85,13 +85,13 @@ test("holiday adjustments hide classes on days off", () => {
   assert.equal(createSnapshotDayReader(data).blocksForDate("2026-09-15")?.length, 1);
 });
 
-test("occupiedSlots covers every period a merged block spans", () => {
+test("the day reader merges consecutive periods of the same course", () => {
   const blocks = createSnapshotDayReader(snapshot([
     { day: 2, bigSlot: 1, courses: [course("A", 1, 2)] },
-    { day: 2, bigSlot: 3, courses: [course("B", 5, 8)] },
+    { day: 2, bigSlot: 3, courses: [course("B", 5, 6)] },
+    { day: 2, bigSlot: 4, courses: [course("B", 7, 8)] },
   ])).blocksForDate("2026-09-08");
-  assert.deepEqual([...occupiedSlots(blocks)].sort((a, b) => a - b), [1, 2, 5, 6, 7, 8]);
-  assert.equal(occupiedSlots(null).size, 0);
+  assert.deepEqual(blocks?.map((block) => [block.course.name, block.startSlot, block.endSlot]), [["A", 1, 2], ["B", 5, 8]]);
 });
 
 test("dates outside the partner's term read as unknown, not free", () => {
@@ -108,4 +108,15 @@ test("daysTogether counts the anniversary itself as day one", () => {
 test("snapshotFingerprint changes with content", () => {
   assert.equal(snapshotFingerprint({ a: 1 }), snapshotFingerprint({ a: 1 }));
   assert.notEqual(snapshotFingerprint({ a: 1 }), snapshotFingerprint({ a: 2 }));
+});
+
+test("coupleCourseTone keeps each person inside one colour family", () => {
+  const hueOf = (value: string) => Number(value.match(/^hsl\((\d+)/u)?.[1]);
+  for (const name of ["药理学", "药物化学", "药剂学", "医学免疫学", "体育"]) {
+    const blue = hueOf(coupleCourseTone("blue", name, false).bg);
+    const pink = hueOf(coupleCourseTone("pink", name, true).bg);
+    assert.ok(blue >= 200 && blue <= 228, `blue hue ${blue}`);
+    assert.ok(pink >= 328 && pink <= 348, `pink hue ${pink}`);
+  }
+  assert.deepEqual(coupleCourseTone("pink", "药理学", false), coupleCourseTone("pink", "药理学", false));
 });
