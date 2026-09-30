@@ -1198,9 +1198,18 @@ function releaseRoutePage(element: Element) {
   flex-shrink: 0;
 }
 
-.page-refresh-btn {
+.page-refresh-btn,
+.top-right .message-entry {
   min-width: 44px;
   min-height: 44px;
+}
+
+// el-badge 默认 inline-block + 基线对齐，会把铃铛顶高几像素，和旁边的刷新/外观图标对不齐
+.top-right .message-entry :deep(.el-badge) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .appearance-cycle-btn {
